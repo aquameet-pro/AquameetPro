@@ -5181,16 +5181,18 @@ function renderResults(){
         <td style="white-space:nowrap;font-size:.8rem">${a.city||'–'}</td><td style="white-space:nowrap;font-size:.8rem">${a.club||'–'}</td><td style="white-space:nowrap;font-size:.78rem;color:var(--text-muted)">${a.coach||'–'}</td>
         <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted);white-space:nowrap">${entry.seedTime||'–'}</td>
         <td><div style="white-space:nowrap;display:flex;align-items:center;gap:.25rem;flex-wrap:nowrap">
-          <input class="t-inp" id="res-${eid}" type="text" value="${entry.result||''}" placeholder="хх:хх:хх" style="width:90px;font-family:monospace;font-size:.82rem" oninput="onTimeInput(event)" onchange="saveResult(${eid},this.value)">
-          <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Н/С')" title="Не стартував">Н/С</button>
-          <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований">Д/К</button>
+          ${isPriv
+            ?`<input class="t-inp" id="res-${eid}" type="text" value="${entry.result||''}" placeholder="хх:хх:хх" style="width:90px;font-family:monospace;font-size:.82rem" oninput="onTimeInput(event)" onchange="saveResult(${eid},this.value)">
+              <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Н/С')" title="Не стартував">Н/С</button>
+              <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований">Д/К</button>`
+            :`<span style="font-family:monospace;font-size:.82rem">${entry.result||'–'}</span>`}
         </div></td>
         <td id="rank-${eid}" style="text-align:center">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
         ${judgeColHtml}${statusColHtml}
-        <td style="white-space:nowrap">
+        ${isPriv?`<td style="white-space:nowrap">
           <button class="btn-success btn-xs" onclick="saveResult(${eid},document.getElementById('res-${eid}').value)">✓</button>
           <button class="btn-icon btn-xs" onclick="clearResult(${eid})">✕</button>
-        </td>
+        </td>`:'<td></td>'}
       </tr>`;
     }).filter(Boolean).join('');
     return`<div class="proto-section">
@@ -5205,7 +5207,7 @@ function renderResults(){
           ${isPriv?'<col style="width:120px"><col style="width:90px">':''}
           <col style="width:50px">
         </colgroup>
-        <thead><tr><th>Дор.</th><th>Учасник</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Заявл.</th><th>Результат</th><th>Розряд</th>${extraTh}<th>Дія</th></tr></thead>
+        <thead><tr><th>Дор.</th><th>Учасник</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Заявл.</th><th>Результат</th><th>Розряд</th>${extraTh}${isPriv?'<th>Дія</th>':'<th></th>'}</tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -7312,6 +7314,7 @@ async function acceptRelayJudgeInput(rowId,heatIdx,lane){
 // Builds a compact protocol section for relay teams, grouped by type → gender → age group.
 // Appended at the bottom of the full protocol.
 function buildRelayResultsHtml(comp,relayHeats,activeLns){
+  const isPriv=['organizer','secretary','admin'].includes(_currentRole);
   return relayHeats.map(heat=>{
     const rtype=RELAY_TYPES[heat.type];
     const ag=getRelayAg(comp,heat.agId);
@@ -7336,12 +7339,14 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
         <td style="font-size:.78rem;color:var(--text-muted)">${legList}</td>
         <td style="font-family:monospace;color:var(--text-muted)">${t.seedTime||'–'}</td>
         <td style="padding:.3rem .4rem">
-          <input class="t-inp" type="text" placeholder="хх:хх:хх"
-            value="${t.result||''}" style="width:108px;font-family:monospace"
-            oninput="autoFormatTime(this)"
-            onchange="saveRelayHeatResult('${t.id}',this.value)">
-          <button class="btn-icon btn-xs" onclick="saveRelayHeatResult('${t.id}','Н/С')" title="Не стартував">Н/С</button>
-          <button class="btn-icon btn-xs" onclick="saveRelayHeatResult('${t.id}','Д/К')" title="Дискваліфіковано">Д/К</button>
+          ${isPriv
+            ?`<input class="t-inp" type="text" placeholder="хх:хх:хх"
+                value="${t.result||''}" style="width:108px;font-family:monospace"
+                oninput="autoFormatTime(this)"
+                onchange="saveRelayHeatResult('${t.id}',this.value)">
+              <button class="btn-icon btn-xs" onclick="saveRelayHeatResult('${t.id}','Н/С')" title="Не стартував">Н/С</button>
+              <button class="btn-icon btn-xs" onclick="saveRelayHeatResult('${t.id}','Д/К')" title="Дискваліфіковано">Д/К</button>`
+            :`<span style="font-family:monospace;font-size:.82rem">${t.result||'–'}</span>`}
         </td>
         <td style="font-size:.75rem">${t.result?renderRankBadge(null):''}</td>
       </tr>`;
@@ -7669,13 +7674,14 @@ function renderReglament(){
     {id:'custom',label:'📁 Власний шаблон'},
   ];
 
-  const tabBar=`<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:.5rem">
+  const _reglIsPriv=['organizer','secretary','admin'].includes(_currentRole);
+  const tabBar=_reglIsPriv?`<div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:1rem;border-bottom:2px solid var(--border);padding-bottom:.5rem">
     ${tabs.map(t=>`<button onclick="setReglamentTemplate('${t.id}')"
       style="padding:.35rem .8rem;border-radius:6px 6px 0 0;border:1px solid var(--border);font-size:.85rem;cursor:pointer;
       background:${activeTempl===t.id?'var(--accent)':'var(--card)'};color:${activeTempl===t.id?'#fff':'var(--text)'};
       font-weight:${activeTempl===t.id?'700':'400'}">${t.label}</button>`).join('')}
     <button class="btn-secondary btn-sm" style="margin-left:auto" onclick="openEditComp(${comp.id})">✏ Дані змагання</button>
-  </div>`;
+  </div>`:'<div style="margin-bottom:1rem"></div>';
 
   let body='';
   if(activeTempl==='compact') body=renderReglamentCompact(comp);
