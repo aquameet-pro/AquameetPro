@@ -1647,8 +1647,8 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <div class="modal" style="max-width:900px">
   <div class="modal-header"><div class="modal-title" id="ath-modal-title">Учасник</div><button class="modal-close" onclick="closeModal('modal-athlete')">✕</button></div>
   <div class="form-row cols-3">
-    <div><label>Прізвище *</label><input id="pa-surname" placeholder="Петренко"></div>
-    <div><label>Ім'я *</label><input id="pa-name" placeholder="Олег"></div>
+    <div style="position:relative"><label>Прізвище *</label><input id="pa-surname" placeholder="Петренко" autocomplete="off" oninput="paAcInput(this.value)" onblur="setTimeout(()=>paAcHide(),180)"><div id="pa-ac-drop" style="display:none;position:absolute;z-index:9999;background:var(--card);border:1px solid var(--accent);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:220px;max-height:220px;overflow-y:auto;top:100%;left:0"></div></div>
+    <div><label>Ім'я *</label><input id="pa-name" placeholder="Олег" autocomplete="off"></div>
     <div><label>Стать *</label><select id="pa-gender"><option value="M">Чоловік (Ч)</option><option value="F">Жінка (Ж)</option></select></div>
   </div>
   <div class="form-row cols-4">
@@ -4034,6 +4034,40 @@ function saveQuickGuest(){
   showToast(`\u2705 ${surname} ${name} додано`);
   if(confirm(`${surname} ${name} додано. Відкрити повну форму для додавання дистанцій?`))openEditAthlete(a.id);
 }
+
+// ── Trainer autocomplete for athlete modal ──
+function paAcInput(val){
+  const drop=document.getElementById('pa-ac-drop');
+  if(!drop)return;
+  if(_currentRole!=='trainer'){drop.style.display='none';return;}
+  const q=val.trim().toLowerCase();
+  if(!q){drop.style.display='none';return;}
+  const list=_taLoad().filter(a=>{
+    const full=(a.surname+' '+a.name).toLowerCase();
+    return a.surname.toLowerCase().startsWith(q)||full.startsWith(q);
+  }).slice(0,10);
+  if(!list.length){drop.style.display='none';return;}
+  drop.innerHTML=list.map(a=>`<div data-tid="${a.id}" style="padding:.45rem .75rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid var(--border)" onmousedown="paAcSelect('${a.id}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><b>${escapeHtml(a.surname)}</b> ${escapeHtml(a.name)} <span style="color:var(--text-muted);font-size:.75rem">${a.birthYear||''} ${a.gender==='F'?'Ж':'Ч'} ${a.currentRank||''}</span></div>`).join('');
+  drop.style.display='block';
+}
+function paAcHide(){
+  const drop=document.getElementById('pa-ac-drop');
+  if(drop)drop.style.display='none';
+}
+function paAcSelect(tid){
+  const a=_taLoad().find(x=>x.id===tid);
+  if(!a)return;
+  document.getElementById('pa-surname').value=a.surname;
+  document.getElementById('pa-name').value=a.name;
+  document.getElementById('pa-gender').value=a.gender||'M';
+  document.getElementById('pa-year').value=a.birthYear||'';
+  document.getElementById('pa-city').value=a.city||'';
+  document.getElementById('pa-club').value=a.club||'';
+  document.getElementById('pa-coach').value=a.coach||'';
+  document.getElementById('pa-rank').value=a.currentRank||'';
+  paAcHide();
+}
+// ────────────────────────────────────────────
 
 function openAddAthlete(){
   editingAthId=null;
