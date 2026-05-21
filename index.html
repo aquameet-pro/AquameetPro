@@ -11857,14 +11857,17 @@ async function acceptJudgeInput(id,idx){
   if(comp){
     const heat=comp.heats?.[row.heat_idx];
     if(heat){
-      const entry=heat.lanes?.[row.lane-1];
+      const entryId=heat.lanes?.[row.lane];
+      const entry=entryId?comp.entries?.find(e=>e.id===entryId):null;
       if(entry&&entry.athleteId){
-        const athlete=comp.athletes?.find(a=>a.id===entry.athleteId)||
-          (db.athletes||[]).find(a=>a.id===entry.athleteId);
         if(!comp.results)comp.results=[];
         const existing=comp.results.find(r=>r.athleteId===entry.athleteId&&r.heatIdx===row.heat_idx);
-        if(existing){existing.resultCs=row.result_cs;existing.dns=false;existing.dnf=false;}
-        else comp.results.push({athleteId:entry.athleteId,heatIdx:row.heat_idx,lane:row.lane,resultCs:row.result_cs,dns:false,dnf:false});
+        const cs=row.result_cs;
+        const timeStr=fmtTime(cs);
+        if(existing){existing.result=timeStr;existing.resultCs=cs;existing.dns=false;existing.dnf=false;}
+        else comp.results.push({athleteId:entry.athleteId,heatIdx:row.heat_idx,lane:Number(row.lane),result:timeStr,resultCs:cs,dns:false,dnf:false});
+        // Also update entry.result for protocol
+        entry.result=timeStr;entry.resultCs=cs;
         saveDB();
         showToast('✅ Результат збережено для '+escapeHtml(row.athlete_name||'спортсмена'));
       }
@@ -11898,22 +11901,26 @@ function openJudgeLinks(){
 
   let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Скопіюйте посилання або покажіть QR суддям. Логін не потрібен.</div>';
   comp.heats.forEach((heat,hIdx)=>{
-    if(!heat.lanes||!heat.lanes.length)return;
+    const laneEntries=Object.entries(heat.lanes||{});
+    if(!laneEntries.length)return;
     html+=`<div style="font-weight:700;color:#023e8a;font-size:.85rem;margin:.9rem 0 .35rem">Заплив ${hIdx+1}${heat.eventName?' · '+escapeHtml(heat.eventName):''}</div>`;
-    heat.lanes.forEach(lane=>{
-      if(!lane.athleteId)return;
-      const athName=lane.name||lane.athleteName||'Спортсмен';
-      const evName=heat.eventName||'';
+    laneEntries.sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([laneNum,entryId])=>{
+      const entry=comp.entries?.find(e=>e.id===entryId);
+      if(!entry)return;
+      const ath=db.athletes?.find(a=>a.id===entry.athleteId);
+      const athName=ath?(ath.surname||'')+' '+(ath.name||''):('Спортсмен');
+      const evName=(entry.dist?entry.dist+'м ':'')+( entry.style||heat.eventName||'');
       const hn=encodeURIComponent('Заплив '+(hIdx+1));
-      const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&h='+hIdx+'&l='+lane.lane+'&an='+encodeURIComponent(athName)+'&ev='+encodeURIComponent(evName)+'&hn='+hn;
+      const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&h='+hIdx+'&l='+laneNum+'&an='+encodeURIComponent(athName.trim())+'&ev='+encodeURIComponent(evName.trim())+'&hn='+hn;
       const qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(url);
+      const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       html+=`<div class="jlink-row">
         <div style="flex:1">
-          <div style="font-weight:600;color:#023e8a">Д.${lane.lane} — ${escapeHtml(athName)}</div>
-          <div style="font-size:.72rem;color:#5a9ab8;word-break:break-all;margin:.2rem 0">${url.slice(0,80)}…</div>
+          <div style="font-weight:600;color:#023e8a">Д.${laneNum} — ${escapeHtml(athName.trim())}</div>
+          <div style="font-size:.72rem;color:#5a9ab8;margin:.2rem 0">${escapeHtml(evName.trim())}</div>
           <img class="jlink-qr" src="${qrSrc}" width="70" height="70" loading="lazy" alt="QR">
         </div>
-        <button class="jlink-copy" onclick="navigator.clipboard.writeText('${url.replace(/'/g,'\\\'')}'.trim()).then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
+        <button class="jlink-copy" onclick="navigator.clipboard.writeText('${urlEsc}').then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
       </div>`;
     });
   });
