@@ -696,8 +696,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .jstatus.err{background:#fde8ea;color:#7d0012;display:block}
 .jstatus.warn{background:#fff3e0;color:#7a4000;display:block}
 .jretry{width:100%;margin-top:.6rem;padding:.7rem;font-size:.9rem;font-weight:700;background:#fff3e0;color:#7a4000;border:1.5px solid #f4a261;border-radius:10px;cursor:pointer;display:none}
-.sw-lap-btn{flex:1;background:#023e8a;color:#fff;border:none;padding:.6rem;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;transition:transform .08s}
+.sw-lap-btn{flex:1;background:#023e8a;color:#fff;border:none;padding:.6rem;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;transition:background .15s,transform .08s}
 .sw-lap-btn:active{transform:scale(.96)}
+.sw-lap-btn.finish{background:#2e7d32;animation:pulse-green .6s infinite alternate}
+@keyframes pulse-green{from{box-shadow:0 0 0 0 rgba(46,125,50,.4)}to{box-shadow:0 0 0 8px rgba(46,125,50,0)}}
+.sw-lap-btn:disabled{opacity:.55;cursor:default}
 .j-splits-list{display:flex;flex-direction:column;gap:.25rem;margin:.4rem 0 .1rem;font-size:.8rem}
 .j-split-item{display:flex;align-items:center;gap:.5rem;background:#f0f9ff;border-radius:8px;padding:.3rem .7rem;color:#023e8a;font-weight:600}
 .j-split-item .j-split-leg{background:#0077b6;color:#fff;border-radius:5px;padding:.1rem .4rem;font-size:.72rem;font-weight:800;min-width:2rem;text-align:center}
@@ -11719,7 +11722,7 @@ function _initJudgeMode(){
   _judgeHeats.forEach(h=>{
     try{
       const s=JSON.parse(localStorage.getItem(_judgeResKey(h.h))||'null');
-      if(s){h.submitted=true;h.resultCs=s.cs||null;h.status=s.status||null;}
+      if(s){h.submitted=true;h.resultCs=s.cs||null;h.status=s.status||null;h.splits=s.splits||[];}
     }catch(_){}
   });
 
@@ -11793,6 +11796,15 @@ function _judgeShowCurrent(){
       document.getElementById('sw-disp').classList.add('sw-stop');
     }
   }
+  // Restore splits if previously submitted with relay data
+  if(h.submitted&&h.splits&&h.splits.length){
+    _swSplits=[...h.splits];
+    _renderSplits();
+    if(_relayMode){
+      const lapBtn=document.getElementById('sw-lap');
+      if(lapBtn){lapBtn.disabled=true;lapBtn.textContent='✓ Фінішовано';lapBtn.classList.remove('finish');}
+    }
+  }
   _setJudgeStatus('','');
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
   const sb=document.getElementById('j-submit');
@@ -11836,7 +11848,7 @@ function swReset(){
   disp.classList.remove('sw-run','sw-stop');
   disp.textContent='00:00:00';
   document.getElementById('j-manual').value='';
-  _swSplits=[];_renderSplits();
+  _swSplits=[];_renderSplits();_resetLapBtn();
   _setJudgeStatus('','');
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
   const submitBtn=document.getElementById('j-submit');
@@ -11844,8 +11856,9 @@ function swReset(){
 }
 
 // ── Relay / LAP mode ──────────────────────────────────────────
-let _swSplits=[];      // [{leg, cs, label}]
+let _swSplits=[];      // [{leg, legCs, totalCs}]
 let _relayMode=false;
+const RELAY_LEGS=4;    // стандартна естафета — 4 етапи
 
 function toggleRelayMode(){
   _relayMode=!_relayMode;
@@ -11853,29 +11866,62 @@ function toggleRelayMode(){
   const lapBtn=document.getElementById('sw-lap');
   if(btn)btn.classList.toggle('active',_relayMode);
   if(lapBtn)lapBtn.style.display=_relayMode?'':'none';
-  if(!_relayMode){_swSplits=[];_renderSplits();}
+  if(!_relayMode){_swSplits=[];_renderSplits();_resetLapBtn();}
+}
+
+function _resetLapBtn(){
+  const lapBtn=document.getElementById('sw-lap');
+  if(!lapBtn)return;
+  lapBtn.textContent='📍 Відмітити';
+  lapBtn.classList.remove('finish');
+  lapBtn.disabled=false;
+  lapBtn.style.background='';
 }
 
 function swLap(){
   if(!_swRunning&&_swElapsedMs===0)return;
+  const doneLegs=_swSplits.length;
+  if(doneLegs>=RELAY_LEGS)return; // вже всі етапи записані
+
   const totalMs=_swRunning?(Date.now()-_swStartTs):_swElapsedMs;
   const totalCs=Math.floor(totalMs/10);
-  const leg=_swSplits.length+1;
-  // Leg time = total - previous split total
-  const prevTotal=_swSplits.length?_swSplits[_swSplits.length-1].totalCs:0;
+  const leg=doneLegs+1;
+  const prevTotal=doneLegs?_swSplits[doneLegs-1].totalCs:0;
   const legCs=totalCs-prevTotal;
-  _swSplits.push({leg,legCs,totalCs});
-  _renderSplits();
-  // Visual pulse feedback
-  const lapBtn=document.getElementById('sw-lap');
-  if(lapBtn){lapBtn.style.background='#00b4d8';setTimeout(()=>{lapBtn.style.background='';},300);}
+
+  if(leg===RELAY_LEGS){
+    // Останній (4-й) етап = ФІНІШ: зупиняємо секундомір
+    if(_swRunning) swToggle(); // зупиняє + заповнює j-manual
+    _swSplits.push({leg,legCs,totalCs});
+    _renderSplits();
+    // Вимикаємо кнопку після фінішу
+    const lapBtn=document.getElementById('sw-lap');
+    if(lapBtn){lapBtn.disabled=true;lapBtn.textContent='✓ Фінішовано';lapBtn.classList.remove('finish');}
+  }else{
+    // Проміжний етап (1, 2, 3) — секундомір продовжує йти
+    _swSplits.push({leg,legCs,totalCs});
+    _renderSplits();
+    const lapBtn=document.getElementById('sw-lap');
+    if(lapBtn){
+      // Після 3-го — кнопка стає "Фініш"
+      if(leg===RELAY_LEGS-1){
+        lapBtn.textContent='🏁 Фініш!';
+        lapBtn.classList.add('finish');
+      }
+      // Pulse-анімація
+      const origBg=lapBtn.style.background;
+      lapBtn.style.background='#00b4d8';
+      setTimeout(()=>{lapBtn.style.background=origBg;},250);
+    }
+  }
 }
 
-function _renderSplits(){
+function _renderSplits(splitsArr){
   const el=document.getElementById('j-splits-list');
   if(!el)return;
-  if(!_swSplits.length){el.innerHTML='';return;}
-  el.innerHTML=_swSplits.map(s=>`
+  const src=splitsArr||_swSplits;
+  if(!src.length){el.innerHTML='';return;}
+  el.innerHTML=src.map(s=>`
     <div class="j-split-item">
       <span class="j-split-leg">${s.leg}-й</span>
       <span style="flex:1">${fmtTime(s.legCs)}</span>
@@ -11956,16 +12002,17 @@ async function submitJudgeResult(){
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
 
   const heat=_judgeHeats[_judgeCurIdx]||{};
+  const splitsSnap=[..._swSplits]; // знімок перед скиданням
   const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
-    result_cs:cs,status:'pending'};
+    result_cs:cs,status:'pending',
+    splits_json:splitsSnap.length?JSON.stringify(splitsSnap):null};
 
   try{
     const{error}=await _supa.from('judge_inputs').insert(row);
     if(error)throw error;
-    // Mark as submitted
-    heat.submitted=true;heat.resultCs=cs;
-    try{localStorage.setItem(_judgeResKey(heat.h),JSON.stringify({cs,ts:Date.now()}));}catch(_){}
+    heat.submitted=true;heat.resultCs=cs;heat.splits=splitsSnap;
+    try{localStorage.setItem(_judgeResKey(heat.h),JSON.stringify({cs,splits:splitsSnap,ts:Date.now()}));}catch(_){}
     _setJudgeStatus('✅ Відправлено! Переходжу до наступного…','ok');
     sb.textContent='✓ Відправлено';
     _judgeRenderList();
@@ -12061,9 +12108,22 @@ function renderJudgeInputsPanel(){
       :r.status==='rejected'
       ?'<span class="jinput-badge-no">✗ Відхилено</span>'
       :`<button class="jinput-accept" onclick="acceptJudgeInput('${r.id}',${i})">✓ Прийняти</button><button class="jinput-reject" onclick="rejectJudgeInput('${r.id}',${i})">✗</button>`;
+    // Parse splits if present
+    let splitsHtml='';
+    if(r.splits_json){
+      try{
+        const sp=JSON.parse(r.splits_json);
+        if(sp&&sp.length){
+          splitsHtml=`<div style="font-size:.72rem;color:#1a6a9a;margin-top:.15rem;display:flex;gap:.5rem;flex-wrap:wrap">`
+            +sp.map(s=>`<span style="background:#e0f2fe;border-radius:4px;padding:.05rem .35rem"><b>${s.leg}</b>: ${fmtTime(s.legCs)}</span>`).join('')
+            +`</div>`;
+        }
+      }catch(_){}
+    }
+    const timeDisp=r.result_cs?fmtTime(r.result_cs):(r.status==='dns'?'Н/С':r.status==='dsq'?'Д/К':'—');
     return `<div class="jinput-row">
-      <span class="jinput-time">${fmtTime(r.result_cs)}</span>
-      <span class="jinput-info">${escapeHtml(r.athlete_name||'—')} · ${heatDisp} · Д.${r.lane}<br><span style="font-size:.75rem;color:#5a9ab8">${escapeHtml(r.event_name||'')}</span></span>
+      <span class="jinput-time">${timeDisp}</span>
+      <span class="jinput-info">${escapeHtml(r.athlete_name||'—')} · ${heatDisp} · Д.${r.lane}<br><span style="font-size:.75rem;color:#5a9ab8">${escapeHtml(r.event_name||'')}</span>${splitsHtml}</span>
       <span class="jinput-status">${statusHtml}</span>
     </div>`;
   }).join('');
