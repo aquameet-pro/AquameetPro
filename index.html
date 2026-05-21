@@ -696,6 +696,9 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .jstatus.err{background:#fde8ea;color:#7d0012;display:block}
 .jstatus.warn{background:#fff3e0;color:#7a4000;display:block}
 .jretry{width:100%;margin-top:.6rem;padding:.7rem;font-size:.9rem;font-weight:700;background:#fff3e0;color:#7a4000;border:1.5px solid #f4a261;border-radius:10px;cursor:pointer;display:none}
+.j-offline-badge{display:none;margin:.4rem auto 0;padding:.35rem .9rem;background:#fff3cd;color:#7a4000;border:1.5px solid #f4a261;border-radius:20px;font-size:.78rem;font-weight:700;text-align:center;max-width:280px}
+.j-offline-badge.visible{display:block}
+.j-offline-badge.syncing{background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7}
 .sw-lap-btn{flex:1;background:#023e8a;color:#fff;border:none;padding:.6rem;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;transition:background .15s,transform .08s}
 .sw-lap-btn:active{transform:scale(.96)}
 .sw-lap-btn.finish{background:#2e7d32;animation:pulse-green .6s infinite alternate}
@@ -873,6 +876,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <div class="jcard">
     <div class="jlogo">Aqua<span>Meet</span><sup>PRO</sup></div>
     <div id="j-lane-badge" class="jlane-badge">Доріжка —</div>
+    <div id="j-offline-badge" class="j-offline-badge"></div>
     <!-- Список запливів -->
     <div id="j-heat-list" class="jheat-list" style="display:none"></div>
     <div class="jcur-divider" id="j-divider" style="display:none"></div>
@@ -11733,6 +11737,52 @@ function _judgeResKey(hIdx){
   return 'jres_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.l+'_'+hIdx;
 }
 
+// ── Офлайн черга суддів ────────────────────────────────────────
+function _jqKey(){return 'aquameet_jq_'+_judgeP.oid+'_'+_judgeP.cid;}
+function _jqLoad(){try{return JSON.parse(localStorage.getItem(_jqKey())||'[]');}catch(_){return[];}}
+function _jqSave(arr){try{localStorage.setItem(_jqKey(),JSON.stringify(arr));}catch(_){}}
+function _jqAdd(row){
+  const q=_jqLoad();
+  // Уникаємо дублів (той самий heat_idx + lane + heat_type)
+  const dup=q.findIndex(r=>r.heat_idx===row.heat_idx&&r.lane===row.lane&&r.heat_type===row.heat_type);
+  if(dup>=0)q.splice(dup,1);
+  q.push({...row,_qts:Date.now()});
+  _jqSave(q);
+  _jqUpdateBadge();
+}
+function _jqUpdateBadge(){
+  const el=document.getElementById('j-offline-badge');if(!el)return;
+  const q=_jqLoad();
+  if(q.length===0){el.className='j-offline-badge';el.textContent='';return;}
+  el.className='j-offline-badge visible';
+  el.textContent='📵 '+q.length+' результат'+(q.length===1?'':'и')+' очікують синхронізації';
+}
+async function _jqFlush(){
+  if(!navigator.onLine)return;
+  const q=_jqLoad();if(!q.length)return;
+  const el=document.getElementById('j-offline-badge');
+  if(el){el.className='j-offline-badge visible syncing';el.textContent='🔄 Синхронізація…';}
+  let synced=0;const failed=[];
+  for(const row of q){
+    const{_qts,...r}=row;
+    try{
+      const{error}=await _supa.from('judge_inputs').insert(r);
+      if(error)throw error;
+      synced++;
+      // Відновити submitted-стан у _judgeHeats
+      const h=_judgeHeats.find(h=>h.h===r.heat_idx);
+      if(h){h.submitted=true;h.resultCs=r.result_cs;h.status=r.status||null;}
+    }catch(_){failed.push(row);}
+  }
+  _jqSave(failed);
+  _jqUpdateBadge();
+  if(synced){
+    _setJudgeStatus('✅ Синхронізовано '+synced+' результат'+(synced===1?'':'и')+' із черги','ok');
+    _judgeRenderList();
+    setTimeout(()=>_setJudgeStatus('',''),4000);
+  }
+}
+
 function _initJudgeMode(){
   const p=new URLSearchParams(location.search);
   if(!p.has('judge'))return false;
@@ -11777,6 +11827,9 @@ function _initJudgeMode(){
 
   _judgeRenderList();
   _judgeShowCurrent();
+  // Показати бейдж якщо є незинхронізовані результати, і спробувати відправити
+  _jqUpdateBadge();
+  if(navigator.onLine)_jqFlush();
   return true;
 }
 
@@ -11991,7 +12044,8 @@ async function submitSpecial(status){
       swReset();_judgeRenderList();_judgeShowCurrent();
     },1200);
   }catch(e){
-    _setJudgeStatus('⚠ Немає зв\'язку','err');
+    _jqAdd(row);
+    _setJudgeStatus('📵 Немає зв\'язку — '+label+' збережено. Надішлеться при відновленні.','warn');
   }
 }
 
@@ -12065,8 +12119,8 @@ async function submitJudgeResult(){
       swReset();_judgeRenderList();_judgeShowCurrent();
     },1400);
   }catch(e){
-    try{localStorage.setItem(_judgeResKey(heat.h)+'_pend',JSON.stringify({...row,ts:Date.now()}));}catch(_){}
-    _setJudgeStatus('⚠ Немає зв\'язку — збережено локально. Надішлеться автоматично при відновленні.','warn');
+    _jqAdd(row);
+    _setJudgeStatus('📵 Немає зв\'язку — збережено. Надішлеться автоматично при відновленні.','warn');
     sb.disabled=false;sb.textContent='✓ Відправити результат';
     if(retry)retry.style.display='block';
   }
@@ -12078,20 +12132,9 @@ function _setJudgeStatus(msg,type){
   if(!type)el.style.display='none';
 }
 
-window.addEventListener('online',async()=>{
+window.addEventListener('online',()=>{
   if(!_judgeMode)return;
-  // Try to send all pending results
-  for(const h of _judgeHeats){
-    const key=_judgeResKey(h.h)+'_pend';
-    try{
-      const pending=JSON.parse(localStorage.getItem(key)||'null');
-      if(!pending)continue;
-      const{error}=await _supa.from('judge_inputs').insert(pending);
-      if(!error){localStorage.removeItem(key);h.submitted=true;h.resultCs=pending.result_cs;}
-    }catch(_){}
-  }
-  _judgeRenderList();
-  _judgeShowCurrent();
+  _jqFlush();
 });
 
 // ── Secretary/Organizer: subscribe to judge inputs ─────────────
