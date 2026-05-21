@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --accent:#0077b6;--accent2:#00b4d8;--accent3:#48cae4;
@@ -11899,6 +11900,7 @@ function openJudgeLinks(){
     openModal('modal-judge-links');return;
   }
 
+  const qrMap={};  // id → url for QR generation after render
   let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Скопіюйте посилання або покажіть QR суддям. Логін не потрібен.</div>';
   comp.heats.forEach((heat,hIdx)=>{
     const laneEntries=Object.entries(heat.lanes||{});
@@ -11908,17 +11910,18 @@ function openJudgeLinks(){
       const entry=comp.entries?.find(e=>e.id===entryId);
       if(!entry)return;
       const ath=db.athletes?.find(a=>a.id===entry.athleteId);
-      const athName=ath?(ath.surname||'')+' '+(ath.name||''):('Спортсмен');
+      const athName=ath?(ath.surname||'')+' '+(ath.name||''):'Спортсмен';
       const evName=(entry.dist?entry.dist+'м ':'')+( entry.style||heat.eventName||'');
       const hn=encodeURIComponent('Заплив '+(hIdx+1));
       const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&h='+hIdx+'&l='+laneNum+'&an='+encodeURIComponent(athName.trim())+'&ev='+encodeURIComponent(evName.trim())+'&hn='+hn;
-      const qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(url);
       const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const qrId='qr-'+hIdx+'-'+laneNum;
+      qrMap[qrId]=url;
       html+=`<div class="jlink-row">
         <div style="flex:1">
           <div style="font-weight:600;color:#023e8a">Д.${laneNum} — ${escapeHtml(athName.trim())}</div>
-          <div style="font-size:.72rem;color:#5a9ab8;margin:.2rem 0">${escapeHtml(evName.trim())}</div>
-          <img class="jlink-qr" src="${qrSrc}" width="70" height="70" loading="lazy" alt="QR">
+          <div style="font-size:.72rem;color:#5a9ab8;margin:.15rem 0">${escapeHtml(evName.trim())}</div>
+          <div id="${qrId}" style="display:inline-block;margin:.35rem 0;border-radius:6px;overflow:hidden;border:1px solid #b8dff0;background:#fff"></div>
         </div>
         <button class="jlink-copy" onclick="navigator.clipboard.writeText('${urlEsc}').then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
       </div>`;
@@ -11926,6 +11929,23 @@ function openJudgeLinks(){
   });
   body.innerHTML=html;
   openModal('modal-judge-links');
+  // Generate QR codes after DOM is ready
+  setTimeout(()=>{
+    Object.entries(qrMap).forEach(([id,url])=>{
+      const el=document.getElementById(id);
+      if(!el)return;
+      if(typeof QRCode!=='undefined'){
+        try{new QRCode(el,{text:url,width:100,height:100,colorDark:'#023e8a',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}
+        catch(e){el.textContent='QR';}
+      } else {
+        // fallback: external image
+        const img=document.createElement('img');
+        img.src='https://api.qrserver.com/v1/create-qr-code/?size=100x100&data='+encodeURIComponent(url);
+        img.width=100;img.height=100;img.alt='QR';
+        el.appendChild(img);
+      }
+    });
+  },120);
 }
 
 // ═══════════════════════════════════════════════════════════════
