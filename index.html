@@ -6129,6 +6129,24 @@ function importTrainerAthletesXlsx(){
   };inp.click();
 }
 
+function downloadTrainerAthleteTemplate(){
+  const header=['Прізвище','Ім\'я','Стать','Рік','Місто','Клуб','Тренер','Розряд'];
+  const example=[
+    ['Петренко','Олег','Ч',2011,'Київ','ДЮСШ-1','Коваленко В.В.','I юн.'],
+    ['Іванченко','Марія','Ж',2012,'Харків','СК Хвиля','Мороз О.С.','II юн.'],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet([header,...example]);
+  // Жирний заголовок
+  const range=XLSX.utils.decode_range(ws['!ref']);
+  for(let c=range.s.c;c<=range.e.c;c++){
+    const cell=ws[XLSX.utils.encode_cell({r:0,c})];
+    if(cell)cell.s={font:{bold:true},fill:{fgColor:{rgb:'D5E8F0'}},alignment:{horizontal:'center'}};
+  }
+  ws['!cols']=[14,12,6,6,14,16,20,10].map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Спортсмени');
+  XLSX.writeFile(wb,'шаблон_спортсмени.xlsx');
+}
+
 function exportTrainerAthletesXlsx(){
   const arr=_taLoad();if(!arr.length){showToast('База порожня');return;}
   const header=['Прізвище','Ім\'я','Стать','Рік','Місто','Клуб','Тренер','Розряд'];
@@ -6219,6 +6237,7 @@ function renderTrainerAthletes(){
     barEl.style.display='flex';
     barEl.innerHTML=`
       <button class="btn-primary btn-sm" onclick="openTrainerAthleteEdit(null)">＋ Додати</button>
+      <button class="btn-secondary btn-sm" onclick="downloadTrainerAthleteTemplate()">📋 Шаблон</button>
       <button class="btn-secondary btn-sm" onclick="importTrainerAthletesXlsx()">📥 Імпорт Excel</button>
       <button class="btn-secondary btn-sm" onclick="exportTrainerAthletesXlsx()">📤 Експорт Excel</button>`;
   }
