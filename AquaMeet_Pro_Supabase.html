@@ -12250,7 +12250,7 @@ async function acceptJudgeInput(id,idx){
             entry.result=timeStr;entry.resultCs=cs;
           }else if(row.status==='dns'){entry.result='Н/С';}
           else if(row.status==='dsq'){entry.result='Д/К';}
-          saveDB();
+          saveDB();renderResults();
           showToast('✅ Результат збережено для '+escapeHtml(row.athlete_name||'спортсмена'));
         }
       }
@@ -12328,7 +12328,7 @@ function openRelayJudgeLinks(){
       if(!el)return;
       if(typeof QRCode!=='undefined'){
         el.innerHTML='';
-        new QRCode(el,{text:url,width:200,height:200,colorDark:'#2e7d32',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+        new QRCode(el,{text:url,width:220,height:220,colorDark:'#2e7d32',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.L});
       }
     });
   });
@@ -12403,9 +12403,9 @@ function openJudgeLinks(regen){
       if(!el)return;
       if(typeof QRCode!=='undefined'){
         el.innerHTML=''; // очистити на випадок повторного відкриття
-        new QRCode(el,{text:url,width:200,height:200,
+        new QRCode(el,{text:url,width:220,height:220,
           colorDark:'#023e8a',colorLight:'#ffffff',
-          correctLevel:QRCode.CorrectLevel.M});
+          correctLevel:QRCode.CorrectLevel.L});
       }else{
         el.innerHTML=`<div style="font-size:.68rem;color:#5a9ab8;word-break:break-all;max-width:200px;padding:.3rem">${escapeHtml(url)}</div>`;
       }
