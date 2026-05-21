@@ -6317,9 +6317,10 @@ function printRelays(mode='heats'){
           const a=leg?.athleteId?db.athletes.find(x=>x.id===leg.athleteId):null;
           const name=a?`${a.surname} ${a.name[0]}.`:leg?.guestName||'—';
           const yr=a?`(${a.birthYear})`:'';
-          const legTime=leg?.legTime?`<br><b>${leg.legTime}</b>`:'';
+          const sp=t.splits?.[i];
+          const splitTime=sp?.legCs?`<br><b>${fmtTime(sp.legCs)}</b>`:leg?.legTime?`<br><b>${leg.legTime}</b>`:'';
           const lbl=rtype.style==='вільний'?`${i+1} ет.`:`${i+1}. ${style.slice(0,5)}`;
-          return`<td><span class="leg-style">${lbl}</span><br>${escapeHtml(name)} ${yr}${legTime}</td>`;
+          return`<td><span class="leg-style">${lbl}</span><br>${escapeHtml(name)} ${yr}${splitTime}</td>`;
         }).join('');
         const statusCell=t.result?
           (cs!==null?`<b style="color:#006600">${t.result}</b>`:
@@ -7435,8 +7436,12 @@ function buildRelayProtocolHtml(comp){
       const legSummary=(t.legs||[]).map((l,i)=>{
         const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
         const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
-        return`<div style="font-size:.72rem">${i+1}. ${name}${l?.legTime?` (${l.legTime})`:''}</div>`;
+        return`<div style="font-size:.72rem">${i+1}. ${name}</div>`;
       }).join('');
+
+      const splitsSummary=(t.splits&&t.splits.length)?t.splits.map((sp,i)=>{
+        return`<div style="font-size:.72rem">Е${sp.leg||i+1}: <span style="font-family:monospace;color:var(--accent);font-weight:600">${fmtTime(sp.legCs)}</span></div>`;
+      }).join(''):'<span style="color:var(--text-muted);font-size:.72rem">–</span>';
 
       return`<tr${t.exhibition?' style="background:rgba(244,162,49,.04)"':''}>
         <td style="text-align:center">${placeCell}</td>
@@ -7444,6 +7449,7 @@ function buildRelayProtocolHtml(comp){
         <td style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
         <td style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
         <td style="font-size:.75rem">${legSummary}</td>
+        <td style="font-size:.75rem">${splitsSummary}</td>
         <td>${statusCell}</td>
       </tr>`;
     }).join('');
@@ -7454,9 +7460,9 @@ function buildRelayProtocolHtml(comp){
         <span class="badge ${g.gender==='M'?'badge-m':g.gender==='F'?'badge-f':'badge-heat'}">${gLabel}</span>
         <span class="badge badge-heat">${agLabel}</span>
       </div>
-      <div class="tbl-wrap"><table style="table-layout:fixed;min-width:600px">
-        <colgroup><col style="width:50px"><col style="width:145px"><col style="width:115px"><col style="width:100px"><col style="width:200px"><col style="width:100px"></colgroup>
-        <thead><tr><th>#</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th>Результат</th></tr></thead>
+      <div class="tbl-wrap"><table style="table-layout:fixed;min-width:700px">
+        <colgroup><col style="width:50px"><col style="width:135px"><col style="width:105px"><col style="width:90px"><col style="width:160px"><col style="width:130px"><col style="width:100px"></colgroup>
+        <thead><tr><th>#</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th>По етапах</th><th>Результат</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -7516,14 +7522,17 @@ function buildRelayStandingsHtml(comp){
       const medal=t.place===1?'🥇':t.place===2?'🥈':'🥉';
       const legSummary=(t.legs||[]).map((l,i)=>{
         const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-        return a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
-      }).join(' · ');
+        const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+        const sp=t.splits?.[i];
+        const splitStr=sp?.legCs?` <span style="font-family:monospace;color:var(--accent);font-weight:600;font-size:.68rem">${fmtTime(sp.legCs)}</span>`:'';
+        return`<span style="white-space:nowrap">${i+1}. ${name}${splitStr}</span>`;
+      }).join('<br>');
       return`<tr class="rank-${t.place}">
         <td style="font-size:1.1rem;text-align:center">${medal}</td>
         <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong></td>
         <td style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
         <td style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
-        <td style="font-size:.75rem">${legSummary}</td>
+        <td style="font-size:.75rem;line-height:1.6">${legSummary}</td>
         <td style="font-family:monospace;font-weight:700;color:var(--success)">${t.result}</td>
       </tr>`;
     }).join('');
@@ -12018,6 +12027,10 @@ function swToggle(){
   const btn=document.getElementById('sw-btn');
   const disp=document.getElementById('sw-disp');
   if(_swRunning){
+    // In relay mode warn if intermediate laps not all done
+    if(_relayMode&&_swSplits.length<RELAY_LEGS-1){
+      if(!confirm(`Зафіксовано лише ${_swSplits.length} з ${RELAY_LEGS-1} проміжних відміток.\nВсе одно зупинити?`))return;
+    }
     _swElapsedMs+=Date.now()-_swStartTs;
     cancelAnimationFrame(_swRaf);_swRaf=null;
     _swRunning=false;
@@ -12216,6 +12229,11 @@ async function submitJudgeResult(){
 
   const heat=_judgeHeats[_judgeCurIdx]||{};
   const splitsSnap=[..._swSplits]; // знімок перед скиданням
+  // For relay: if judge stopped via main button instead of lap button, auto-add final split
+  if(_relayMode&&splitsSnap.length===RELAY_LEGS-1&&cs){
+    const prevTotal=splitsSnap[splitsSnap.length-1].totalCs;
+    splitsSnap.push({leg:RELAY_LEGS,legCs:cs-prevTotal,totalCs:cs});
+  }
   const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
     result_cs:cs,status:'pending',
@@ -12285,8 +12303,7 @@ function _showJudgeInputsBadge(n){
   const badge=document.getElementById('jinputs-badge');
   if(!badge)return;
   badge.textContent=n;badge.style.display=n>0?'inline':'none';
-  const panel=document.getElementById('judge-inputs-panel');
-  if(panel&&n>0)panel.style.display='block';
+  // Panel stays hidden — relay results are handled inline in the Estafety tab
 }
 
 function toggleJudgeInputsPanel(){
