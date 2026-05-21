@@ -7240,8 +7240,11 @@ function renderRelayHeats(){
         if(!t)return`<tr><td style="text-align:center;color:var(--text-muted)">${ln}</td><td colspan="6" style="color:var(--text-muted);font-size:.82rem">вільна</td></tr>`;
         const legList=(t.legs||[]).map((l,i)=>{
           const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-          return a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
-        }).join(', ');
+          const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+          const sp=t.splits?.[i];
+          const splitStr=sp?.legCs?` <span style="color:var(--accent);font-size:.72rem;font-weight:700">${fmtTime(sp.legCs)}</span>`:'';
+          return`<span style="white-space:nowrap">${i+1}. ${name}${splitStr}</span>`;
+        }).join(' &nbsp;');
         let judgeRelayCol='',statusRelayCol='';
         if(isOrg){
           const pending=relayPendingByHL[`${hIdx}_${ln}`]||[];
@@ -7319,8 +7322,11 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
       if(!t)return`<tr><td style="text-align:center;font-weight:700;color:var(--text-muted)">${ln}</td><td colspan="4" style="color:var(--text-muted)">вільна</td><td></td><td></td></tr>`;
       const legList=(t.legs||[]).map((l,i)=>{
         const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-        return a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
-      }).join(', ');
+        const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+        const sp=t.splits?.[i];
+        const splitStr=sp?.legCs?` (${fmtTime(sp.legCs)})`:'';
+        return`${i+1}. ${name}${splitStr}`;
+      }).join(' / ');
       const exh=t.exhibition?'<span class="badge" style="background:rgba(244,162,49,.18);color:#b45309;font-size:.68rem;margin-left:.3rem">ПК</span>':'';
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
@@ -12296,7 +12302,7 @@ function renderJudgeInputsPanel(){
   // Panel shows ONLY relay results — individual heat results are shown inline in the Results table
   const relayRows=_judgeInputsCache.filter(r=>r.heat_type==='relay');
   const panel=document.getElementById('judge-inputs-panel');
-  if(panel)panel.style.display=relayRows.length?'block':'none';
+  if(panel)panel.style.display='none'; // inline columns in Estafety tab handle relay results
   if(!relayRows.length){
     body.innerHTML='<div style="color:#5a9ab8;font-size:.82rem;text-align:center;padding:.5rem">Очікування результатів естафет…</div>';
     _updateResultsBadge();_updateRelayBadge();
