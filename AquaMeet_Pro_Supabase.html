@@ -1144,13 +1144,30 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <!-- ATHLETES DIRECTORY -->
 <div class="tab-panel" id="tab-athletes-dir">
   <div class="section-header">
-    <div><div class="section-title">🏊 Спортсмени</div><div class="section-sub">База спортсменів — пошук по прізвищу/імені або літері алфавіту. Відображається повна історія виступів.</div></div>
+    <div><div class="section-title">🏊 Спортсмени</div><div class="section-sub" id="adir-sub">База спортсменів — пошук по прізвищу/імені або літері алфавіту. Відображається повна історія виступів.</div></div>
+    <div id="adir-trainer-bar" style="display:none;gap:.45rem;flex-wrap:wrap"></div>
   </div>
   <div class="card" style="margin-bottom:1rem">
     <input id="adir-search" placeholder="🔍 Введіть прізвище або ім'я..." oninput="renderAthletesDir()" style="max-width:420px">
     <div id="adir-alphabet" class="alphabet-bar"></div>
   </div>
   <div id="adir-content"></div>
+</div>
+
+<!-- TRAINER ATHLETE MODALS -->
+<div class="modal-overlay" id="modal-ta-edit" onclick="if(event.target===this)closeTaModal('modal-ta-edit')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header"><span id="modal-ta-edit-title">Спортсмен</span><button class="modal-close" onclick="closeTaModal('modal-ta-edit')">✕</button></div>
+    <div class="modal-body" id="modal-ta-edit-body"></div>
+    <div class="modal-footer" id="modal-ta-edit-footer"></div>
+  </div>
+</div>
+<div class="modal-overlay" id="modal-ta-stats" onclick="if(event.target===this)closeTaModal('modal-ta-stats')">
+  <div class="modal" style="max-width:740px">
+    <div class="modal-header"><span id="modal-ta-stats-title">Статистика</span><button class="modal-close" onclick="closeTaModal('modal-ta-stats')">✕</button></div>
+    <div class="modal-body" id="modal-ta-stats-body" style="max-height:65vh;overflow-y:auto"></div>
+    <div class="modal-footer" id="modal-ta-stats-footer"></div>
+  </div>
 </div>
 
 <!-- RELAYS -->
@@ -5946,7 +5963,271 @@ function setAdirLetter(letter){
   adirActiveLetter=adirActiveLetter===letter?'':letter; // click same letter again to deselect
   renderAthletesDir();
 }
+// ─── Trainer Athlete Database ─────────────────────────────────────────────────
+function _taKey(){return'aquameet_ta_'+(_currentUser?.id||'anon');}
+function _taLoad(){try{return JSON.parse(localStorage.getItem(_taKey())||'[]');}catch(_){return[];}}
+function _taSave(arr){try{localStorage.setItem(_taKey(),JSON.stringify(arr));}catch(_){}}
+function _taUid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+
+function _gradeIsBetter(current,candidate){
+  const o=RANK_LIST;
+  const ci=o.indexOf(current),ni=o.indexOf(candidate);
+  if(ni===-1)return false;
+  return ci===-1||ni<ci;
+}
+
+function _taGetResults(ta){
+  const out=[];
+  for(const comp of(db.competitions||[])){
+    for(const e of(comp.entries||[])){
+      if(!e.result||e.result==='Н/С'||e.result==='Д/К')continue;
+      const a=db.athletes.find(x=>x.id===e.athleteId);
+      if(!a)continue;
+      if((a.surname||'').trim().toLowerCase()!==(ta.surname||'').trim().toLowerCase())continue;
+      if((a.name||'').trim().toLowerCase()!==(ta.name||'').trim().toLowerCase())continue;
+      if(parseInt(a.birthYear)!==parseInt(ta.birthYear))continue;
+      out.push({compName:comp.name||'',date:comp.dateFrom||'',dist:e.dist,style:e.style,
+        result:e.result,resultCs:e.resultCs||parseTime(e.result)||0,grade:e.achievedRank||null});
+    }
+  }
+  return out.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+}
+
+function _taSyncGrades(){
+  const athletes=_taLoad();let changed=false;
+  for(const ta of athletes){
+    if(ta.gradeManual)continue;
+    for(const r of _taGetResults(ta)){
+      if(r.grade&&_gradeIsBetter(ta.grade,r.grade)){ta.grade=r.grade;changed=true;}
+    }
+  }
+  if(changed)_taSave(athletes);
+  return athletes;
+}
+
+function closeTaModal(id){const el=document.getElementById(id);if(el)el.classList.remove('open');}
+
+let _taEditId=null;
+
+function openTrainerAthleteEdit(id){
+  _taEditId=id||null;
+  const ta=id?_taLoad().find(x=>x.id===id):null;
+  const v=ta||{surname:'',name:'',gender:'M',birthYear:'',city:'',club:'',coach:'',grade:'',gradeManual:false};
+  const gOpts=['','МС','КМС','I','II','III','I юн.','II юн.'].map(g=>`<option value="${g}"${v.grade===g?' selected':''}>${g||'(без розряду)'}</option>`).join('');
+  document.getElementById('modal-ta-edit-title').textContent=id?'Редагувати спортсмена':'Додати спортсмена';
+  document.getElementById('modal-ta-edit-body').innerHTML=`
+    <div class="form-row" style="grid-template-columns:1fr 1fr;gap:.6rem">
+      <label style="grid-column:1/-1">Прізвище *<input id="ta-surname" value="${escapeHtml(v.surname)}" placeholder="Іванов" autocomplete="off"></label>
+      <label>Ім'я *<input id="ta-name" value="${escapeHtml(v.name)}" placeholder="Іван" autocomplete="off"></label>
+      <label>Стать<select id="ta-gender"><option value="M"${v.gender==='M'?' selected':''}>Чоловіча</option><option value="F"${v.gender==='F'?' selected':''}>Жіноча</option></select></label>
+      <label>Рік народження<input id="ta-year" type="number" min="1980" max="2020" value="${v.birthYear||''}"></label>
+      <label>Місто<input id="ta-city" value="${escapeHtml(v.city||'')}"></label>
+      <label style="grid-column:1/-1">Клуб<input id="ta-club" value="${escapeHtml(v.club||'')}"></label>
+      <label style="grid-column:1/-1">Тренер<input id="ta-coach" value="${escapeHtml(v.coach||'')}"></label>
+      <label>Поточний розряд<select id="ta-grade">${gOpts}</select></label>
+      <label style="display:flex;align-items:center;gap:.45rem;padding-top:1.4rem;font-size:.82rem">
+        <input type="checkbox" id="ta-grade-manual"${v.gradeManual?' checked':''}> Не оновлювати автоматично
+      </label>
+    </div>`;
+  document.getElementById('modal-ta-edit-footer').innerHTML=`
+    <button class="btn-primary" onclick="saveTrainerAthlete()">💾 Зберегти</button>
+    <button class="btn-secondary" onclick="closeTaModal('modal-ta-edit')">Скасувати</button>`;
+  document.getElementById('modal-ta-edit').classList.add('open');
+  setTimeout(()=>document.getElementById('ta-surname')?.focus(),100);
+}
+
+function saveTrainerAthlete(){
+  const surname=(document.getElementById('ta-surname')?.value||'').trim();
+  const name=(document.getElementById('ta-name')?.value||'').trim();
+  if(!surname||!name){alert('Введіть прізвище та ім\'я');return;}
+  const rec={id:_taEditId||_taUid(),surname,name,
+    gender:document.getElementById('ta-gender').value,
+    birthYear:parseInt(document.getElementById('ta-year').value)||null,
+    city:(document.getElementById('ta-city').value||'').trim(),
+    club:(document.getElementById('ta-club').value||'').trim(),
+    coach:(document.getElementById('ta-coach').value||'').trim(),
+    grade:document.getElementById('ta-grade').value,
+    gradeManual:document.getElementById('ta-grade-manual').checked};
+  const arr=_taLoad();
+  if(_taEditId){const i=arr.findIndex(x=>x.id===_taEditId);if(i>=0)arr[i]=rec;else arr.push(rec);}
+  else arr.push(rec);
+  _taSave(arr);closeTaModal('modal-ta-edit');renderAthletesDir();
+}
+
+function deleteTrainerAthlete(id){
+  if(!confirm('Видалити цього спортсмена з вашої бази?'))return;
+  _taSave(_taLoad().filter(a=>a.id!==id));renderAthletesDir();
+}
+
+function importTrainerAthletesCsv(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.csv,.txt';
+  inp.onchange=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const lines=(ev.target.result||'').split(/\r?\n/).filter(l=>l.trim());
+      if(!lines.length)return;
+      const isHeader=/прізвище|surname|name|ім/i.test(lines[0]);
+      const data=isHeader?lines.slice(1):lines;
+      const arr=_taLoad();let added=0;
+      for(const line of data){
+        const c=line.split(/[,;\t]/).map(x=>x.trim().replace(/^["']|["']$/g,''));
+        if(!c[0])continue;
+        const gRaw=(c[2]||'').toUpperCase();
+        const gender=(gRaw==='Ж'||gRaw==='F'||gRaw==='ЖІНОЧА'||gRaw==='FEMALE')?'F':'M';
+        const rec={id:_taUid(),surname:c[0],name:c[1]||'',gender,
+          birthYear:parseInt(c[3])||null,city:c[4]||'',club:c[5]||'',coach:c[6]||'',grade:c[7]||'',gradeManual:false};
+        const dup=arr.find(a=>a.surname.toLowerCase()===rec.surname.toLowerCase()&&
+          a.name.toLowerCase()===rec.name.toLowerCase()&&a.birthYear===rec.birthYear);
+        if(!dup){arr.push(rec);added++;}
+      }
+      _taSave(arr);alert(`Імпортовано ${added} спортсменів. Дублікати пропущені.`);renderAthletesDir();
+    };
+    reader.readAsText(file,'UTF-8');
+  };inp.click();
+}
+
+function exportTrainerAthletesCsv(){
+  const arr=_taLoad();if(!arr.length){alert('База порожня');return;}
+  const header='Прізвище,Ім\'я,Стать,Рік,Місто,Клуб,Тренер,Розряд\n';
+  const rows=arr.map(a=>[a.surname,a.name,a.gender==='F'?'Ж':'Ч',a.birthYear||'',
+    a.city||'',a.club||'',a.coach||'',a.grade||'']
+    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['﻿'+header+rows],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');link.href=url;link.download='мої_спортсмени.csv';link.click();
+  URL.revokeObjectURL(url);
+}
+
+function openTrainerAthleteStats(id){
+  const ta=_taLoad().find(a=>a.id===id);if(!ta)return;
+  const results=_taGetResults(ta);
+
+  const bestByEvent={};
+  for(const r of results){
+    const k=`${r.dist}м ${r.style}`;
+    if(!bestByEvent[k]||r.resultCs<bestByEvent[k].resultCs)bestByEvent[k]=r;
+  }
+  const grades=[...new Set(results.filter(r=>r.grade).map(r=>r.grade))];
+  const gLabel=ta.gender==='F'?'Жін.':'Чол.';
+
+  const bestRows=Object.entries(bestByEvent)
+    .sort((a,b)=>a[0].localeCompare(b[0],'uk'))
+    .map(([ev,r])=>`<tr>
+      <td style="font-weight:600">${escapeHtml(ev)}</td>
+      <td style="font-family:monospace;font-weight:700;color:var(--success)">${r.result}</td>
+      <td>${r.grade?`<span class="ach-badge">${escapeHtml(r.grade)}</span>`:''}</td>
+      <td style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(r.compName)}${r.date?' ('+r.date+')':''}</td></tr>`).join('');
+
+  const histRows=results.map(r=>`<tr>
+    <td style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">${r.date||'–'}</td>
+    <td style="font-size:.8rem">${escapeHtml(r.compName)}</td>
+    <td style="font-size:.82rem">${r.dist}м ${escapeHtml(r.style)}</td>
+    <td style="font-family:monospace;font-weight:600;color:var(--success)">${r.result}</td>
+    <td>${r.grade?`<span class="ach-badge">${escapeHtml(r.grade)}</span>`:''}</td></tr>`).join('');
+
+  const curGrade=ta.grade?`<span class="ach-badge" style="font-size:.95rem">${escapeHtml(ta.grade)}</span>`:
+    '<span style="color:var(--text-muted)">–</span>';
+
+  document.getElementById('modal-ta-stats-title').textContent=`${ta.surname} ${ta.name} · ${ta.birthYear||'?'} р.н. · ${gLabel}`;
+  document.getElementById('modal-ta-stats-body').innerHTML=`
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem">
+      <div class="card" style="flex:1;min-width:130px;padding:.55rem .9rem">
+        <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">Розряд</div>
+        <div>${curGrade}${ta.gradeManual?'<span style="font-size:.62rem;color:var(--text-muted);margin-left:.3rem">вручну</span>':''}</div>
+      </div>
+      <div class="card" style="flex:1;min-width:100px;padding:.55rem .9rem">
+        <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">Виступів</div>
+        <div style="font-size:1.4rem;font-weight:800;color:var(--accent)">${results.length}</div>
+      </div>
+      <div class="card" style="flex:1;min-width:100px;padding:.55rem .9rem">
+        <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">Дисциплін</div>
+        <div style="font-size:1.4rem;font-weight:800;color:var(--accent)">${Object.keys(bestByEvent).length}</div>
+      </div>
+      ${grades.length?`<div class="card" style="flex:1;min-width:160px;padding:.55rem .9rem">
+        <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">Виконані розряди</div>
+        <div>${grades.map(g=>`<span class="ach-badge">${escapeHtml(g)}</span>`).join(' ')}</div>
+      </div>`:''}
+    </div>
+    ${bestRows?`<div style="font-weight:700;font-size:.9rem;margin-bottom:.4rem">🏆 Кращі результати</div>
+    <div class="tbl-wrap" style="margin-bottom:1.1rem"><table>
+      <thead><tr><th>Дисципліна</th><th>Результат</th><th>Розряд</th><th>Змагання</th></tr></thead>
+      <tbody>${bestRows}</tbody>
+    </table></div>`:'<div class="alert alert-info">Результатів у базі поточних змагань не знайдено.<br>Результати відображаються тільки з тих змагань, де Ви маєте доступ.</div>'}
+    ${histRows?`<div style="font-weight:700;font-size:.9rem;margin-bottom:.4rem">📅 Історія виступів</div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Дата</th><th>Змагання</th><th>Дисципліна</th><th>Результат</th><th>Розряд</th></tr></thead>
+      <tbody>${histRows}</tbody>
+    </table></div>`:''}`;
+  document.getElementById('modal-ta-stats-footer').innerHTML=`
+    <button class="btn-secondary" onclick="closeTaModal('modal-ta-stats');openTrainerAthleteEdit('${id}')">✏ Редагувати</button>
+    <button class="btn-secondary" onclick="closeTaModal('modal-ta-stats')">Закрити</button>`;
+  document.getElementById('modal-ta-stats').classList.add('open');
+}
+
+function renderTrainerAthletes(){
+  const contentEl=document.getElementById('adir-content');
+  const alphaEl=document.getElementById('adir-alphabet');
+  const subEl=document.getElementById('adir-sub');
+  const barEl=document.getElementById('adir-trainer-bar');
+  if(!contentEl)return;
+
+  if(alphaEl)alphaEl.style.display='none';
+  if(subEl)subEl.textContent='Ваша особиста база спортсменів — зберігається на цьому пристрої.';
+  if(barEl){
+    barEl.style.display='flex';
+    barEl.innerHTML=`
+      <button class="btn-primary btn-sm" onclick="openTrainerAthleteEdit(null)">＋ Додати</button>
+      <button class="btn-secondary btn-sm" onclick="importTrainerAthletesCsv()">📥 Імпорт CSV</button>
+      <button class="btn-secondary btn-sm" onclick="exportTrainerAthletesCsv()">📤 Експорт CSV</button>`;
+  }
+
+  const athletes=_taSyncGrades();
+  const search=(document.getElementById('adir-search')?.value||'').trim().toLowerCase();
+  const filtered=athletes.filter(a=>!search||
+    (a.surname||'').toLowerCase().includes(search)||(a.name||'').toLowerCase().includes(search));
+
+  if(!athletes.length){
+    contentEl.innerHTML=`<div class="alert alert-info" style="margin-top:.5rem">
+      База порожня. Натисніть <strong>＋ Додати</strong> щоб внести першого спортсмена,
+      або <strong>📥 Імпорт CSV</strong> для завантаження списку.<br><br>
+      <strong>Формат CSV:</strong> Прізвище, Ім'я, Стать (Ч/Ж), Рік, Місто, Клуб, Тренер, Розряд</div>`;
+    return;
+  }
+  if(!filtered.length){
+    contentEl.innerHTML=`<div class="alert alert-info">Нічого не знайдено за запитом «${escapeHtml(search)}»</div>`;
+    return;
+  }
+
+  const rows=filtered.map(a=>{
+    const gBadge=`<span class="badge ${a.gender==='M'?'badge-m':'badge-f'}">${a.gender==='M'?'Ч':'Ж'}</span>`;
+    const gradeCell=a.grade?`<span class="ach-badge">${escapeHtml(a.grade)}</span>`:'<span style="color:var(--text-muted)">–</span>';
+    const results=_taGetResults(a);
+    const hint=results.length?`<span style="font-size:.72rem;color:var(--text-muted);margin-left:.4rem">${results.length} виступ${results.length===1?'':'ів'}</span>`:'';
+    return`<tr style="cursor:pointer" onclick="openTrainerAthleteStats('${a.id}')">
+      <td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${hint}</td>
+      <td>${gBadge}</td>
+      <td style="text-align:center">${a.birthYear||'–'}</td>
+      <td style="font-size:.82rem">${escapeHtml(a.city||'–')}</td>
+      <td style="font-size:.82rem">${escapeHtml(a.club||'–')}</td>
+      <td style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(a.coach||'–')}</td>
+      <td>${gradeCell}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-icon btn-sm" onclick="event.stopPropagation();openTrainerAthleteEdit('${a.id}')" title="Редагувати">✏</button>
+        <button class="btn-icon btn-sm" style="color:var(--danger)" onclick="event.stopPropagation();deleteTrainerAthlete('${a.id}')" title="Видалити">✕</button>
+      </td></tr>`;
+  }).join('');
+
+  contentEl.innerHTML=`<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem">${filtered.length} спортсменів · натисніть рядок для статистики</div>
+    <div class="tbl-wrap"><table style="min-width:680px">
+      <thead><tr><th>ПІБ</th><th>Ст.</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Розряд</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 function renderAthletesDir(){
+  if(_currentRole==='trainer'){renderTrainerAthletes();return;}
   const alphaEl=document.getElementById('adir-alphabet');
   const searchEl=document.getElementById('adir-search');
   const contentEl=document.getElementById('adir-content');
