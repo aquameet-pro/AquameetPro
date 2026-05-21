@@ -11877,8 +11877,7 @@ function _initJudgeMode(){
     const lapBtn=document.getElementById('sw-lap');
     if(lapBtn)lapBtn.style.display=''; // покажемо після _judgeShowCurrent
   }else{
-    if(relayToggleBtn){relayToggleBtn.style.display='';} // тільки для індивідуальних
-    // Кнопка LAP прихована за замовчуванням для індивідуальних запливів
+    if(relayToggleBtn){relayToggleBtn.style.display='none';} // завжди прихована — режим визначається URL
     _relayMode=false;
   }
 
@@ -11995,6 +11994,7 @@ function _swTick(){
 }
 
 function swReset(){
+  if((_swRunning||_swElapsedMs>0)&&!confirm('Скинути секундомір і очистити результат?'))return;
   cancelAnimationFrame(_swRaf);_swRaf=null;
   _swRunning=false;_swElapsedMs=0;
   const btn=document.getElementById('sw-btn');
@@ -12089,9 +12089,16 @@ async function submitSpecial(status){
   const label=status==='dns'?'Н/С':'Д/К';
   if(!confirm(`Підтвердити: ${label} для цього учасника?`))return;
   const heat=_judgeHeats[_judgeCurIdx]||{};
+  // Для Д/К — завжди передаємо час (якщо є), щоб організатор міг прийняти час незалежно від статусу
+  let cs=null;
+  if(status==='dsq'){
+    if(_swRunning){const ms=Date.now()-_swStartTs;cs=Math.floor(ms/10);}
+    else if(_swElapsedMs>0){cs=Math.floor(_swElapsedMs/10);}
+    if(!cs){const mv=document.getElementById('j-manual')?.value.trim();if(mv)cs=parseTime(mv)||null;}
+  }
   const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
-    result_cs:null,status,heat_type:_judgeP.r==='1'?'relay':'heat'};
+    result_cs:cs,status,heat_type:_judgeP.r==='1'?'relay':'heat'};
   try{
     const{error}=await _supa.from('judge_inputs').insert(row);
     if(error)throw error;
