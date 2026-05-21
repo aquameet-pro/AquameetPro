@@ -11979,7 +11979,7 @@ function swToggle(){
   }else{
     _swStartTs=Date.now()-_swElapsedMs;
     _swRunning=true;
-    btn.innerHTML='⏹&nbsp;СТОП';btn.classList.add('run');
+    btn.innerHTML='⏹&nbsp;ФІНІШ';btn.classList.add('run');
     disp.classList.add('sw-run');disp.classList.remove('sw-stop');
     _swTick();
   }
@@ -11993,8 +11993,8 @@ function _swTick(){
   _swRaf=requestAnimationFrame(_swTick);
 }
 
-function swReset(){
-  if((_swRunning||_swElapsedMs>0)&&!confirm('Скинути секундомір і очистити результат?'))return;
+function swReset(force=false){
+  if(!force&&(_swRunning||_swElapsedMs>0)&&!confirm('Скинути секундомір і очистити результат?'))return;
   cancelAnimationFrame(_swRaf);_swRaf=null;
   _swRunning=false;_swElapsedMs=0;
   const btn=document.getElementById('sw-btn');
@@ -12109,7 +12109,7 @@ async function submitSpecial(status){
     setTimeout(()=>{
       const nextIdx=_judgeHeats.findIndex((h,i)=>i>_judgeCurIdx&&!h.submitted);
       _judgeCurIdx=nextIdx>=0?nextIdx:_judgeHeats.length;
-      swReset();_judgeRenderList();_judgeShowCurrent();
+      swReset(true);_judgeRenderList();_judgeShowCurrent();
     },1200);
   }catch(e){
     _jqAdd(row);
@@ -12184,7 +12184,7 @@ async function submitJudgeResult(){
     setTimeout(()=>{
       const nextIdx=_judgeHeats.findIndex((h,i)=>i>_judgeCurIdx&&!h.submitted);
       _judgeCurIdx=nextIdx>=0?nextIdx:_judgeHeats.length;
-      swReset();_judgeRenderList();_judgeShowCurrent();
+      swReset(true);_judgeRenderList();_judgeShowCurrent();
     },1400);
   }catch(e){
     _jqAdd(row);
@@ -12365,11 +12365,9 @@ async function acceptJudgeTime(rowId,eid){
   entry.result=timeStr;entry.resultCs=cs;entry.confirmedBy='від судді';
   const a=db.athletes?.find(x=>x.id===entry.athleteId);
   if(a){const rk=checkRank(entry.style,entry.dist,a.gender,cs);entry.achievedRank=rk||null;if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}}
-  if(row.status!=='dsq'&&row.status!=='dns'){
-    try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
-    const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
-    if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
-  }
+  try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+  const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
+  if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
   saveDB();renderResults();_updateResultsBadge();
   showToast('✅ Час від судді прийнято: '+timeStr);
 }
