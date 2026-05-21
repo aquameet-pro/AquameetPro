@@ -12242,18 +12242,26 @@ function toggleJudgeInputsPanel(){
 
 function renderJudgeInputsPanel(){
   const body=document.getElementById('jinputs-body');if(!body)return;
-  if(!_judgeInputsCache.length){
-    body.innerHTML='<div style="color:#5a9ab8;font-size:.82rem;text-align:center;padding:.5rem">Очікування результатів від суддів…</div>';
+  // Panel shows ONLY relay results — individual heat results are shown inline in the Results table
+  const relayRows=_judgeInputsCache.filter(r=>r.heat_type==='relay');
+  const panel=document.getElementById('judge-inputs-panel');
+  if(panel)panel.style.display=relayRows.length?'block':'none';
+  if(!relayRows.length){
+    body.innerHTML='<div style="color:#5a9ab8;font-size:.82rem;text-align:center;padding:.5rem">Очікування результатів естафет…</div>';
+    _updateResultsBadge();
+    // Refresh inline columns whenever cache changes
+    if(document.getElementById('tab-results')?.style.display!=='none')renderResults();
     return;
   }
   const comp=activeComp();
-  body.innerHTML=_judgeInputsCache.map((r,i)=>{
-    const heatDisp=r.heat_type==='relay'?'🤝 Ест. Заплив '+(r.heat_idx+1):'Заплив '+(r.heat_idx+1);
+  body.innerHTML=relayRows.map((r,i)=>{
+    const _i=_judgeInputsCache.indexOf(r); // original cache index for accept/reject
+    const heatDisp='🤝 Ест. Заплив '+(r.heat_idx+1);
     const statusHtml=r.status==='accepted'
       ?'<span class="jinput-badge-ok">✓ Прийнято</span>'
       :r.status==='rejected'
       ?'<span class="jinput-badge-no">✗ Відхилено</span>'
-      :`<button class="jinput-accept" onclick="acceptJudgeInput('${r.id}',${i})">✓ Прийняти</button><button class="jinput-reject" onclick="rejectJudgeInput('${r.id}',${i})">✗</button>`;
+      :`<button class="jinput-accept" onclick="acceptJudgeInput('${r.id}',${_i})">✓ Прийняти</button><button class="jinput-reject" onclick="rejectJudgeInput('${r.id}',${_i})">✗</button>`;
     // Parse splits if present
     let splitsHtml='';
     if(r.splits_json){
@@ -12274,6 +12282,8 @@ function renderJudgeInputsPanel(){
     </div>`;
   }).join('');
   _updateResultsBadge();
+  // Refresh inline judge columns in Results table
+  if(document.getElementById('tab-results')?.style.display!=='none')renderResults();
 }
 
 function _updateResultsBadge(){
