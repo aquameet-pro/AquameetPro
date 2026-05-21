@@ -695,6 +695,23 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .jstatus.err{background:#fde8ea;color:#7d0012;display:block}
 .jstatus.warn{background:#fff3e0;color:#7a4000;display:block}
 .jretry{width:100%;margin-top:.6rem;padding:.7rem;font-size:.9rem;font-weight:700;background:#fff3e0;color:#7a4000;border:1.5px solid #f4a261;border-radius:10px;cursor:pointer;display:none}
+/* Judge heat list */
+.jlane-badge{background:#0077b6;color:#fff;border-radius:20px;padding:.35rem 1rem;font-size:.9rem;font-weight:800;text-align:center;margin-bottom:.9rem;letter-spacing:.5px}
+.jheat-list{display:flex;flex-direction:column;gap:.2rem;margin-bottom:.5rem;max-height:170px;overflow-y:auto;border:1px solid #e0f2fe;border-radius:10px;padding:.35rem}
+.jheat-item{display:flex;align-items:center;gap:.5rem;padding:.32rem .55rem;border-radius:7px;cursor:pointer;transition:background .1s;font-size:.8rem}
+.jheat-item:hover{background:#e8f4fd}
+.jheat-item.jhi-cur{background:#e0f2fe;font-weight:700}
+.jheat-item.jhi-done{opacity:.65}
+.jheat-item.jhi-done .jhi-ico{color:#06a870;font-weight:700}
+.jheat-item.jhi-cur .jhi-ico{color:#0077b6;font-weight:900}
+.jhi-ico{width:14px;text-align:center;flex-shrink:0;font-size:.8rem}
+.jhi-heat{font-weight:600;color:#023e8a;flex-shrink:0;font-size:.78rem}
+.jhi-nm{color:#1a6a9a;font-size:.78rem;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jhi-time{color:#06a870;font-size:.72rem;flex-shrink:0;font-weight:700}
+.jcur-divider{border-top:1.5px solid #e0f2fe;margin:.8rem 0 .7rem}
+/* QR stale banner */
+.judge-qr-stale{background:#fff3e0;border:1.5px solid #f4a261;border-radius:10px;padding:.55rem .9rem;margin-bottom:.7rem;font-size:.82rem;color:#7a4000;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.judge-qr-stale button{padding:.25rem .6rem;font-size:.78rem;background:#f4a261;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;font-family:inherit}
 /* Incoming results panel (secretary/organizer) */
 .jinputs-panel{background:#fff;border:1.5px solid #b8dff0;border-radius:12px;margin-bottom:1rem;overflow:hidden}
 .jinputs-hdr{background:#e0f2fe;padding:.6rem 1rem;display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.85rem;color:#023e8a;cursor:pointer;user-select:none}
@@ -837,12 +854,15 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <!-- ══ JUDGE MODE OVERLAY ══ -->
 <div id="judge-overlay">
   <div class="jcard">
-    <div class="jlogo">Aqua<span>Meet</span><sup>PRO</sup> — Суддя</div>
-    <div id="j-loading" style="text-align:center;padding:1.5rem;color:#5a9ab8">Завантаження…</div>
+    <div class="jlogo">Aqua<span>Meet</span><sup>PRO</sup></div>
+    <div id="j-lane-badge" class="jlane-badge">Доріжка —</div>
+    <!-- Список запливів -->
+    <div id="j-heat-list" class="jheat-list" style="display:none"></div>
+    <div class="jcur-divider" id="j-divider" style="display:none"></div>
+    <!-- Поточний заплив -->
     <div id="j-content" style="display:none">
       <div class="jheat">
         <div class="jheat-name" id="j-heat-name"></div>
-        <div class="jheat-lane" id="j-lane-info"></div>
       </div>
       <div class="jathlete" id="j-athlete"></div>
       <div class="jevent" id="j-event"></div>
@@ -857,11 +877,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       <div class="jstatus" id="j-status"></div>
       <button class="jretry" id="j-retry" onclick="submitJudgeResult()">↺ Спробувати знову</button>
     </div>
-    <div id="j-done" style="display:none;text-align:center;padding:1rem">
-      <div style="font-size:3rem;margin-bottom:.5rem">✅</div>
-      <div style="font-weight:800;color:#023e8a;font-size:1.1rem">Результат відправлено!</div>
-      <div style="color:#1a6a9a;font-size:.85rem;margin-top:.4rem" id="j-done-time"></div>
-      <button class="sw-reset-btn" style="margin-top:1.2rem;width:100%" onclick="judgeResetForNext()">↺ Новий заплив / виправити</button>
+    <!-- Всі запливи завершено -->
+    <div id="j-all-done" style="display:none;text-align:center;padding:1.5rem 0">
+      <div style="font-size:3rem">🏁</div>
+      <div style="font-weight:800;color:#023e8a;font-size:1.1rem;margin-top:.5rem">Всі запливи завершено!</div>
+      <div style="color:#1a6a9a;font-size:.85rem;margin-top:.3rem">Дякуємо за роботу</div>
     </div>
   </div>
 </div>
@@ -1017,6 +1037,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     </div>
   </div>
   <div id="heats-alert"></div>
+  <div id="judge-qr-banner-wrap"></div>
   <div id="judge-inputs-panel" style="display:none">
     <div class="jinputs-panel">
       <div class="jinputs-hdr" onclick="toggleJudgeInputsPanel()">
@@ -2963,7 +2984,7 @@ function assignLateAthlete(athleteId){
   }
   // Renumber globalNums sequentially
   comp.heats.forEach((h,i)=>h.globalNum=i+1);
-  saveDB();renderAthletes();renderHeats&&renderHeats();
+  saveDB();_markJudgeQrDirty();renderAthletes();renderHeats&&renderHeats();
   const msg=`✓ Додано до ${added} запл.${created?' (створено '+created+' нових)':''}`;
   showToast(msg);
 }
@@ -4748,7 +4769,7 @@ function startSwap(heatId,lane){
       else delete heat.lanes[_swapState.lane];
       if(tmp)heat.lanes[lane]=tmp;
       else delete heat.lanes[lane];
-      saveDB();
+      saveDB();_markJudgeQrDirty();
       showToast(`✅ Доріжки ${_swapState.lane} і ${lane} поміняно місцями`);
     }
     _swapState=null;
@@ -4900,7 +4921,7 @@ function generateHeats(){
     buildHeatsFor(g.dist,g.style,null,g.items);
   }
 
-  comp.heats=heats;saveDB();syncEventFilters();renderHeats();
+  comp.heats=heats;saveDB();_markJudgeQrDirty();syncEventFilters();renderHeats();
   showToast(`✅ Згенеровано ${heats.length} запливів згідно розкладу`);
   onHeatsGenerated();
 }
@@ -4916,6 +4937,7 @@ function renderHeats(){
     cont.innerHTML='';document.getElementById('heats-sub').textContent='';return;
   }
   alert_el.innerHTML='';
+  _renderJudgeQrBanner();
   // Warn organizer/secretary if athletes have entries not yet placed in any heat
   if(['organizer','secretary','admin'].includes(_currentRole)){
     // h.lanes is {laneNum: entryId} — collect assigned entryIds, then map to athleteIds
@@ -11639,39 +11661,103 @@ document.addEventListener('click',e=>{
 // ═══════════════════════════════════════════════════════════════
 
 let _judgeMode=false;
-let _judgeP={};     // judge URL params
-let _swRunning=false;
-let _swStartTs=0;
-let _swElapsedMs=0;
-let _swRaf=null;
+let _judgeP={};
+let _judgeHeats=[];   // [{h:idx, an:'Name', ev:'Event', submitted:false, resultCs:null}]
+let _judgeCurIdx=0;   // index in _judgeHeats
+let _swRunning=false,_swStartTs=0,_swElapsedMs=0,_swRaf=null;
 let _judgeChannel=null;
 let _judgeInputsCache=[];
 let _jinputsPanelOpen=true;
+
+function _judgeResKey(hIdx){
+  return 'jres_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.l+'_'+hIdx;
+}
 
 function _initJudgeMode(){
   const p=new URLSearchParams(location.search);
   if(!p.has('judge'))return false;
   _judgeMode=true;
-  _judgeP={
-    oid:p.get('oid')||'',
-    cid:p.get('cid')||'',
-    h:parseInt(p.get('h')||'0'),
-    l:parseInt(p.get('l')||'1'),
-    an:p.get('an')||'—',
-    ev:p.get('ev')||'—',
-    hn:p.get('hn')||('Заплив '+(parseInt(p.get('h')||'0')+1)),
-  };
+  _judgeP={oid:p.get('oid')||'',cid:p.get('cid')||'',l:p.get('l')||'1'};
+
+  // Decode heats array from 'd' param
+  try{
+    const d=p.get('d');
+    if(d) _judgeHeats=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(d))))).map(h=>({...h,submitted:false,resultCs:null}));
+  }catch(e){_judgeHeats=[];}
+
+  // Restore already-submitted results from localStorage
+  _judgeHeats.forEach(h=>{
+    try{
+      const s=JSON.parse(localStorage.getItem(_judgeResKey(h.h))||'null');
+      if(s){h.submitted=true;h.resultCs=s.cs;}
+    }catch(_){}
+  });
+
   document.getElementById('auth-overlay').style.display='none';
   document.getElementById('app').style.display='none';
-  const ov=document.getElementById('judge-overlay');
-  ov.classList.add('active');
-  document.getElementById('j-heat-name').textContent=_judgeP.hn;
-  document.getElementById('j-lane-info').textContent='Доріжка '+_judgeP.l;
-  document.getElementById('j-athlete').textContent=_judgeP.an;
-  document.getElementById('j-event').textContent=_judgeP.ev;
-  document.getElementById('j-loading').style.display='none';
-  document.getElementById('j-content').style.display='block';
+  document.getElementById('judge-overlay').classList.add('active');
+  document.getElementById('j-lane-badge').textContent='Доріжка '+_judgeP.l;
+
+  // Find first unsubmitted heat
+  _judgeCurIdx=_judgeHeats.findIndex(h=>!h.submitted);
+  if(_judgeCurIdx<0)_judgeCurIdx=_judgeHeats.length;
+
+  _judgeRenderList();
+  _judgeShowCurrent();
   return true;
+}
+
+function _judgeRenderList(){
+  const el=document.getElementById('j-heat-list');
+  const div=document.getElementById('j-divider');
+  if(!el)return;
+  if(!_judgeHeats.length){el.style.display='none';if(div)div.style.display='none';return;}
+  el.style.display='';if(div)div.style.display='';
+  el.innerHTML=_judgeHeats.map((h,i)=>{
+    const isCur=i===_judgeCurIdx;
+    const cls='jheat-item'+(h.submitted?' jhi-done':'')+(isCur?' jhi-cur':'');
+    const ico=h.submitted?'✓':isCur?'▶':'○';
+    const timeSpan=h.submitted&&h.resultCs?`<span class="jhi-time">${fmtTime(h.resultCs)}</span>`:'';
+    return `<div class="${cls}" onclick="judgeGoTo(${i})">
+      <span class="jhi-ico">${ico}</span>
+      <span class="jhi-heat">З.${h.h+1}</span>
+      <span class="jhi-nm">${escapeHtml(h.an||'—')}</span>
+      ${timeSpan}
+    </div>`;
+  }).join('');
+}
+
+function judgeGoTo(idx){
+  _judgeCurIdx=idx;
+  swReset();
+  _judgeRenderList();
+  _judgeShowCurrent();
+}
+
+function _judgeShowCurrent(){
+  const content=document.getElementById('j-content');
+  const allDone=document.getElementById('j-all-done');
+  if(_judgeCurIdx>=_judgeHeats.length){
+    if(content)content.style.display='none';
+    if(allDone)allDone.style.display='block';
+    return;
+  }
+  if(content)content.style.display='block';
+  if(allDone)allDone.style.display='none';
+  const h=_judgeHeats[_judgeCurIdx];
+  document.getElementById('j-heat-name').textContent='Заплив '+(h.h+1);
+  document.getElementById('j-athlete').textContent=h.an||'—';
+  document.getElementById('j-event').textContent=h.ev||'';
+  if(h.submitted&&h.resultCs){
+    const t=fmtTime(h.resultCs);
+    document.getElementById('j-manual').value=t;
+    document.getElementById('sw-disp').textContent=t;
+    document.getElementById('sw-disp').classList.add('sw-stop');
+  }
+  _setJudgeStatus('','');
+  const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
+  const sb=document.getElementById('j-submit');
+  if(sb){sb.disabled=false;sb.textContent=h.submitted?'↺ Перевідправити':'✓ Відправити результат';}
 }
 
 function swToggle(){
@@ -11731,34 +11817,42 @@ async function submitJudgeResult(){
   if(manualVal){
     cs=parseTime(manualVal);
     if(!cs||cs<=0){_setJudgeStatus('Невірний формат. Введіть як 1:23.45 або 45.67','err');return;}
-  }else if(!_swRunning&&_swElapsedMs>0){
-    cs=Math.floor(_swElapsedMs/10);
   }else if(_swRunning){
-    // stop stopwatch first
     swToggle();
     cs=parseTime(document.getElementById('j-manual').value.trim());
+  }else if(_swElapsedMs>0){
+    cs=Math.floor(_swElapsedMs/10);
   }
   if(!cs||cs<=0){_setJudgeStatus('Засічіть час або введіть вручну','err');return;}
 
-  const submitBtn=document.getElementById('j-submit');
-  submitBtn.disabled=true;submitBtn.textContent='⏳ Відправлення…';
+  const sb=document.getElementById('j-submit');
+  sb.disabled=true;sb.textContent='⏳ Відправлення…';
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
 
-  const row={owner_id:_judgeP.oid,comp_id:_judgeP.cid,heat_idx:_judgeP.h,lane:_judgeP.l,
-    athlete_name:_judgeP.an,event_name:_judgeP.ev,result_cs:cs,status:'pending'};
+  const heat=_judgeHeats[_judgeCurIdx]||{};
+  const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
+    lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
+    result_cs:cs,status:'pending'};
 
   try{
     const{error}=await _supa.from('judge_inputs').insert(row);
     if(error)throw error;
-    // success
-    document.getElementById('j-content').style.display='none';
-    document.getElementById('j-done').style.display='block';
-    document.getElementById('j-done-time').textContent=fmtTime(cs);
-    try{localStorage.removeItem('judge_pending_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.h+'_'+_judgeP.l);}catch(_){}
+    // Mark as submitted
+    heat.submitted=true;heat.resultCs=cs;
+    try{localStorage.setItem(_judgeResKey(heat.h),JSON.stringify({cs,ts:Date.now()}));}catch(_){}
+    _setJudgeStatus('✅ Відправлено! Переходжу до наступного…','ok');
+    sb.textContent='✓ Відправлено';
+    _judgeRenderList();
+    // Auto-advance to next unsubmitted heat
+    setTimeout(()=>{
+      const nextIdx=_judgeHeats.findIndex((h,i)=>i>_judgeCurIdx&&!h.submitted);
+      _judgeCurIdx=nextIdx>=0?nextIdx:_judgeHeats.length;
+      swReset();_judgeRenderList();_judgeShowCurrent();
+    },1400);
   }catch(e){
-    try{localStorage.setItem('judge_pending_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.h+'_'+_judgeP.l,JSON.stringify({...row,pending_ts:Date.now()}));}catch(_){}
-    _setJudgeStatus('⚠ Немає зв\'язку — результат збережено локально. Натисніть «Спробувати знову» або він відправиться автоматично.','warn');
-    submitBtn.disabled=false;submitBtn.textContent='✓ Відправити результат';
+    try{localStorage.setItem(_judgeResKey(heat.h)+'_pend',JSON.stringify({...row,ts:Date.now()}));}catch(_){}
+    _setJudgeStatus('⚠ Немає зв\'язку — збережено локально. Надішлеться автоматично при відновленні.','warn');
+    sb.disabled=false;sb.textContent='✓ Відправити результат';
     if(retry)retry.style.display='block';
   }
 }
@@ -11771,19 +11865,18 @@ function _setJudgeStatus(msg,type){
 
 window.addEventListener('online',async()=>{
   if(!_judgeMode)return;
-  const{oid,cid,h,l}=_judgeP;
-  const key='judge_pending_'+oid+'_'+cid+'_'+h+'_'+l;
-  try{
-    const pending=JSON.parse(localStorage.getItem(key)||'null');
-    if(!pending)return;
-    const{error}=await _supa.from('judge_inputs').insert(pending);
-    if(!error){
-      localStorage.removeItem(key);
-      document.getElementById('j-content').style.display='none';
-      document.getElementById('j-done').style.display='block';
-      document.getElementById('j-done-time').textContent=fmtTime(pending.result_cs);
-    }
-  }catch(_){}
+  // Try to send all pending results
+  for(const h of _judgeHeats){
+    const key=_judgeResKey(h.h)+'_pend';
+    try{
+      const pending=JSON.parse(localStorage.getItem(key)||'null');
+      if(!pending)continue;
+      const{error}=await _supa.from('judge_inputs').insert(pending);
+      if(!error){localStorage.removeItem(key);h.submitted=true;h.resultCs=pending.result_cs;}
+    }catch(_){}
+  }
+  _judgeRenderList();
+  _judgeShowCurrent();
 });
 
 // ── Secretary/Organizer: subscribe to judge inputs ─────────────
@@ -11885,47 +11978,88 @@ async function rejectJudgeInput(id,idx){
   renderJudgeInputsPanel();
 }
 
-// ── Generate judge links ─────────────────────────────────────
-function openJudgeLinks(){
+// ── Generate judge links — one QR per lane for the whole day ──
+function openJudgeLinks(regen){
   const comp=activeComp();if(!comp){showToast('Оберіть змагання',true);return;}
   const ownerId=_getTargetOwnerId();
   if(!ownerId){showToast('Немає даних організатора',true);return;}
   const base=location.origin+location.pathname;
-  const body=document.getElementById('modal-judge-links-body');
-  if(!body)return;
+  const bodyEl=document.getElementById('modal-judge-links-body');
+  if(!bodyEl)return;
 
   if(!comp.heats||!comp.heats.length){
-    body.innerHTML='<p style="color:#5a9ab8;padding:1rem">Спочатку згенеруйте запливи.</p>';
+    bodyEl.innerHTML='<p style="color:#5a9ab8;padding:1rem">Спочатку згенеруйте запливи.</p>';
     openModal('modal-judge-links');return;
   }
 
-  let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Скопіюйте посилання або покажіть QR суддям. Логін не потрібен.</div>';
-  comp.heats.forEach((heat,hIdx)=>{
-    const laneEntries=Object.entries(heat.lanes||{});
-    if(!laneEntries.length)return;
-    html+=`<div style="font-weight:700;color:#023e8a;font-size:.85rem;margin:.9rem 0 .35rem">Заплив ${hIdx+1}${heat.eventName?' · '+escapeHtml(heat.eventName):''}</div>`;
-    laneEntries.sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([laneNum,entryId])=>{
-      const entry=comp.entries?.find(e=>e.id===entryId);
-      if(!entry)return;
+  // Collect max lane number across all heats
+  let maxLane=0;
+  comp.heats.forEach(h=>Object.keys(h.lanes||{}).forEach(l=>{const n=Number(l);if(n>maxLane)maxLane=n;}));
+
+  let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Один QR-код на доріжку — для всього дня змагань. Суддя сканує один раз і бачить усі свої запливи по порядку.</div>';
+  let anyLane=false;
+
+  for(let lane=1;lane<=maxLane;lane++){
+    const laneHeats=[];
+    comp.heats.forEach((heat,hIdx)=>{
+      const eid=heat.lanes?.[lane]||heat.lanes?.[String(lane)];if(!eid)return;
+      const entry=comp.entries?.find(e=>e.id===eid);if(!entry)return;
       const ath=db.athletes?.find(a=>a.id===entry.athleteId);
-      const athName=ath?(ath.surname||'')+' '+(ath.name||''):'Спортсмен';
-      const evName=(entry.dist?entry.dist+'м ':'')+( entry.style||heat.eventName||'');
-      const hn=encodeURIComponent('Заплив '+(hIdx+1));
-      const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&h='+hIdx+'&l='+laneNum+'&an='+encodeURIComponent(athName.trim())+'&ev='+encodeURIComponent(evName.trim())+'&hn='+hn;
-      const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-      const qrSrc='https://chart.googleapis.com/chart?cht=qr&chs=120x120&chl='+encodeURIComponent(url)+'&choe=UTF-8';
-      html+=`<div class="jlink-row">
-        <div style="flex:1">
-          <div style="font-weight:600;color:#023e8a">Д.${laneNum} — ${escapeHtml(athName.trim())}</div>
-          <div style="font-size:.72rem;color:#5a9ab8;margin:.15rem 0">${escapeHtml(evName.trim())}</div>
-          <img src="${qrSrc}" width="90" height="90" style="display:block;margin:.35rem 0;border-radius:6px;border:1px solid #b8dff0" alt="QR" loading="eager">
-        </div>
-        <button class="jlink-copy" onclick="navigator.clipboard.writeText('${urlEsc}').then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
-      </div>`;
+      const an=((ath?(ath.surname||'')+' '+(ath.name||''):'Спортсмен')).trim();
+      const ev=((entry.dist?entry.dist+'м ':'')+(entry.style||heat.eventName||'')).trim();
+      laneHeats.push({h:hIdx,an,ev});
     });
-  });
-  body.innerHTML=html;
+    if(!laneHeats.length)continue;
+    anyLane=true;
+
+    const d=btoa(unescape(encodeURIComponent(JSON.stringify(laneHeats))));
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&d='+encodeURIComponent(d);
+    const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const qrSrc='https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl='+encodeURIComponent(url)+'&choe=UTF-8';
+
+    // Summary of heats for this lane
+    const heatsSummary=laneHeats.map(h=>`З.${h.h+1}: ${escapeHtml(h.an)}`).join(' → ');
+
+    html+=`<div class="jlink-row" style="flex-direction:column;align-items:flex-start;gap:.5rem;padding:.9rem">
+      <div style="display:flex;align-items:center;gap:.6rem;width:100%">
+        <div style="background:#023e8a;color:#fff;font-weight:800;border-radius:8px;padding:.25rem .7rem;font-size:.95rem">Доріжка ${lane}</div>
+        <div style="flex:1;font-size:.75rem;color:#5a9ab8">${laneHeats.length} запливів</div>
+        <button class="jlink-copy" onclick="navigator.clipboard.writeText('${urlEsc}').then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
+        <a class="jlink-copy" href="${urlEsc}" target="_blank" style="text-decoration:none">↗ Відкрити</a>
+      </div>
+      <div style="font-size:.72rem;color:#1a6a9a;line-height:1.5">${heatsSummary}</div>
+      <img src="${qrSrc}" width="160" height="160" style="display:block;border-radius:8px;border:1px solid #b8dff0;margin-top:.25rem" alt="QR доріжка ${lane}" loading="eager">
+    </div>`;
+  }
+
+  if(!anyLane)html+='<p style="color:#5a9ab8;padding:1rem">Немає учасників у запливах.</p>';
+
+  // Save QR generation timestamp
+  comp.judgeQrTs=Date.now();comp.judgeQrDirty=false;
+  saveDB();_renderJudgeQrBanner();
+
+  bodyEl.innerHTML=html;
   openModal('modal-judge-links');
+}
+
+function _markJudgeQrDirty(){
+  const comp=activeComp();
+  if(comp&&comp.judgeQrTs&&!comp.judgeQrDirty){
+    comp.judgeQrDirty=true;
+    saveDB();
+    _renderJudgeQrBanner();
+  }
+}
+
+function _renderJudgeQrBanner(){
+  const comp=activeComp();
+  const container=document.getElementById('judge-qr-banner-wrap');
+  if(!container)return;
+  if(comp&&comp.judgeQrTs&&comp.judgeQrDirty){
+    container.innerHTML=`<div class="judge-qr-stale">⚠ Склад учасників змінився після генерації QR — судді мають <strong>відсканувати нові QR-коди</strong> <button onclick="openJudgeLinks(true)">↺ Регенерувати QR</button></div>`;
+  }else{
+    container.innerHTML='';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
