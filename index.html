@@ -6631,6 +6631,7 @@ function renderRelays(){
   const comp=activeComp();
   if(!comp){el.innerHTML='<div class="alert alert-warn">Оберіть змагання</div>';return;}
   ensureRelayData(comp);
+  const isOrg=['organizer','secretary','admin'].includes(_currentRole);
 
   // Populate type filter
   const typeSel=document.getElementById('rl-filter-type');
@@ -6718,8 +6719,8 @@ function renderRelays(){
         ${resultCell}
         <td style="padding:.3rem .5rem;white-space:nowrap">
           <button class="btn-icon btn-sm" onclick="openEditRelay('${t.id}')" title="${canEdit?'Редагувати':'Переглянути'}">✏</button>
-          <button class="btn-icon btn-sm" onclick="openRelayResult('${t.id}')" title="Результат">🏁</button>
-          <button class="btn-icon btn-sm" style="color:var(--danger)" onclick="deleteRelay('${t.id}')" title="Видалити">✕</button>
+          ${isOrg?`<button class="btn-icon btn-sm" onclick="openRelayResult('${t.id}')" title="Результат">🏁</button>`:''}
+          ${isOrg?`<button class="btn-icon btn-sm" style="color:var(--danger)" onclick="deleteRelay('${t.id}')" title="Видалити">✕</button>`:''}
         </td>
       </tr>`;
     }).join('');
@@ -7273,7 +7274,7 @@ function renderRelayHeats(){
           <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted)">${t.seedTime||'–'}</td>
           <td>${t.result?`<span style="font-family:monospace;font-weight:700;color:var(--success)">${t.result}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
           ${judgeRelayCol}${statusRelayCol}
-          <td><button class="btn-icon btn-sm" onclick="openRelayResult('${t.id}')" title="Внести результат">🏁</button></td>
+          ${isOrg?`<td><button class="btn-icon btn-sm" onclick="openRelayResult('${t.id}')" title="Внести результат">🏁</button></td>`:'<td></td>'}
         </tr>`;
       }).join('');
       return`<div class="card" style="margin-bottom:.75rem">
