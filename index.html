@@ -11821,6 +11821,7 @@ function swToggle(){
     btn.innerHTML='▶&nbsp;СТАРТ';btn.classList.remove('run');
     disp.classList.remove('sw-run');disp.classList.add('sw-stop');
     const cs=Math.floor(_swElapsedMs/10);
+    disp.textContent=fmtTime(cs); // синхронізуємо дисплей — той самий cs, без різниці в 1 соту
     document.getElementById('j-manual').value=fmtTime(cs);
   }else{
     _swStartTs=Date.now()-_swElapsedMs;
