@@ -3,10 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0077b6">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="AquaMeet Pro">
 <title>AquaMeet Pro — Система управління змаганнями з плавання</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -671,6 +667,52 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .notif-item .n-time{font-size:.65rem;color:var(--text-muted);margin-top:.2rem}
 .notif-empty{padding:1.5rem;text-align:center;color:var(--text-muted);font-size:.82rem}
 #notif-wrap{position:relative;display:none}
+/* ═══════════ JUDGE MODE ═══════════ */
+#judge-overlay{position:fixed;inset:0;z-index:9998;background:linear-gradient(150deg,#03045e 0%,#0077b6 55%,#00b4d8 100%);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:max(env(safe-area-inset-top,0px),1.2rem) 1rem 2rem;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#judge-overlay.active{display:flex}
+.jcard{background:rgba(255,255,255,.97);border-radius:20px;padding:1.5rem 1.4rem;width:100%;max-width:440px;box-shadow:0 12px 48px rgba(0,0,50,.35);margin-top:.5rem}
+.jlogo{font-size:1.15rem;font-weight:900;color:#0077b6;text-align:center;margin-bottom:1.2rem}.jlogo span{color:#00b4d8}
+.jheat{background:#e8f4fd;border-radius:12px;padding:.8rem 1rem;margin-bottom:1rem;text-align:center}
+.jheat-name{font-size:1rem;font-weight:800;color:#023e8a}.jheat-lane{font-size:.82rem;color:#1a6a9a;margin-top:.18rem}
+.jathlete{font-size:1.2rem;font-weight:800;color:#023e8a;text-align:center;margin-bottom:.25rem}
+.jevent{font-size:.83rem;color:#1a6a9a;text-align:center;margin-bottom:1.3rem}
+.sw-disp{font-size:4rem;font-weight:900;font-variant-numeric:tabular-nums;text-align:center;color:#023e8a;letter-spacing:-2px;background:#f0f9ff;border-radius:14px;padding:.5rem .3rem;margin-bottom:.9rem;border:2.5px solid #b8dff0;line-height:1;transition:border-color .2s,color .2s}
+.sw-disp.sw-run{color:#0077b6;border-color:#0077b6}.sw-disp.sw-stop{color:#06a870;border-color:#06a870}
+.sw-main-btn{width:100%;padding:1.05rem;font-size:1.15rem;font-weight:800;border-radius:14px;border:none;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center;gap:.5rem;background:#0077b6;color:#fff;box-shadow:0 4px 18px rgba(0,119,182,.35)}
+.sw-main-btn:active{transform:scale(.97)}.sw-main-btn.run{background:#e63946;box-shadow:0 4px 18px rgba(230,57,70,.35)}
+.sw-row2{display:flex;gap:.55rem;margin-top:.6rem}
+.sw-reset-btn{flex:1;background:#f0f9ff;color:#1a6a9a;border:1.5px solid #b8dff0;padding:.6rem;border-radius:10px;font-size:.88rem;font-weight:600;cursor:pointer}
+.sw-reset-btn:active{background:#d8edf8}
+.jdivider{text-align:center;color:#5a9ab8;font-size:.77rem;margin:.85rem 0;position:relative}
+.jdivider::before,.jdivider::after{content:'';position:absolute;top:50%;height:1px;background:#c8e4f0;width:35%}
+.jdivider::before{left:0}.jdivider::after{right:0}
+.jmanual{font-size:1.5rem;text-align:center;letter-spacing:3px;border:2px solid #b8dff0;border-radius:12px;padding:.55rem;font-weight:700;color:#023e8a;width:100%;background:#fff;font-family:inherit;box-sizing:border-box}
+.jmanual:focus{border-color:#0077b6;outline:none;box-shadow:0 0 0 3px rgba(0,119,182,.12)}
+.jsubmit{width:100%;padding:1rem;margin-top:1rem;background:#06d6a0;color:#003d28;font-size:1.05rem;font-weight:800;border-radius:14px;border:none;cursor:pointer;box-shadow:0 4px 18px rgba(6,214,160,.3);transition:all .12s}
+.jsubmit:active{transform:scale(.97)}.jsubmit:disabled{background:#b8dff0;color:#7a9ab0;box-shadow:none;transform:none}
+.jstatus{margin-top:.85rem;padding:.65rem 1rem;border-radius:10px;text-align:center;font-size:.85rem;font-weight:600;display:none;line-height:1.4}
+.jstatus.ok{background:#d0f5ea;color:#00522d;display:block}
+.jstatus.err{background:#fde8ea;color:#7d0012;display:block}
+.jstatus.warn{background:#fff3e0;color:#7a4000;display:block}
+.jretry{width:100%;margin-top:.6rem;padding:.7rem;font-size:.9rem;font-weight:700;background:#fff3e0;color:#7a4000;border:1.5px solid #f4a261;border-radius:10px;cursor:pointer;display:none}
+/* Incoming results panel (secretary/organizer) */
+.jinputs-panel{background:#fff;border:1.5px solid #b8dff0;border-radius:12px;margin-bottom:1rem;overflow:hidden}
+.jinputs-hdr{background:#e0f2fe;padding:.6rem 1rem;display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.85rem;color:#023e8a;cursor:pointer;user-select:none}
+.jinputs-body{padding:.7rem 1rem}
+.jinput-row{display:flex;align-items:center;gap:.5rem;padding:.35rem 0;border-bottom:1px solid #e8f4fb;font-size:.82rem;flex-wrap:wrap}
+.jinput-row:last-child{border-bottom:none}
+.jinput-time{font-weight:700;color:#023e8a;font-size:.95rem;flex-shrink:0;min-width:72px}
+.jinput-info{flex:1;color:#1a6a9a;min-width:120px}
+.jinput-accept{padding:.22rem .5rem;font-size:.72rem;background:#06d6a0;color:#003d28;border:none;border-radius:6px;cursor:pointer;font-weight:700}
+.jinput-reject{padding:.22rem .5rem;font-size:.72rem;background:#fde8ea;color:#7d0012;border:1px solid #e63946;border-radius:6px;cursor:pointer;font-weight:600;margin-left:.25rem}
+.jinput-badge-ok{padding:.18rem .45rem;font-size:.72rem;background:#d0f5ea;color:#005e40;border-radius:6px;font-weight:700}
+.jinput-badge-no{padding:.18rem .45rem;font-size:.72rem;background:#fde8ea;color:#7d0012;border-radius:6px;font-weight:700}
+/* Judge links modal table */
+.jlink-row{display:flex;align-items:center;gap:.6rem;padding:.4rem 0;border-bottom:1px solid #e0f2fe;font-size:.82rem;flex-wrap:wrap}
+.jlink-row:last-child{border-bottom:none}
+.jlink-copy{flex-shrink:0;padding:.28rem .55rem;font-size:.75rem;background:#e0f2fe;border:1px solid #b8dff0;border-radius:6px;cursor:pointer;font-family:inherit;color:#023e8a}
+.jlink-copy:hover{background:#c8e8f8}
+.jlink-qr{display:block;margin:.4rem 0;border-radius:6px;border:1px solid #b8dff0}
 </style>
 </head>
 <body>
@@ -792,6 +834,46 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     </div>
   </div>
 </div>
+<!-- ══ JUDGE MODE OVERLAY ══ -->
+<div id="judge-overlay">
+  <div class="jcard">
+    <div class="jlogo">Aqua<span>Meet</span><sup>PRO</sup> — Суддя</div>
+    <div id="j-loading" style="text-align:center;padding:1.5rem;color:#5a9ab8">Завантаження…</div>
+    <div id="j-content" style="display:none">
+      <div class="jheat">
+        <div class="jheat-name" id="j-heat-name"></div>
+        <div class="jheat-lane" id="j-lane-info"></div>
+      </div>
+      <div class="jathlete" id="j-athlete"></div>
+      <div class="jevent" id="j-event"></div>
+      <div class="sw-disp" id="sw-disp">0:00.00</div>
+      <button class="sw-main-btn" id="sw-btn" onclick="swToggle()">▶&nbsp;СТАРТ</button>
+      <div class="sw-row2">
+        <button class="sw-reset-btn" onclick="swReset()">↺ Скинути</button>
+      </div>
+      <div class="jdivider">або введіть вручну</div>
+      <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="0:00.00" autocomplete="off">
+      <button class="jsubmit" id="j-submit" onclick="submitJudgeResult()">✓ Відправити результат</button>
+      <div class="jstatus" id="j-status"></div>
+      <button class="jretry" id="j-retry" onclick="submitJudgeResult()">↺ Спробувати знову</button>
+    </div>
+    <div id="j-done" style="display:none;text-align:center;padding:1rem">
+      <div style="font-size:3rem;margin-bottom:.5rem">✅</div>
+      <div style="font-weight:800;color:#023e8a;font-size:1.1rem">Результат відправлено!</div>
+      <div style="color:#1a6a9a;font-size:.85rem;margin-top:.4rem" id="j-done-time"></div>
+      <button class="sw-reset-btn" style="margin-top:1.2rem;width:100%" onclick="judgeResetForNext()">↺ Новий заплив / виправити</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ JUDGE LINKS MODAL ══ -->
+<div class="modal-backdrop" id="modal-judge-links" style="display:none" onclick="if(event.target===this)closeModal('modal-judge-links')">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><span>📱 Посилання для суддів</span><button class="btn-icon" onclick="closeModal('modal-judge-links')">✕</button></div>
+    <div class="modal-body" id="modal-judge-links-body" style="max-height:70vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <div id="app" style="display:none">
 <!-- ══ HEADER ══ -->
 <div id="sticky-top">
@@ -931,9 +1013,22 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       <select id="hf-event" onchange="renderHeats()" style="width:250px"><option value="">Всі події</option></select>
       <button class="btn-warn" id="btn-gen-heats" onclick="generateHeats()">⚡ Генерувати запливи</button>
       <button class="btn-secondary btn-sm" onclick="printHeats()">🖨 Друк запливів</button>
+      <button class="btn-secondary btn-sm" id="btn-judge-links" onclick="openJudgeLinks()" style="display:none">📱 Посилання для суддів</button>
     </div>
   </div>
   <div id="heats-alert"></div>
+  <div id="judge-inputs-panel" style="display:none">
+    <div class="jinputs-panel">
+      <div class="jinputs-hdr" onclick="toggleJudgeInputsPanel()">
+        <span>📥 Результати від суддів</span>
+        <span id="jinputs-badge" style="background:#e63946;color:#fff;border-radius:10px;padding:.1rem .45rem;font-size:.72rem;display:none"></span>
+        <span style="margin-left:auto;font-size:.75rem;font-weight:400;color:#5a9ab8" id="jinputs-toggle-hint">▲ згорнути</span>
+      </div>
+      <div class="jinputs-body" id="jinputs-body">
+        <div style="color:#5a9ab8;font-size:.82rem;text-align:center;padding:.5rem">Очікування результатів від суддів…</div>
+      </div>
+    </div>
+  </div>
   <div id="heats-content"></div>
 </div>
 
@@ -9765,6 +9860,13 @@ async function startApp(){
     // Load organizer pending requests notification (organizer and secretary)
     if(_currentRole==='organizer'||_currentRole==='admin'||_currentRole==='secretary')
       await loadOrganizerRequests();
+    // Judge mode features for organizer/secretary/admin
+    if(['organizer','secretary','admin'].includes(_currentRole)){
+      const ownerId=_getTargetOwnerId();
+      if(ownerId)subscribeJudgeInputs(ownerId);
+      const jlBtn=document.getElementById('btn-judge-links');
+      if(jlBtn)jlBtn.style.display='';
+    }
   },150);
 }
 
@@ -11533,6 +11635,293 @@ document.addEventListener('click',e=>{
 });
 
 // ═══════════════════════════════════════════════════════════════
+// JUDGE MODE
+// ═══════════════════════════════════════════════════════════════
+
+let _judgeMode=false;
+let _judgeP={};     // judge URL params
+let _swRunning=false;
+let _swStartTs=0;
+let _swElapsedMs=0;
+let _swRaf=null;
+let _judgeChannel=null;
+let _judgeInputsCache=[];
+let _jinputsPanelOpen=true;
+
+function _initJudgeMode(){
+  const p=new URLSearchParams(location.search);
+  if(!p.has('judge'))return false;
+  _judgeMode=true;
+  _judgeP={
+    oid:p.get('oid')||'',
+    cid:p.get('cid')||'',
+    h:parseInt(p.get('h')||'0'),
+    l:parseInt(p.get('l')||'1'),
+    an:p.get('an')||'—',
+    ev:p.get('ev')||'—',
+    hn:p.get('hn')||('Заплив '+(parseInt(p.get('h')||'0')+1)),
+  };
+  document.getElementById('auth-overlay').style.display='none';
+  document.getElementById('app').style.display='none';
+  const ov=document.getElementById('judge-overlay');
+  ov.classList.add('active');
+  document.getElementById('j-heat-name').textContent=_judgeP.hn;
+  document.getElementById('j-lane-info').textContent='Доріжка '+_judgeP.l;
+  document.getElementById('j-athlete').textContent=_judgeP.an;
+  document.getElementById('j-event').textContent=_judgeP.ev;
+  document.getElementById('j-loading').style.display='none';
+  document.getElementById('j-content').style.display='block';
+  return true;
+}
+
+function swToggle(){
+  const btn=document.getElementById('sw-btn');
+  const disp=document.getElementById('sw-disp');
+  if(_swRunning){
+    _swElapsedMs+=Date.now()-_swStartTs;
+    cancelAnimationFrame(_swRaf);_swRaf=null;
+    _swRunning=false;
+    btn.innerHTML='▶&nbsp;СТАРТ';btn.classList.remove('run');
+    disp.classList.remove('sw-run');disp.classList.add('sw-stop');
+    const cs=Math.floor(_swElapsedMs/10);
+    document.getElementById('j-manual').value=fmtTime(cs);
+  }else{
+    _swStartTs=Date.now()-_swElapsedMs;
+    _swRunning=true;
+    btn.innerHTML='⏹&nbsp;СТОП';btn.classList.add('run');
+    disp.classList.add('sw-run');disp.classList.remove('sw-stop');
+    _swTick();
+  }
+}
+
+function _swTick(){
+  if(!_swRunning)return;
+  const ms=Date.now()-_swStartTs;
+  const cs=Math.floor(ms/10);
+  const min=Math.floor(cs/6000),sec=Math.floor((cs%6000)/100),cent=cs%100;
+  document.getElementById('sw-disp').textContent=
+    (min>0?min+':':'')+(min>0?String(sec).padStart(2,'0'):sec)+'.'+String(cent).padStart(2,'0');
+  _swRaf=requestAnimationFrame(_swTick);
+}
+
+function swReset(){
+  cancelAnimationFrame(_swRaf);_swRaf=null;
+  _swRunning=false;_swElapsedMs=0;
+  const btn=document.getElementById('sw-btn');
+  const disp=document.getElementById('sw-disp');
+  btn.innerHTML='▶&nbsp;СТАРТ';btn.classList.remove('run');
+  disp.classList.remove('sw-run','sw-stop');
+  disp.textContent='0:00.00';
+  document.getElementById('j-manual').value='';
+  _setJudgeStatus('','');
+  const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
+  const submitBtn=document.getElementById('j-submit');
+  if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='✓ Відправити результат';}
+}
+
+function judgeResetForNext(){
+  swReset();
+  document.getElementById('j-done').style.display='none';
+  document.getElementById('j-content').style.display='block';
+}
+
+async function submitJudgeResult(){
+  const manualVal=document.getElementById('j-manual').value.trim();
+  let cs=null;
+  if(manualVal){
+    cs=parseTime(manualVal);
+    if(!cs||cs<=0){_setJudgeStatus('Невірний формат. Введіть як 1:23.45 або 45.67','err');return;}
+  }else if(!_swRunning&&_swElapsedMs>0){
+    cs=Math.floor(_swElapsedMs/10);
+  }else if(_swRunning){
+    // stop stopwatch first
+    swToggle();
+    cs=parseTime(document.getElementById('j-manual').value.trim());
+  }
+  if(!cs||cs<=0){_setJudgeStatus('Засічіть час або введіть вручну','err');return;}
+
+  const submitBtn=document.getElementById('j-submit');
+  submitBtn.disabled=true;submitBtn.textContent='⏳ Відправлення…';
+  const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
+
+  const row={owner_id:_judgeP.oid,comp_id:_judgeP.cid,heat_idx:_judgeP.h,lane:_judgeP.l,
+    athlete_name:_judgeP.an,event_name:_judgeP.ev,result_cs:cs,status:'pending'};
+
+  try{
+    const{error}=await _supa.from('judge_inputs').insert(row);
+    if(error)throw error;
+    // success
+    document.getElementById('j-content').style.display='none';
+    document.getElementById('j-done').style.display='block';
+    document.getElementById('j-done-time').textContent=fmtTime(cs);
+    try{localStorage.removeItem('judge_pending_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.h+'_'+_judgeP.l);}catch(_){}
+  }catch(e){
+    try{localStorage.setItem('judge_pending_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.h+'_'+_judgeP.l,JSON.stringify({...row,pending_ts:Date.now()}));}catch(_){}
+    _setJudgeStatus('⚠ Немає зв\'язку — результат збережено локально. Натисніть «Спробувати знову» або він відправиться автоматично.','warn');
+    submitBtn.disabled=false;submitBtn.textContent='✓ Відправити результат';
+    if(retry)retry.style.display='block';
+  }
+}
+
+function _setJudgeStatus(msg,type){
+  const el=document.getElementById('j-status');if(!el)return;
+  el.textContent=msg;el.className='jstatus'+(type?' '+type:'');
+  if(!type)el.style.display='none';
+}
+
+window.addEventListener('online',async()=>{
+  if(!_judgeMode)return;
+  const{oid,cid,h,l}=_judgeP;
+  const key='judge_pending_'+oid+'_'+cid+'_'+h+'_'+l;
+  try{
+    const pending=JSON.parse(localStorage.getItem(key)||'null');
+    if(!pending)return;
+    const{error}=await _supa.from('judge_inputs').insert(pending);
+    if(!error){
+      localStorage.removeItem(key);
+      document.getElementById('j-content').style.display='none';
+      document.getElementById('j-done').style.display='block';
+      document.getElementById('j-done-time').textContent=fmtTime(pending.result_cs);
+    }
+  }catch(_){}
+});
+
+// ── Secretary/Organizer: subscribe to judge inputs ─────────────
+function subscribeJudgeInputs(ownerId){
+  if(_judgeChannel){_judgeChannel.unsubscribe();_judgeChannel=null;}
+  _judgeInputsCache=[];
+  renderJudgeInputsPanel();
+  // Load existing pending
+  _supa.from('judge_inputs').select('*')
+    .eq('owner_id',ownerId).eq('status','pending')
+    .order('created_at',{ascending:false})
+    .then(({data})=>{
+      if(data&&data.length){
+        _judgeInputsCache=data;
+        renderJudgeInputsPanel();
+        _showJudgeInputsBadge(data.length);
+      }
+    });
+  _judgeChannel=_supa.channel('judge_inputs_'+ownerId)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'judge_inputs',filter:'owner_id=eq.'+ownerId},(payload)=>{
+      _judgeInputsCache.unshift(payload.new);
+      renderJudgeInputsPanel();
+      _showJudgeInputsBadge(_judgeInputsCache.filter(r=>r.status==='pending').length);
+      showToast('📥 Новий результат: '+payload.new.athlete_name+' — '+fmtTime(payload.new.result_cs));
+    })
+    .subscribe();
+}
+
+function _showJudgeInputsBadge(n){
+  const badge=document.getElementById('jinputs-badge');
+  if(!badge)return;
+  badge.textContent=n;badge.style.display=n>0?'inline':'none';
+  const panel=document.getElementById('judge-inputs-panel');
+  if(panel&&n>0)panel.style.display='block';
+}
+
+function toggleJudgeInputsPanel(){
+  _jinputsPanelOpen=!_jinputsPanelOpen;
+  const body=document.getElementById('jinputs-body');
+  const hint=document.getElementById('jinputs-toggle-hint');
+  if(body)body.style.display=_jinputsPanelOpen?'':'none';
+  if(hint)hint.textContent=_jinputsPanelOpen?'▲ згорнути':'▼ розгорнути';
+}
+
+function renderJudgeInputsPanel(){
+  const body=document.getElementById('jinputs-body');if(!body)return;
+  if(!_judgeInputsCache.length){
+    body.innerHTML='<div style="color:#5a9ab8;font-size:.82rem;text-align:center;padding:.5rem">Очікування результатів від суддів…</div>';
+    return;
+  }
+  const comp=activeComp();
+  body.innerHTML=_judgeInputsCache.map((r,i)=>{
+    const heatDisp=comp?.heats?.[r.heat_idx]?('Заплив '+(r.heat_idx+1)):('Заплив '+(r.heat_idx+1));
+    const statusHtml=r.status==='accepted'
+      ?'<span class="jinput-badge-ok">✓ Прийнято</span>'
+      :r.status==='rejected'
+      ?'<span class="jinput-badge-no">✗ Відхилено</span>'
+      :`<button class="jinput-accept" onclick="acceptJudgeInput('${r.id}',${i})">✓ Прийняти</button><button class="jinput-reject" onclick="rejectJudgeInput('${r.id}',${i})">✗</button>`;
+    return `<div class="jinput-row">
+      <span class="jinput-time">${fmtTime(r.result_cs)}</span>
+      <span class="jinput-info">${escapeHtml(r.athlete_name||'—')} · ${heatDisp} · Д.${r.lane}<br><span style="font-size:.75rem;color:#5a9ab8">${escapeHtml(r.event_name||'')}</span></span>
+      <span class="jinput-status">${statusHtml}</span>
+    </div>`;
+  }).join('');
+}
+
+async function acceptJudgeInput(id,idx){
+  const row=_judgeInputsCache[idx];if(!row)return;
+  // Save result into competition data
+  const comp=activeComp();
+  if(comp){
+    const heat=comp.heats?.[row.heat_idx];
+    if(heat){
+      const entry=heat.lanes?.[row.lane-1];
+      if(entry&&entry.athleteId){
+        const athlete=comp.athletes?.find(a=>a.id===entry.athleteId)||
+          (db.athletes||[]).find(a=>a.id===entry.athleteId);
+        if(!comp.results)comp.results=[];
+        const existing=comp.results.find(r=>r.athleteId===entry.athleteId&&r.heatIdx===row.heat_idx);
+        if(existing){existing.resultCs=row.result_cs;existing.dns=false;existing.dnf=false;}
+        else comp.results.push({athleteId:entry.athleteId,heatIdx:row.heat_idx,lane:row.lane,resultCs:row.result_cs,dns:false,dnf:false});
+        saveDB();
+        showToast('✅ Результат збережено для '+escapeHtml(row.athlete_name||'спортсмена'));
+      }
+    }
+  }
+  // Update status in Supabase
+  try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',id);}catch(_){}
+  _judgeInputsCache[idx]={..._judgeInputsCache[idx],status:'accepted'};
+  renderJudgeInputsPanel();
+}
+
+async function rejectJudgeInput(id,idx){
+  try{await _supa.from('judge_inputs').update({status:'rejected'}).eq('id',id);}catch(_){}
+  _judgeInputsCache[idx]={..._judgeInputsCache[idx],status:'rejected'};
+  renderJudgeInputsPanel();
+}
+
+// ── Generate judge links ─────────────────────────────────────
+function openJudgeLinks(){
+  const comp=activeComp();if(!comp){showToast('Оберіть змагання',true);return;}
+  const ownerId=_getTargetOwnerId();
+  if(!ownerId){showToast('Немає даних організатора',true);return;}
+  const base=location.origin+location.pathname;
+  const body=document.getElementById('modal-judge-links-body');
+  if(!body)return;
+
+  if(!comp.heats||!comp.heats.length){
+    body.innerHTML='<p style="color:#5a9ab8;padding:1rem">Спочатку згенеруйте запливи.</p>';
+    openModal('modal-judge-links');return;
+  }
+
+  let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Скопіюйте посилання або покажіть QR суддям. Логін не потрібен.</div>';
+  comp.heats.forEach((heat,hIdx)=>{
+    if(!heat.lanes||!heat.lanes.length)return;
+    html+=`<div style="font-weight:700;color:#023e8a;font-size:.85rem;margin:.9rem 0 .35rem">Заплив ${hIdx+1}${heat.eventName?' · '+escapeHtml(heat.eventName):''}</div>`;
+    heat.lanes.forEach(lane=>{
+      if(!lane.athleteId)return;
+      const athName=lane.name||lane.athleteName||'Спортсмен';
+      const evName=heat.eventName||'';
+      const hn=encodeURIComponent('Заплив '+(hIdx+1));
+      const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&h='+hIdx+'&l='+lane.lane+'&an='+encodeURIComponent(athName)+'&ev='+encodeURIComponent(evName)+'&hn='+hn;
+      const qrSrc='https://api.qrserver.com/v1/create-qr-code/?size=140x140&data='+encodeURIComponent(url);
+      html+=`<div class="jlink-row">
+        <div style="flex:1">
+          <div style="font-weight:600;color:#023e8a">Д.${lane.lane} — ${escapeHtml(athName)}</div>
+          <div style="font-size:.72rem;color:#5a9ab8;word-break:break-all;margin:.2rem 0">${url.slice(0,80)}…</div>
+          <img class="jlink-qr" src="${qrSrc}" width="70" height="70" loading="lazy" alt="QR">
+        </div>
+        <button class="jlink-copy" onclick="navigator.clipboard.writeText('${url.replace(/'/g,'\\\'')}'.trim()).then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
+      </div>`;
+    });
+  });
+  body.innerHTML=html;
+  openModal('modal-judge-links');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // INIT — Auth-aware startup
 // ═══════════════════════════════════════════════════════════════
 
@@ -11565,6 +11954,9 @@ async function _bootApp(user){
 })();
 
 (async()=>{
+  // Judge mode — no auth needed, bypass everything
+  if(_initJudgeMode())return;
+
   // Check for public share link first (no auth needed)
   const isPublic=await checkPublicHash();
   if(isPublic)return;
@@ -11828,10 +12220,6 @@ async function _bootApp(user){
   </div>
 </div>
 </div>
-<script>
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW:',e));
-}
-</script>
+
 </body>
 </html>
