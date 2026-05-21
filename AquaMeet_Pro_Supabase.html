@@ -696,6 +696,17 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .jstatus.err{background:#fde8ea;color:#7d0012;display:block}
 .jstatus.warn{background:#fff3e0;color:#7a4000;display:block}
 .jretry{width:100%;margin-top:.6rem;padding:.7rem;font-size:.9rem;font-weight:700;background:#fff3e0;color:#7a4000;border:1.5px solid #f4a261;border-radius:10px;cursor:pointer;display:none}
+.judge-from-col{min-width:110px;max-width:160px;padding:.25rem .4rem!important;vertical-align:top}
+.judge-pending-item{display:flex;align-items:center;gap:.3rem;padding:.15rem 0;white-space:nowrap}
+.judge-pending-val{font-family:monospace;font-size:.78rem;color:#023e8a;font-weight:600}
+.judge-pending-val.status-dns{color:#475569}
+.judge-pending-val.status-dsq{color:#c62828}
+.res-status-col{min-width:80px;padding:.25rem .4rem!important;vertical-align:top;font-size:.75rem}
+.res-status-badge{display:inline-block;padding:.1rem .4rem;border-radius:5px;font-size:.72rem;font-weight:700}
+.res-status-badge.judge{background:#d0f5ea;color:#00522d}
+.res-status-badge.manual{background:#e8f0fe;color:#1a3a6b}
+.res-status-badge.pending{background:#fff3cd;color:#7a4000}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;background:#e63946;color:#fff;border-radius:50%;min-width:1.15rem;height:1.15rem;font-size:.65rem;font-weight:800;margin-left:.3rem;vertical-align:middle;padding:0 .15rem}
 .j-offline-badge{display:none;margin:.4rem auto 0;padding:.35rem .9rem;background:#fff3cd;color:#7a4000;border:1.5px solid #f4a261;border-radius:20px;font-size:.78rem;font-weight:700;text-align:center;max-width:280px}
 .j-offline-badge.visible{display:block}
 .j-offline-badge.syncing{background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7}
@@ -1066,6 +1077,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
   <div id="heats-alert"></div>
   <div id="judge-qr-banner-wrap"></div>
+  <div id="heats-content"></div>
+</div>
+
+<!-- RESULTS -->
+<div class="tab-panel" id="tab-results">
   <div id="judge-inputs-panel" style="display:none">
     <div class="jinputs-panel">
       <div class="jinputs-hdr" onclick="toggleJudgeInputsPanel()">
@@ -1078,11 +1094,6 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       </div>
     </div>
   </div>
-  <div id="heats-content"></div>
-</div>
-
-<!-- RESULTS -->
-<div class="tab-panel" id="tab-results">
   <div class="section-header">
     <div><div class="section-title">🏁 Внесення результатів</div><div class="section-sub">Формат: хх:хх:хх (хв:сек:соті)</div></div>
     <div style="display:flex;gap:.45rem;flex-wrap:wrap">
@@ -5103,6 +5114,20 @@ function renderResults(){
   const activeLns=(comp.activeLanes&&comp.activeLanes.length)?
     [...comp.activeLanes].sort((a,b)=>a-b):[1,2,3,4,5,6];
 
+  const isPriv=['organizer','secretary','admin'].includes(_currentRole);
+  // Build heatOrigIdx map BEFORE filtering
+  const heatOrigIdx=new Map();
+  comp.heats.forEach((h,i)=>heatOrigIdx.set(h,i));
+  // Build pending lookup: key = `${hIdx}_${lane}` → array of pending rows
+  const pendingByHL={};
+  if(isPriv&&_judgeInputsCache){
+    _judgeInputsCache.filter(r=>r.status==='pending'&&r.heat_type!=='relay').forEach(r=>{
+      const k=`${r.heat_idx}_${r.lane}`;
+      if(!pendingByHL[k])pendingByHL[k]=[];
+      pendingByHL[k].push(r);
+    });
+  }
+
   let heats=comp.heats;
   if(filt)heats=heats.filter(h=>h.eventKey===filt);
   if(dayFilt==='none')heats=heats.filter(h=>h.dayId==null);
@@ -5110,6 +5135,7 @@ function renderResults(){
 
   // Build the block renderer once, reused for each grouping below
   const renderHeatBlock=heat=>{
+    const extraTh=isPriv?'<th style="font-size:.72rem">Від судді</th><th style="font-size:.72rem">Статус</th>':'';
     const rows=activeLns.map(ln=>{
       const eid=heat.lanes[ln];if(!eid)return'';
       const entry=(comp.entries||[]).find(e=>e.id===eid);
@@ -5119,6 +5145,35 @@ function renderResults(){
       // Use stored rank if available (persisted at time of entry), fall back to live calc
       const achievedRank=entry.achievedRank!==undefined?entry.achievedRank:(tc?checkRank(entry.style,entry.dist,a.gender,tc):null);
       const exhMark=entry.exhibition?'<span class="exh-badge" title="Поза конкурсом">ПК</span>':'';
+      let judgeColHtml='';
+      let statusColHtml='';
+      if(isPriv){
+        const hIdx=heatOrigIdx.get(heat)??-1;
+        const pending=(pendingByHL[`${hIdx}_${ln}`]||[]);
+        const pendingItems=pending.map(r=>{
+          const items=[];
+          if(r.result_cs){
+            const tv=fmtTime(r.result_cs);
+            items.push(`<div class="judge-pending-item"><span class="judge-pending-val">${tv}</span><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem" onclick="acceptJudgeTime('${r.id}',${eid})">✓</button></div>`);
+          }
+          if(r.status==='dns'){
+            items.push(`<div class="judge-pending-item"><span class="judge-pending-val status-dns">Н/С</span><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem" onclick="acceptJudgeStatus('${r.id}',${eid},'dns')">✓</button></div>`);
+          }else if(r.status==='dsq'){
+            items.push(`<div class="judge-pending-item"><span class="judge-pending-val status-dsq">Д/К</span><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem" onclick="acceptJudgeStatus('${r.id}',${eid},'dsq')">✓</button></div>`);
+          }
+          return items.join('');
+        }).join('');
+        judgeColHtml=`<td class="judge-from-col">${pendingItems||'<span style="color:#cce;font-size:.72rem">–</span>'}</td>`;
+        const statusVal=entry.confirmedBy;
+        let statusBadge='<span style="color:#cce;font-size:.72rem">–</span>';
+        if(statusVal){
+          const cls=statusVal==='від судді'?'judge':'manual';
+          statusBadge=`<span class="res-status-badge ${cls}">${escapeHtml(statusVal)}</span>`;
+        } else if(pending.length){
+          statusBadge=`<span class="res-status-badge pending">⏳ ${pending.length}</span>`;
+        }
+        statusColHtml=`<td class="res-status-col">${statusBadge}</td>`;
+      }
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
         <td style="white-space:nowrap"><strong>${a.surname}</strong> ${a.name} ${exhMark}</td>
@@ -5131,6 +5186,7 @@ function renderResults(){
           <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований">Д/К</button>
         </div></td>
         <td id="rank-${eid}" style="text-align:center">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
+        ${judgeColHtml}${statusColHtml}
         <td style="white-space:nowrap">
           <button class="btn-success btn-xs" onclick="saveResult(${eid},document.getElementById('res-${eid}').value)">✓</button>
           <button class="btn-icon btn-xs" onclick="clearResult(${eid})">✕</button>
@@ -5145,9 +5201,11 @@ function renderResults(){
       <div class="tbl-wrap" style="border-radius:0 0 8px 8px"><table style="min-width:820px;width:100%">
         <colgroup>
           <col style="width:55px"><col style="width:140px"><col style="width:42px"><col style="width:75px">
-          <col style="width:100px"><col style="width:100px"><col style="width:75px"><col style="width:155px"><col style="width:55px"><col style="width:50px">
+          <col style="width:100px"><col style="width:100px"><col style="width:75px"><col style="width:155px"><col style="width:55px">
+          ${isPriv?'<col style="width:120px"><col style="width:90px">':''}
+          <col style="width:50px">
         </colgroup>
-        <thead><tr><th>Дор.</th><th>Учасник</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Заявл.</th><th>Результат</th><th>Розряд</th><th>Дія</th></tr></thead>
+        <thead><tr><th>Дор.</th><th>Учасник</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Заявл.</th><th>Результат</th><th>Розряд</th>${extraTh}<th>Дія</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -5253,6 +5311,9 @@ function saveResult(eid,val){
     entry.result=norm.value;
     const inp=document.getElementById('res-'+eid);if(inp&&inp.value!==norm.value)inp.value=norm.value;
     if(rankCell)rankCell.innerHTML='<span style="color:var(--text-muted)">—</span>';
+  }
+  if(_currentRole&&_currentRole!=='trainer'){
+    entry.confirmedBy=({organizer:'Організатор',secretary:'Секретар',admin:'Адмін'})[_currentRole]||_currentRole;
   }
   saveDB();
   if(norm.kind==='time')showNormHint(eid,norm.value);
@@ -12212,6 +12273,17 @@ function renderJudgeInputsPanel(){
       <span class="jinput-status">${statusHtml}</span>
     </div>`;
   }).join('');
+  _updateResultsBadge();
+}
+
+function _updateResultsBadge(){
+  const btn=document.querySelector('[data-tab="results"]');if(!btn)return;
+  const count=(_judgeInputsCache||[]).filter(r=>r.status==='pending'&&r.heat_type!=='relay').length;
+  let badge=btn.querySelector('.tab-badge');
+  if(count>0){
+    if(!badge){badge=document.createElement('span');badge.className='tab-badge';btn.appendChild(badge);}
+    badge.textContent=count;
+  }else if(badge)badge.remove();
 }
 
 async function acceptJudgeInput(id,idx){
@@ -12266,6 +12338,35 @@ async function rejectJudgeInput(id,idx){
   try{await _supa.from('judge_inputs').update({status:'rejected'}).eq('id',id);}catch(_){}
   _judgeInputsCache[idx]={..._judgeInputsCache[idx],status:'rejected'};
   renderJudgeInputsPanel();
+}
+
+async function acceptJudgeTime(rowId,eid){
+  const comp=activeComp();if(!comp)return;
+  const row=_judgeInputsCache.find(r=>r.id==rowId);if(!row||!row.result_cs)return;
+  const entry=(comp.entries||[]).find(e=>e.id===eid);if(!entry)return;
+  const cs=row.result_cs;const timeStr=fmtTime(cs);
+  entry.result=timeStr;entry.resultCs=cs;entry.confirmedBy='від судді';
+  const a=db.athletes?.find(x=>x.id===entry.athleteId);
+  if(a){const rk=checkRank(entry.style,entry.dist,a.gender,cs);entry.achievedRank=rk||null;if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}}
+  if(row.status!=='dsq'&&row.status!=='dns'){
+    try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+    const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
+    if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
+  }
+  saveDB();renderResults();_updateResultsBadge();
+  showToast('✅ Час від судді прийнято: '+timeStr);
+}
+
+async function acceptJudgeStatus(rowId,eid,statusCode){
+  const comp=activeComp();if(!comp)return;
+  const entry=(comp.entries||[]).find(e=>e.id===eid);if(!entry)return;
+  entry.result=statusCode==='dns'?'Н/С':'Д/К';
+  entry.confirmedBy='від судді';
+  try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+  const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
+  if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
+  saveDB();renderResults();_updateResultsBadge();
+  showToast('✅ Статус від судді прийнято: '+(statusCode==='dns'?'Н/С':'Д/К'));
 }
 
 // ── Generate relay judge links — one QR per lane ──────────────
