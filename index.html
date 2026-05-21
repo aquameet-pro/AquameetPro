@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>AquaMeet Pro — Система управління змаганнями з плавання</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
@@ -12215,7 +12215,7 @@ function openJudgeLinks(regen){
         <a class="jlink-copy" href="${urlEsc}" target="_blank" style="text-decoration:none">↗ Відкрити</a>
       </div>
       <div style="font-size:.72rem;color:#1a6a9a;line-height:1.5">${heatsSummary}</div>
-      <canvas id="qr-lane-${lane}" style="display:block;border-radius:8px;border:1px solid #b8dff0;margin-top:.25rem;max-width:200px"></canvas>
+      <div id="qr-lane-${lane}" style="display:inline-block;border-radius:8px;border:1px solid #b8dff0;margin-top:.25rem;overflow:hidden;line-height:0"></div>
     </div>`;
   }
 
@@ -12226,17 +12226,18 @@ function openJudgeLinks(regen){
   saveDB();_renderJudgeQrBanner();
 
   bodyEl.innerHTML=html;
-  // Generate QR codes client-side (no URL length limit, no external dependency issues)
+  // Generate QR codes client-side via qrcodejs (cdnjs)
   requestAnimationFrame(()=>{
     Object.entries(_qrUrls).forEach(([lane,url])=>{
-      const canvas=document.getElementById('qr-lane-'+lane);
-      if(!canvas)return;
+      const el=document.getElementById('qr-lane-'+lane);
+      if(!el)return;
       if(typeof QRCode!=='undefined'){
-        QRCode.toCanvas(canvas,url,{width:200,margin:1,errorCorrectionLevel:'M',
-          color:{dark:'#023e8a',light:'#ffffff'}},
-          err=>{if(err)canvas.insertAdjacentHTML('afterend','<div style="color:#e63946;font-size:.75rem">QR помилка</div>');});
+        el.innerHTML=''; // очистити на випадок повторного відкриття
+        new QRCode(el,{text:url,width:200,height:200,
+          colorDark:'#023e8a',colorLight:'#ffffff',
+          correctLevel:QRCode.CorrectLevel.M});
       }else{
-        canvas.insertAdjacentHTML('afterend',`<div style="font-size:.7rem;color:#5a9ab8;word-break:break-all;max-width:200px">${url}</div>`);
+        el.innerHTML=`<div style="font-size:.68rem;color:#5a9ab8;word-break:break-all;max-width:200px;padding:.3rem">${escapeHtml(url)}</div>`;
       }
     });
   });
