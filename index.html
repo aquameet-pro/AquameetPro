@@ -6093,44 +6093,51 @@ function deleteTrainerAthlete(id){
   _taSave(_taLoad().filter(a=>a.id!==id));renderAthletesDir();
 }
 
-function importTrainerAthletesCsv(){
-  const inp=document.createElement('input');inp.type='file';inp.accept='.csv,.txt';
+function importTrainerAthletesXlsx(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.xlsx,.xls';
   inp.onchange=e=>{
     const file=e.target.files[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=ev=>{
-      const lines=(ev.target.result||'').split(/\r?\n/).filter(l=>l.trim());
-      if(!lines.length)return;
-      const isHeader=/прізвище|surname|name|ім/i.test(lines[0]);
-      const data=isHeader?lines.slice(1):lines;
-      const arr=_taLoad();let added=0;
-      for(const line of data){
-        const c=line.split(/[,;\t]/).map(x=>x.trim().replace(/^["']|["']$/g,''));
-        if(!c[0])continue;
-        const gRaw=(c[2]||'').toUpperCase();
-        const gender=(gRaw==='Ж'||gRaw==='F'||gRaw==='ЖІНОЧА'||gRaw==='FEMALE')?'F':'M';
-        const rec={id:_taUid(),surname:c[0],name:c[1]||'',gender,
-          birthYear:parseInt(c[3])||null,city:c[4]||'',club:c[5]||'',coach:c[6]||'',grade:c[7]||'',gradeManual:false};
-        const dup=arr.find(a=>a.surname.toLowerCase()===rec.surname.toLowerCase()&&
-          a.name.toLowerCase()===rec.name.toLowerCase()&&a.birthYear===rec.birthYear);
-        if(!dup){arr.push(rec);added++;}
-      }
-      _taSave(arr);alert(`Імпортовано ${added} спортсменів. Дублікати пропущені.`);renderAthletesDir();
+      try{
+        const wb=XLSX.read(ev.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+        if(!rows.length){alert('Файл порожній');return;}
+        const isHeader=/прізвище|surname|name|ім/i.test(String(rows[0][0]||''));
+        const data=isHeader?rows.slice(1):rows;
+        const arr=_taLoad();let added=0;
+        for(const c of data){
+          if(!String(c[0]||'').trim())continue;
+          const gRaw=String(c[2]||'').toUpperCase().trim();
+          const gender=(gRaw==='Ж'||gRaw==='F'||gRaw==='ЖІНОЧА'||gRaw==='FEMALE')?'F':'M';
+          const rec={id:_taUid(),
+            surname:String(c[0]||'').trim(),name:String(c[1]||'').trim(),gender,
+            birthYear:parseInt(c[3])||null,
+            city:String(c[4]||'').trim(),club:String(c[5]||'').trim(),
+            coach:String(c[6]||'').trim(),grade:String(c[7]||'').trim(),gradeManual:false};
+          const dup=arr.find(a=>a.surname.toLowerCase()===rec.surname.toLowerCase()&&
+            a.name.toLowerCase()===rec.name.toLowerCase()&&a.birthYear===rec.birthYear);
+          if(!dup){arr.push(rec);added++;}
+        }
+        _taSave(arr);
+        showToast(`✅ Імпортовано ${added} спортсменів. Дублікати пропущені.`);
+        renderAthletesDir();
+      }catch(err){alert('Помилка читання файлу: '+err.message);}
     };
-    reader.readAsText(file,'UTF-8');
+    reader.readAsArrayBuffer(file);
   };inp.click();
 }
 
-function exportTrainerAthletesCsv(){
-  const arr=_taLoad();if(!arr.length){alert('База порожня');return;}
-  const header='Прізвище,Ім\'я,Стать,Рік,Місто,Клуб,Тренер,Розряд\n';
+function exportTrainerAthletesXlsx(){
+  const arr=_taLoad();if(!arr.length){showToast('База порожня');return;}
+  const header=['Прізвище','Ім\'я','Стать','Рік','Місто','Клуб','Тренер','Розряд'];
   const rows=arr.map(a=>[a.surname,a.name,a.gender==='F'?'Ж':'Ч',a.birthYear||'',
-    a.city||'',a.club||'',a.coach||'',a.grade||'']
-    .map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob=new Blob(['﻿'+header+rows],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement('a');link.href=url;link.download='мої_спортсмени.csv';link.click();
-  URL.revokeObjectURL(url);
+    a.city||'',a.club||'',a.coach||'',a.grade||'']);
+  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+  ws['!cols']=[14,12,6,6,14,16,20,10].map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Спортсмени');
+  XLSX.writeFile(wb,'мої_спортсмени.xlsx');
 }
 
 function openTrainerAthleteStats(id){
@@ -6212,8 +6219,8 @@ function renderTrainerAthletes(){
     barEl.style.display='flex';
     barEl.innerHTML=`
       <button class="btn-primary btn-sm" onclick="openTrainerAthleteEdit(null)">＋ Додати</button>
-      <button class="btn-secondary btn-sm" onclick="importTrainerAthletesCsv()">📥 Імпорт CSV</button>
-      <button class="btn-secondary btn-sm" onclick="exportTrainerAthletesCsv()">📤 Експорт CSV</button>`;
+      <button class="btn-secondary btn-sm" onclick="importTrainerAthletesXlsx()">📥 Імпорт Excel</button>
+      <button class="btn-secondary btn-sm" onclick="exportTrainerAthletesXlsx()">📤 Експорт Excel</button>`;
   }
 
   const athletes=_taSyncGrades();
@@ -6224,8 +6231,8 @@ function renderTrainerAthletes(){
   if(!athletes.length){
     contentEl.innerHTML=`<div class="alert alert-info" style="margin-top:.5rem">
       База порожня. Натисніть <strong>＋ Додати</strong> щоб внести першого спортсмена,
-      або <strong>📥 Імпорт CSV</strong> для завантаження списку.<br><br>
-      <strong>Формат CSV:</strong> Прізвище, Ім'я, Стать (Ч/Ж), Рік, Місто, Клуб, Тренер, Розряд</div>`;
+      або <strong>📥 Імпорт Excel</strong> для завантаження списку.<br><br>
+      <strong>Формат Excel (.xlsx):</strong> колонки — Прізвище, Ім'я, Стать (Ч/Ж), Рік, Місто, Клуб, Тренер, Розряд</div>`;
     return;
   }
   if(!filtered.length){
