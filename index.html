@@ -5121,7 +5121,7 @@ function renderResults(){
   // Build pending lookup: key = `${hIdx}_${lane}` → array of pending rows
   const pendingByHL={};
   if(isPriv&&_judgeInputsCache){
-    _judgeInputsCache.filter(r=>r.status==='pending'&&r.heat_type!=='relay').forEach(r=>{
+    _judgeInputsCache.filter(r=>!['accepted','rejected'].includes(r.status)&&r.heat_type!=='relay').forEach(r=>{
       const k=`${r.heat_idx}_${r.lane}`;
       if(!pendingByHL[k])pendingByHL[k]=[];
       pendingByHL[k].push(r);
@@ -12295,7 +12295,7 @@ function renderJudgeInputsPanel(){
 
 function _updateResultsBadge(){
   const btn=document.querySelector('[data-tab="results"]');if(!btn)return;
-  const count=(_judgeInputsCache||[]).filter(r=>r.status==='pending'&&r.heat_type!=='relay').length;
+  const count=(_judgeInputsCache||[]).filter(r=>!['accepted','rejected'].includes(r.status)&&r.heat_type!=='relay').length;
   let badge=btn.querySelector('.tab-badge');
   if(count>0){
     if(!badge){badge=document.createElement('span');badge.className='tab-badge';btn.appendChild(badge);}
