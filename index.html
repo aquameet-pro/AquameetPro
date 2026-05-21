@@ -696,6 +696,19 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .jstatus.err{background:#fde8ea;color:#7d0012;display:block}
 .jstatus.warn{background:#fff3e0;color:#7a4000;display:block}
 .jretry{width:100%;margin-top:.6rem;padding:.7rem;font-size:.9rem;font-weight:700;background:#fff3e0;color:#7a4000;border:1.5px solid #f4a261;border-radius:10px;cursor:pointer;display:none}
+.sw-lap-btn{flex:1;background:#023e8a;color:#fff;border:none;padding:.6rem;border-radius:10px;font-size:.88rem;font-weight:700;cursor:pointer;transition:transform .08s}
+.sw-lap-btn:active{transform:scale(.96)}
+.j-splits-list{display:flex;flex-direction:column;gap:.25rem;margin:.4rem 0 .1rem;font-size:.8rem}
+.j-split-item{display:flex;align-items:center;gap:.5rem;background:#f0f9ff;border-radius:8px;padding:.3rem .7rem;color:#023e8a;font-weight:600}
+.j-split-item .j-split-leg{background:#0077b6;color:#fff;border-radius:5px;padding:.1rem .4rem;font-size:.72rem;font-weight:800;min-width:2rem;text-align:center}
+.j-special-btns{display:flex;gap:.5rem;margin-top:.55rem}
+.j-dns-btn,.j-dsq-btn{flex:1;padding:.55rem;font-size:.82rem;font-weight:700;border-radius:10px;cursor:pointer;border:none;transition:all .12s}
+.j-dns-btn{background:#f1f5f9;color:#475569;border:1.5px solid #cbd5e1}
+.j-dns-btn:hover{background:#e2e8f0}
+.j-dsq-btn{background:#fff0f0;color:#c62828;border:1.5px solid #ef9a9a}
+.j-dsq-btn:hover{background:#ffe0e0}
+.j-relay-toggle{flex:1;padding:.55rem;font-size:.78rem;font-weight:700;border-radius:10px;cursor:pointer;background:#e8f5e9;color:#2e7d32;border:1.5px solid #a5d6a7;transition:all .12s}
+.j-relay-toggle.active{background:#2e7d32;color:#fff;border-color:#2e7d32}
 /* Judge heat list */
 .jlane-badge{background:#0077b6;color:#fff;border-radius:20px;padding:.35rem 1rem;font-size:.9rem;font-weight:800;text-align:center;margin-bottom:.9rem;letter-spacing:.5px}
 .jheat-list{display:flex;flex-direction:column;gap:.2rem;margin-bottom:.5rem;max-height:170px;overflow-y:auto;border:1px solid #e0f2fe;border-radius:10px;padding:.35rem}
@@ -867,14 +880,21 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       </div>
       <div class="jathlete" id="j-athlete"></div>
       <div class="jevent" id="j-event"></div>
-      <div class="sw-disp" id="sw-disp">0:00.00</div>
+      <div class="sw-disp" id="sw-disp">00:00:00</div>
       <button class="sw-main-btn" id="sw-btn" onclick="swToggle()">▶&nbsp;СТАРТ</button>
       <div class="sw-row2">
         <button class="sw-reset-btn" onclick="swReset()">↺ Скинути</button>
+        <button class="sw-lap-btn" id="sw-lap" onclick="swLap()" style="display:none">📍 Відмітити</button>
       </div>
+      <div id="j-splits-list" class="j-splits-list"></div>
       <div class="jdivider">або введіть вручну</div>
-      <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="напр. 28.35 або 1:02.45" autocomplete="off" oninput="jManualInput(this)" onblur="jManualBlur(this)">
+      <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="00:00:00" autocomplete="off" oninput="jManualInput(this)" onblur="jManualBlur(this)">
       <button class="jsubmit" id="j-submit" onclick="submitJudgeResult()">✓ Відправити результат</button>
+      <div class="j-special-btns">
+        <button class="j-dns-btn" onclick="submitSpecial('dns')">🚫 Н/С</button>
+        <button class="j-dsq-btn" onclick="submitSpecial('dsq')">⛔ Д/К</button>
+        <button class="j-relay-toggle" id="j-relay-toggle" onclick="toggleRelayMode()">🔄 Естафета</button>
+      </div>
       <div class="jstatus" id="j-status"></div>
       <button class="jretry" id="j-retry" onclick="submitJudgeResult()">↺ Спробувати знову</button>
     </div>
@@ -2563,7 +2583,7 @@ function parseTime(str){
 function fmtTime(cs){
   if(cs===null||cs===undefined||isNaN(cs))return'–';
   const m=Math.floor(cs/6000),s=Math.floor((cs%6000)/100),c=cs%100;
-  return`${m}:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`;
+  return`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}:${String(c).padStart(2,'0')}`;
 }
 // Normalize a typed result into one of: a valid time string, "Н/С", "Д/К", or null (invalid)
 function normalizeResult(raw){
@@ -11699,7 +11719,7 @@ function _initJudgeMode(){
   _judgeHeats.forEach(h=>{
     try{
       const s=JSON.parse(localStorage.getItem(_judgeResKey(h.h))||'null');
-      if(s){h.submitted=true;h.resultCs=s.cs;}
+      if(s){h.submitted=true;h.resultCs=s.cs||null;h.status=s.status||null;}
     }catch(_){}
   });
 
@@ -11726,8 +11746,10 @@ function _judgeRenderList(){
   el.innerHTML=_judgeHeats.map((h,i)=>{
     const isCur=i===_judgeCurIdx;
     const cls='jheat-item'+(h.submitted?' jhi-done':'')+(isCur?' jhi-cur':'');
-    const ico=h.submitted?'✓':isCur?'▶':'○';
-    const timeSpan=h.submitted&&h.resultCs?`<span class="jhi-time">${fmtTime(h.resultCs)}</span>`:'';
+    const ico=h.submitted?(h.status==='dns'?'—':h.status==='dsq'?'✗':'✓'):isCur?'▶':'○';
+    const timeSpan=h.submitted?(h.resultCs?`<span class="jhi-time">${fmtTime(h.resultCs)}</span>`
+      :(h.status==='dns'?'<span class="jhi-time" style="color:#ef9a9a">Н/С</span>'
+      :h.status==='dsq'?'<span class="jhi-time" style="color:#ef9a9a">Д/К</span>':'')):'';
     return `<div class="${cls}" onclick="judgeGoTo(${i})">
       <span class="jhi-ico">${ico}</span>
       <span class="jhi-heat">З.${h.h+1}</span>
@@ -11758,11 +11780,18 @@ function _judgeShowCurrent(){
   document.getElementById('j-heat-name').textContent='Заплив '+(h.h+1);
   document.getElementById('j-athlete').textContent=h.an||'—';
   document.getElementById('j-event').textContent=h.ev||'';
-  if(h.submitted&&h.resultCs){
-    const t=fmtTime(h.resultCs);
-    document.getElementById('j-manual').value=t;
-    document.getElementById('sw-disp').textContent=t;
-    document.getElementById('sw-disp').classList.add('sw-stop');
+  if(h.submitted){
+    if(h.resultCs){
+      const t=fmtTime(h.resultCs);
+      document.getElementById('j-manual').value=t;
+      document.getElementById('sw-disp').textContent=t;
+      document.getElementById('sw-disp').classList.add('sw-stop');
+    }else if(h.status==='dns'||h.status==='dsq'){
+      const lbl=h.status==='dns'?'Н/С':'Д/К';
+      document.getElementById('j-manual').value='';
+      document.getElementById('sw-disp').textContent=lbl;
+      document.getElementById('sw-disp').classList.add('sw-stop');
+    }
   }
   _setJudgeStatus('','');
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
@@ -11794,9 +11823,7 @@ function _swTick(){
   if(!_swRunning)return;
   const ms=Date.now()-_swStartTs;
   const cs=Math.floor(ms/10);
-  const min=Math.floor(cs/6000),sec=Math.floor((cs%6000)/100),cent=cs%100;
-  document.getElementById('sw-disp').textContent=
-    (min>0?min+':':'')+(min>0?String(sec).padStart(2,'0'):sec)+'.'+String(cent).padStart(2,'0');
+  document.getElementById('sw-disp').textContent=fmtTime(cs);
   _swRaf=requestAnimationFrame(_swTick);
 }
 
@@ -11807,12 +11834,78 @@ function swReset(){
   const disp=document.getElementById('sw-disp');
   btn.innerHTML='▶&nbsp;СТАРТ';btn.classList.remove('run');
   disp.classList.remove('sw-run','sw-stop');
-  disp.textContent='0:00.00';
+  disp.textContent='00:00:00';
   document.getElementById('j-manual').value='';
+  _swSplits=[];_renderSplits();
   _setJudgeStatus('','');
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
   const submitBtn=document.getElementById('j-submit');
   if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='✓ Відправити результат';}
+}
+
+// ── Relay / LAP mode ──────────────────────────────────────────
+let _swSplits=[];      // [{leg, cs, label}]
+let _relayMode=false;
+
+function toggleRelayMode(){
+  _relayMode=!_relayMode;
+  const btn=document.getElementById('j-relay-toggle');
+  const lapBtn=document.getElementById('sw-lap');
+  if(btn)btn.classList.toggle('active',_relayMode);
+  if(lapBtn)lapBtn.style.display=_relayMode?'':'none';
+  if(!_relayMode){_swSplits=[];_renderSplits();}
+}
+
+function swLap(){
+  if(!_swRunning&&_swElapsedMs===0)return;
+  const totalMs=_swRunning?(Date.now()-_swStartTs):_swElapsedMs;
+  const totalCs=Math.floor(totalMs/10);
+  const leg=_swSplits.length+1;
+  // Leg time = total - previous split total
+  const prevTotal=_swSplits.length?_swSplits[_swSplits.length-1].totalCs:0;
+  const legCs=totalCs-prevTotal;
+  _swSplits.push({leg,legCs,totalCs});
+  _renderSplits();
+  // Visual pulse feedback
+  const lapBtn=document.getElementById('sw-lap');
+  if(lapBtn){lapBtn.style.background='#00b4d8';setTimeout(()=>{lapBtn.style.background='';},300);}
+}
+
+function _renderSplits(){
+  const el=document.getElementById('j-splits-list');
+  if(!el)return;
+  if(!_swSplits.length){el.innerHTML='';return;}
+  el.innerHTML=_swSplits.map(s=>`
+    <div class="j-split-item">
+      <span class="j-split-leg">${s.leg}-й</span>
+      <span style="flex:1">${fmtTime(s.legCs)}</span>
+      <span style="color:#5a9ab8;font-size:.75rem">∑ ${fmtTime(s.totalCs)}</span>
+    </div>`).join('');
+}
+
+// ── Н/С та Д/К ────────────────────────────────────────────────
+async function submitSpecial(status){
+  const label=status==='dns'?'Н/С':'Д/К';
+  if(!confirm(`Підтвердити: ${label} для цього учасника?`))return;
+  const heat=_judgeHeats[_judgeCurIdx]||{};
+  const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
+    lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
+    result_cs:null,status};
+  try{
+    const{error}=await _supa.from('judge_inputs').insert(row);
+    if(error)throw error;
+    heat.submitted=true;heat.resultCs=null;heat.status=status;
+    try{localStorage.setItem(_judgeResKey(heat.h),JSON.stringify({status,ts:Date.now()}));}catch(_){}
+    _setJudgeStatus(`✅ ${label} відправлено`,'ok');
+    _judgeRenderList();
+    setTimeout(()=>{
+      const nextIdx=_judgeHeats.findIndex((h,i)=>i>_judgeCurIdx&&!h.submitted);
+      _judgeCurIdx=nextIdx>=0?nextIdx:_judgeHeats.length;
+      swReset();_judgeRenderList();_judgeShowCurrent();
+    },1200);
+  }catch(e){
+    _setJudgeStatus('⚠ Немає зв\'язку','err');
+  }
 }
 
 // Manual time input helpers
@@ -11828,7 +11921,7 @@ function jManualBlur(inp){
   if(!v){inp.style.borderColor='';return;}
   const cs=parseTime(v);
   if(cs&&cs>0){
-    inp.value=fmtTime(cs); // normalize to M:SS.cc on blur
+    inp.value=fmtTime(cs); // normalize to 00:00:00 on blur
     inp.style.borderColor='#2ec86a';
     // Sync display if stopwatch is idle
     const disp=document.getElementById('sw-disp');
