@@ -868,7 +868,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 </div>
 
 <!-- ══ JUDGE LINKS MODAL ══ -->
-<div class="modal-backdrop" id="modal-judge-links" style="display:none" onclick="if(event.target===this)closeModal('modal-judge-links')">
+<div class="modal-overlay" id="modal-judge-links" onclick="if(event.target===this)closeModal('modal-judge-links')">
   <div class="modal" style="max-width:600px">
     <div class="modal-header"><span>📱 Посилання для суддів</span><button class="btn-icon" onclick="closeModal('modal-judge-links')">✕</button></div>
     <div class="modal-body" id="modal-judge-links-body" style="max-height:70vh;overflow-y:auto"></div>
