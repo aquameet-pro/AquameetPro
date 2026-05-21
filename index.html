@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>AquaMeet Pro — Система управління змаганнями з плавання</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
@@ -872,7 +873,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
         <button class="sw-reset-btn" onclick="swReset()">↺ Скинути</button>
       </div>
       <div class="jdivider">або введіть вручну</div>
-      <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="0:00.00" autocomplete="off">
+      <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="напр. 28.35 або 1:02.45" autocomplete="off" oninput="jManualInput(this)" onblur="jManualBlur(this)">
       <button class="jsubmit" id="j-submit" onclick="submitJudgeResult()">✓ Відправити результат</button>
       <div class="jstatus" id="j-status"></div>
       <button class="jretry" id="j-retry" onclick="submitJudgeResult()">↺ Спробувати знову</button>
@@ -2544,16 +2545,25 @@ loadDB();
 // ═══════════════════════════════════════════════════════════════
 function parseTime(str){
   if(!str||!str.trim())return null;
-  const clean=str.trim().replace(/[.,]/g,':');
-  const p=clean.split(':').map(s=>parseInt(s,10));
-  if(p.length===3&&p.every(n=>!isNaN(n)&&n>=0)){const cs=p[2]>=100?Math.floor(p[2]/Math.pow(10,p[2].toString().length-2)):p[2];return p[0]*6000+p[1]*100+Math.min(cs,99);}
-  if(p.length===2&&p.every(n=>!isNaN(n)&&n>=0))return p[0]*6000+p[1]*100;
+  const t=str.trim();
+  // M:SS.cc  or  M:SS:CC  (with min)
+  let m=/^(\d+):(\d{1,2})[.:\,](\d{1,2})$/.exec(t);
+  if(m){const c=parseInt(m[3]);return parseInt(m[1])*6000+parseInt(m[2])*100+(c>=100?Math.floor(c/10):Math.min(c,99));}
+  // M:SS  (min:sec, no centiseconds)
+  m=/^(\d+):(\d{1,2})$/.exec(t);
+  if(m)return parseInt(m[1])*6000+parseInt(m[2])*100;
+  // SS.cc  or  SS,cc  (sec + centisec, no minutes — most common for short events)
+  m=/^(\d{1,3})[.,](\d{1,2})$/.exec(t);
+  if(m){const c=parseInt(m[2]);return parseInt(m[1])*100+Math.min(c,99);}
+  // Bare integer — treat as total centiseconds if >9999, else as whole seconds
+  m=/^(\d+)$/.exec(t);
+  if(m){const n=parseInt(m[1]);return n>9999?n:n*100;}
   return null;
 }
 function fmtTime(cs){
   if(cs===null||cs===undefined||isNaN(cs))return'–';
   const m=Math.floor(cs/6000),s=Math.floor((cs%6000)/100),c=cs%100;
-  return`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}:${String(c).padStart(2,'0')}`;
+  return`${m}:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`;
 }
 // Normalize a typed result into one of: a valid time string, "Н/С", "Д/К", or null (invalid)
 function normalizeResult(raw){
@@ -11805,6 +11815,29 @@ function swReset(){
   if(submitBtn){submitBtn.disabled=false;submitBtn.textContent='✓ Відправити результат';}
 }
 
+// Manual time input helpers
+function jManualInput(inp){
+  // Show red border if invalid while typing (only after >=4 chars)
+  const v=inp.value.trim();
+  if(v.length<4){inp.style.borderColor='';return;}
+  const cs=parseTime(v);
+  inp.style.borderColor=cs&&cs>0?'#2ec86a':'#e63946';
+}
+function jManualBlur(inp){
+  const v=inp.value.trim();
+  if(!v){inp.style.borderColor='';return;}
+  const cs=parseTime(v);
+  if(cs&&cs>0){
+    inp.value=fmtTime(cs); // normalize to M:SS.cc on blur
+    inp.style.borderColor='#2ec86a';
+    // Sync display if stopwatch is idle
+    const disp=document.getElementById('sw-disp');
+    if(disp&&!_swRunning){disp.textContent=inp.value;disp.classList.add('sw-stop');}
+  }else{
+    inp.style.borderColor='#e63946';
+  }
+}
+
 function judgeResetForNext(){
   swReset();
   document.getElementById('j-done').style.display='none';
@@ -11998,6 +12031,7 @@ function openJudgeLinks(regen){
 
   let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Один QR-код на доріжку — для всього дня змагань. Суддя сканує один раз і бачить усі свої запливи по порядку.</div>';
   let anyLane=false;
+  const _qrUrls={};  // lane → url, for client-side QR generation after DOM insert
 
   for(let lane=1;lane<=maxLane;lane++){
     const laneHeats=[];
@@ -12015,9 +12049,8 @@ function openJudgeLinks(regen){
     const d=btoa(unescape(encodeURIComponent(JSON.stringify(laneHeats))));
     const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&d='+encodeURIComponent(d);
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    const qrSrc='https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl='+encodeURIComponent(url)+'&choe=UTF-8';
+    _qrUrls[lane]=url;
 
-    // Summary of heats for this lane
     const heatsSummary=laneHeats.map(h=>`З.${h.h+1}: ${escapeHtml(h.an)}`).join(' → ');
 
     html+=`<div class="jlink-row" style="flex-direction:column;align-items:flex-start;gap:.5rem;padding:.9rem">
@@ -12028,7 +12061,7 @@ function openJudgeLinks(regen){
         <a class="jlink-copy" href="${urlEsc}" target="_blank" style="text-decoration:none">↗ Відкрити</a>
       </div>
       <div style="font-size:.72rem;color:#1a6a9a;line-height:1.5">${heatsSummary}</div>
-      <img src="${qrSrc}" width="160" height="160" style="display:block;border-radius:8px;border:1px solid #b8dff0;margin-top:.25rem" alt="QR доріжка ${lane}" loading="eager">
+      <canvas id="qr-lane-${lane}" style="display:block;border-radius:8px;border:1px solid #b8dff0;margin-top:.25rem;max-width:200px"></canvas>
     </div>`;
   }
 
@@ -12039,6 +12072,20 @@ function openJudgeLinks(regen){
   saveDB();_renderJudgeQrBanner();
 
   bodyEl.innerHTML=html;
+  // Generate QR codes client-side (no URL length limit, no external dependency issues)
+  requestAnimationFrame(()=>{
+    Object.entries(_qrUrls).forEach(([lane,url])=>{
+      const canvas=document.getElementById('qr-lane-'+lane);
+      if(!canvas)return;
+      if(typeof QRCode!=='undefined'){
+        QRCode.toCanvas(canvas,url,{width:200,margin:1,errorCorrectionLevel:'M',
+          color:{dark:'#023e8a',light:'#ffffff'}},
+          err=>{if(err)canvas.insertAdjacentHTML('afterend','<div style="color:#e63946;font-size:.75rem">QR помилка</div>');});
+      }else{
+        canvas.insertAdjacentHTML('afterend',`<div style="font-size:.7rem;color:#5a9ab8;word-break:break-all;max-width:200px">${url}</div>`);
+      }
+    });
+  });
   openModal('modal-judge-links');
 }
 
