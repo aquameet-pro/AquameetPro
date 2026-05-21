@@ -7213,6 +7213,15 @@ function renderRelayHeats(){
     Array.from({length:parseInt(comp.poolLength)>=50?10:6},(_,i)=>i+1);
 
   const isOrg=['organizer','secretary','admin'].includes(_currentRole);
+  // Build pending relay judge inputs lookup: key = `${hIdx}_${lane}`
+  const relayPendingByHL={};
+  if(isOrg&&_judgeInputsCache){
+    _judgeInputsCache.filter(r=>r.heat_type==='relay'&&!['accepted','rejected'].includes(r.status)).forEach(r=>{
+      const k=`${r.heat_idx}_${r.lane}`;
+      if(!relayPendingByHL[k])relayPendingByHL[k]=[];
+      relayPendingByHL[k].push(r);
+    });
+  }
   const lockBtn=isOrg?`<button class="btn-sm ${comp.relaysLocked?'btn-warn':'btn-secondary'}" onclick="toggleRelaysLocked()" style="margin-left:auto">${comp.relaysLocked?'🔒 Розблокувати':'🔓 Заблокувати'} естафети</button>`:'';
   el.innerHTML=`<div style="margin-top:1.5rem;padding-top:1rem;border-top:2px solid var(--accent)">
     <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.75rem;flex-wrap:wrap">
@@ -7220,7 +7229,7 @@ function renderRelayHeats(){
       ${lockBtn}
     </div>
     ${comp.relaysLocked?`<div style="background:rgba(244,162,49,.12);border:1px solid rgba(244,162,49,.4);border-radius:8px;padding:.5rem .9rem;font-size:.82rem;color:#7a4000;margin-bottom:.75rem">🔒 Редагування команд і запливів естафет заблоковано</div>`:''}
-    ${comp.relayHeats.map(heat=>{
+    ${comp.relayHeats.map((heat,hIdx)=>{
       const rtype=RELAY_TYPES[heat.type];
       const ag=getRelayAg(comp,heat.agId);
       const gLabel=RL_GENDER[heat.gender]||heat.gender;
@@ -7233,6 +7242,22 @@ function renderRelayHeats(){
           const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
           return a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
         }).join(', ');
+        let judgeRelayCol='',statusRelayCol='';
+        if(isOrg){
+          const pending=relayPendingByHL[`${hIdx}_${ln}`]||[];
+          const pendingHtml=pending.map(r=>{
+            const tv=r.result_cs?fmtTime(r.result_cs):'–';
+            let splitsHtml='';
+            if(r.splits_json){try{const sp=JSON.parse(r.splits_json);if(sp&&sp.length)splitsHtml=`<div style="font-size:.68rem;color:#1a6a9a;margin-top:.15rem">${sp.map(s=>`Е${s.leg}: ${fmtTime(s.legCs)}`).join(' · ')}</div>`;}catch(_){}}
+            return`<div class="judge-pending-item" style="align-items:flex-start"><div><span class="judge-pending-val">${tv}</span>${splitsHtml}</div><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem;margin-top:.1rem" onclick="acceptRelayJudgeInput('${r.id}',${hIdx},${ln})">✓</button></div>`;
+          }).join('');
+          judgeRelayCol=`<td class="judge-from-col">${pendingHtml||'<span style="color:#cce;font-size:.72rem">–</span>'}</td>`;
+          const statusVal=t.confirmedBy;
+          let statusBadge='<span style="color:#cce;font-size:.72rem">–</span>';
+          if(statusVal){const cls=statusVal==='від судді'?'judge':'manual';statusBadge=`<span class="res-status-badge ${cls}">${escapeHtml(statusVal)}</span>`;}
+          else if(pending.length){statusBadge=`<span class="res-status-badge pending">⏳ ${pending.length}</span>`;}
+          statusRelayCol=`<td class="res-status-col">${statusBadge}</td>`;
+        }
         return`<tr>
           <td style="text-align:center;font-weight:700">${ln}</td>
           <td><strong>${escapeHtml(t.name)}</strong></td>
@@ -7241,6 +7266,7 @@ function renderRelayHeats(){
           <td style="font-size:.78rem;color:var(--text-muted)">${legList}</td>
           <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted)">${t.seedTime||'–'}</td>
           <td>${t.result?`<span style="font-family:monospace;font-weight:700;color:var(--success)">${t.result}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
+          ${judgeRelayCol}${statusRelayCol}
           <td><button class="btn-icon btn-sm" onclick="openRelayResult('${t.id}')" title="Внести результат">🏁</button></td>
         </tr>`;
       }).join('');
@@ -7252,12 +7278,30 @@ function renderRelayHeats(){
           <span class="badge badge-heat">${agLabel}</span>
         </div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th style="width:50px">Дор.</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th style="width:80px">Заявл.</th><th style="width:90px">Результат</th><th style="width:40px"></th></tr></thead>
+          <thead><tr><th style="width:50px">Дор.</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th style="width:80px">Заявл.</th><th style="width:90px">Результат</th>${isOrg?'<th style="font-size:.72rem;min-width:120px">Від судді</th><th style="font-size:.72rem;width:80px">Статус</th>':''}<th style="width:40px"></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
       </div>`;
     }).join('')}
   </div>`;
+}
+
+async function acceptRelayJudgeInput(rowId,heatIdx,lane){
+  const comp=activeComp();if(!comp)return;
+  const row=_judgeInputsCache.find(r=>r.id==rowId);if(!row)return;
+  const relayHeat=comp.relayHeats?.[heatIdx];if(!relayHeat)return;
+  const teamId=relayHeat.lanes?.[lane]||relayHeat.lanes?.[String(lane)];
+  const team=teamId?(comp.relays||[]).find(t=>t.id===teamId):null;
+  if(team){
+    if(row.result_cs){team.result=fmtTime(row.result_cs);team.resultCs=row.result_cs;}
+    team.confirmedBy='від судді';
+    if(row.splits_json){try{team.splits=JSON.parse(row.splits_json);}catch(_){}}
+  }
+  try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+  const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
+  if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
+  saveDB();renderRelayHeats();renderRelays();_updateResultsBadge();_updateRelayBadge();
+  showToast('✅ Результат естафети від судді прийнято');
 }
 
 // ─── Relay Protocol HTML ─────────────────────────────────────────────────────
@@ -12255,9 +12299,10 @@ function renderJudgeInputsPanel(){
   if(panel)panel.style.display=relayRows.length?'block':'none';
   if(!relayRows.length){
     body.innerHTML='<div style="color:#5a9ab8;font-size:.82rem;text-align:center;padding:.5rem">Очікування результатів естафет…</div>';
-    _updateResultsBadge();
+    _updateResultsBadge();_updateRelayBadge();
     // Refresh inline columns whenever cache changes
     if(document.getElementById('tab-results')?.style.display!=='none')renderResults();
+    if(document.querySelector('[data-tab="relays"]')?.classList.contains('active'))renderRelayHeats();
     return;
   }
   const comp=activeComp();
@@ -12288,14 +12333,25 @@ function renderJudgeInputsPanel(){
       <span class="jinput-status">${statusHtml}</span>
     </div>`;
   }).join('');
-  _updateResultsBadge();
-  // Refresh inline judge columns in Results table
+  _updateResultsBadge();_updateRelayBadge();
+  // Refresh inline judge columns in Results and Relay tables
   if(document.getElementById('tab-results')?.style.display!=='none')renderResults();
+  if(document.querySelector('[data-tab="relays"]')?.classList.contains('active'))renderRelayHeats();
 }
 
 function _updateResultsBadge(){
   const btn=document.querySelector('[data-tab="results"]');if(!btn)return;
   const count=(_judgeInputsCache||[]).filter(r=>!['accepted','rejected'].includes(r.status)&&r.heat_type!=='relay').length;
+  let badge=btn.querySelector('.tab-badge');
+  if(count>0){
+    if(!badge){badge=document.createElement('span');badge.className='tab-badge';btn.appendChild(badge);}
+    badge.textContent=count;
+  }else if(badge)badge.remove();
+}
+
+function _updateRelayBadge(){
+  const btn=document.querySelector('[data-tab="relays"]');if(!btn)return;
+  const count=(_judgeInputsCache||[]).filter(r=>!['accepted','rejected'].includes(r.status)&&r.heat_type==='relay').length;
   let badge=btn.querySelector('.tab-badge');
   if(count>0){
     if(!badge){badge=document.createElement('span');badge.className='tab-badge';btn.appendChild(badge);}
