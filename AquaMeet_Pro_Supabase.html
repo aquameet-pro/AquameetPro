@@ -118,6 +118,7 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
 /* TABLE */
 .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);position:relative}
 .mob-sub{display:none}
+.mob-only{display:none}
 .tbl-wrap.scrollable::after{content:'';pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right,transparent,rgba(0,119,182,.10));border-radius:0 var(--radius) var(--radius) 0}
 table{width:100%;border-collapse:collapse;font-size:.84rem;background:var(--card)}
 th{background:rgba(0,119,182,.09);color:var(--text-dim);font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.5px;padding:.52rem .7rem;text-align:left;border-bottom:1.5px solid var(--border)}
@@ -700,8 +701,18 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   }
   .tbl-wrap thead th:nth-child(2){background:rgba(0,119,182,.09);z-index:3}
   tr:hover .tbl-wrap td:nth-child(2){background:rgba(0,180,216,.06)}
-  /* Hide separate city/club/coach columns */
+  /* Hide/show mobile-only columns */
   .tbl-wrap th.mob-hide,.tbl-wrap td.mob-hide{display:none}
+  .mob-only{display:table-cell!important}
+  /* Relay team list: first col is Команда — make it sticky */
+  .relay-teams-tbl th:first-child,.relay-teams-tbl td:first-child{
+    position:sticky!important;left:0!important;z-index:2!important;
+    background:var(--card)!important;
+    box-shadow:3px 0 6px rgba(0,0,0,.08)!important;
+    width:auto!important;min-width:110px!important;max-width:150px!important;
+    padding:.35rem .5rem!important;text-align:left!important;font-size:inherit!important;
+  }
+  .relay-teams-tbl thead th:first-child{background:rgba(0,119,182,.09)!important;z-index:3!important}
   /* Heats: vertical list layout */
   .lanes-grid{display:flex!important;flex-direction:column;gap:0}
   .lane-cell{
@@ -7186,12 +7197,19 @@ function renderRelays(){
         const name=a?`${a.surname} ${a.name}`:guest?`👤 ${guest}`:'<span style="color:var(--text-muted)">—</span>';
         const year=a?a.birthYear:'';
         const styleLabel=rtype.style==='вільний'?`${i+1} етап`:`${i+1}. ${style}`;
-        return`<td style="vertical-align:top;padding:.3rem .5rem;font-size:.8rem">
+        return`<td class="mob-hide" style="vertical-align:top;padding:.3rem .5rem;font-size:.8rem">
           <div style="color:var(--text-muted);font-size:.7rem">${styleLabel}</div>
           <div>${name}</div>
           ${year?`<div style="color:var(--text-muted);font-size:.72rem">${year} р.н.</div>`:''}
           ${leg?.legTime?`<div style="font-family:monospace;font-size:.78rem;color:var(--accent)">${leg.legTime}</div>`:''}
         </td>`;
+      }).join('');
+      const legListMob=rtype.legs.map((style,i)=>{
+        const leg=legs[i];
+        const a=leg?.athleteId?db.athletes.find(x=>x.id===leg.athleteId):null;
+        const name=a?`${a.surname} ${a.name}`:leg?.guestName||'—';
+        const styleLabel=rtype.style==='вільний'?`${i+1}.`:`${i+1}. ${style.slice(0,3)}.`;
+        return`<div style="font-size:.72rem;line-height:1.5"><span style="color:var(--text-muted)">${styleLabel}</span> ${name}${leg?.legTime?` <span style="font-family:monospace;color:var(--accent);font-size:.68rem">${leg.legTime}</span>`:''}</div>`;
       }).join('');
 
       const hasResult=!!t.result;
@@ -7203,10 +7221,11 @@ function renderRelays(){
 
       const canEdit=!hasResult;
       return`<tr>
-        <td style="padding:.3rem .5rem;font-weight:700">${exhMark}${escapeHtml(t.name)}</td>
-        <td style="padding:.3rem .5rem;font-size:.85rem;color:var(--text-muted)">${escapeHtml(t.club||'')}</td>
-        <td style="padding:.3rem .5rem;font-size:.85rem;color:var(--text-muted)">${escapeHtml(t.city||'')}</td>
+        <td style="padding:.3rem .5rem;font-weight:700">${exhMark}${escapeHtml(t.name)}<span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td class="mob-hide" style="padding:.3rem .5rem;font-size:.85rem;color:var(--text-muted)">${escapeHtml(t.club||'')}</td>
+        <td class="mob-hide" style="padding:.3rem .5rem;font-size:.85rem;color:var(--text-muted)">${escapeHtml(t.city||'')}</td>
         ${legCells}
+        <td class="mob-only" style="vertical-align:top;padding:.3rem .4rem">${legListMob}</td>
         <td style="padding:.3rem .5rem;text-align:center">${seedCell}</td>
         ${resultCell}
         <td style="padding:.3rem .5rem;white-space:nowrap">
@@ -7219,8 +7238,9 @@ function renderRelays(){
 
     const legHeaders=rtype.legs.map((style,i)=>{
       const h=rtype.style==='вільний'?`${i+1} етап`:`${i+1}. ${style}`;
-      return`<th style="text-align:left;font-size:.75rem">${h}</th>`;
+      return`<th class="mob-hide" style="text-align:left;font-size:.75rem">${h}</th>`;
     }).join('');
+    const mobLegHeader=`<th class="mob-only" style="font-size:.75rem">Склад</th>`;
 
     return`<div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap">
@@ -7230,7 +7250,7 @@ function renderRelays(){
         <span class="badge badge-heat">${agLabel}</span>
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted)">${g.teams.length} команд</span>
       </div>
-      <div class="tbl-wrap"><table style="table-layout:fixed;min-width:950px">
+      <div class="tbl-wrap scrollable"><table class="relay-teams-tbl" style="table-layout:fixed;min-width:950px">
         <colgroup>
           <col style="width:170px"><col style="width:110px"><col style="width:110px">
           ${rtype.legs.map(()=>'<col style="width:135px">').join('')}
@@ -7238,9 +7258,9 @@ function renderRelays(){
         </colgroup>
         <thead><tr>
           <th style="text-align:left">Команда</th>
-          <th style="text-align:left">Клуб</th>
-          <th style="text-align:left">Місто</th>
-          ${legHeaders}
+          <th class="mob-hide" style="text-align:left">Клуб</th>
+          <th class="mob-hide" style="text-align:left">Місто</th>
+          ${legHeaders}${mobLegHeader}
           <th>Заявл.</th>
           <th>Результат</th>
           <th></th>
@@ -7759,9 +7779,9 @@ function renderRelayHeats(){
         }
         return`<tr>
           <td style="text-align:center;font-weight:700">${ln}</td>
-          <td><strong>${escapeHtml(t.name)}</strong></td>
-          <td>${escapeHtml(t.club||'–')}</td>
-          <td style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(t.city||'–')}</td>
+          <td><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+          <td class="mob-hide">${escapeHtml(t.club||'–')}</td>
+          <td class="mob-hide" style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(t.city||'–')}</td>
           <td style="font-size:.78rem;color:var(--text-muted)">${legList}</td>
           <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted)">${t.seedTime||'–'}</td>
           <td>${t.result?`<span style="font-family:monospace;font-weight:700;color:var(--success)">${t.result}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
@@ -7776,8 +7796,8 @@ function renderRelayHeats(){
           <span class="badge ${heat.gender==='M'?'badge-m':heat.gender==='F'?'badge-f':'badge-heat'}">${gLabel}</span>
           <span class="badge badge-heat">${agLabel}</span>
         </div>
-        <div class="tbl-wrap"><table>
-          <thead><tr><th style="width:50px">Дор.</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th style="width:80px">Заявл.</th><th style="width:90px">Результат</th>${isOrg?'<th style="font-size:.72rem;min-width:120px">Від судді</th><th style="font-size:.72rem;width:80px">Статус</th>':''}<th style="width:40px"></th></tr></thead>
+        <div class="tbl-wrap scrollable"><table>
+          <thead><tr><th style="width:50px">Дор.</th><th>Команда</th><th class="mob-hide">Клуб</th><th class="mob-hide">Місто</th><th>Склад</th><th style="width:80px">Заявл.</th><th style="width:90px">Результат</th>${isOrg?'<th style="font-size:.72rem;min-width:120px">Від судді</th><th style="font-size:.72rem;width:80px">Статус</th>':''}<th style="width:40px"></th></tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
       </div>`;
