@@ -2243,8 +2243,11 @@ function saveDB(){
   setTimeout(async()=>{
     _supaSavePending=false;
     try{
+      // Embed save timestamp inside data — used by trainer sync to detect changes
+      // (Supabase may not update the updated_at column on every upsert)
+      db._savedAt=new Date().toISOString();
       const{error}=await _supa.from(SUPA_TABLE).upsert(
-        {id:ownerId,owner_id:ownerId,data:db,updated_at:new Date().toISOString()},
+        {id:ownerId,owner_id:ownerId,data:db,updated_at:db._savedAt},
         {onConflict:'id'}
       );
       if(error){
@@ -12526,8 +12529,12 @@ async function _trainerRefreshDb(){
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
-  const prevAt=_lastDbUpdatedAt;
-  _lastDbUpdatedAt=updatedAt||'';
+  // Compare _savedAt embedded in data — reliable even if Supabase ignores updated_at column
+  const newSavedAt=newData._savedAt||updatedAt||'';
+  const prevSavedAt=db._savedAt||_lastDbUpdatedAt||'';
+  const changed=newSavedAt!==prevSavedAt;
+  if(!changed)return; // truly no change
+  _lastDbUpdatedAt=newSavedAt;
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
@@ -12536,10 +12543,8 @@ function _applyRemoteDb(newData,updatedAt){
   const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
   if(activeTab&&tabRenderers[activeTab]&&activeTab!=='home'&&activeTab!=='news')
     tabRenderers[activeTab]();
-  // Update sync indicator with what was rendered and whether timestamp changed
-  const tStr=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const changed=prevAt!==updatedAt;
-  _setSyncIndicator((changed?'✅':'➡')+' '+activeTab+' '+(updatedAt||'').substr(11,8));
+  const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  _setSyncIndicator('✅ '+activeTab+' '+t);
 }
 
 // Close notif panel on outside click
