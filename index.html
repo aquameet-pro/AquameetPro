@@ -12526,6 +12526,7 @@ async function _trainerRefreshDb(){
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
+  const prevAt=_lastDbUpdatedAt;
   _lastDbUpdatedAt=updatedAt||'';
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
@@ -12535,6 +12536,10 @@ function _applyRemoteDb(newData,updatedAt){
   const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
   if(activeTab&&tabRenderers[activeTab]&&activeTab!=='home'&&activeTab!=='news')
     tabRenderers[activeTab]();
+  // Update sync indicator with what was rendered and whether timestamp changed
+  const tStr=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const changed=prevAt!==updatedAt;
+  _setSyncIndicator((changed?'✅':'➡')+' '+activeTab+' '+(updatedAt||'').substr(11,8));
 }
 
 // Close notif panel on outside click
