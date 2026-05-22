@@ -2266,11 +2266,12 @@ async function loadDB(){
     try{
       if(_supaOffline)throw new Error('offline');
       setAuthLoadingMsg('Завантаження даних із хмари…');
-      const fetchP=_supa.from(SUPA_TABLE).select('data').eq('id',ownerId).maybeSingle();
+      const fetchP=_supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
       const timeoutP=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),5000));
       const{data,error}=await Promise.race([fetchP,timeoutP]);
       if(!error&&data?.data){
         db=data.data;loaded=true;
+        _lastDbUpdatedAt=data.updated_at||'';
         try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(e){}
         console.log('[AquaMeet] Loaded from Supabase ✓ owner:',ownerId);
       }else if(error){
@@ -12504,20 +12505,20 @@ async function _trainerRefreshDb(){
   const ownerId=_getTargetOwnerId();if(!ownerId)return;
   try{
     const{data}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
-    if(data?.updated_at&&data.updated_at!==_lastDbUpdatedAt)
-      _applyRemoteDb(data.data,data.updated_at);
+    if(data?.data)_applyRemoteDb(data.data,data.updated_at||'');
   }catch(_){}
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
-  _lastDbUpdatedAt=updatedAt||'';
+  // Skip re-render if data is identical (compare JSON to avoid unnecessary re-draws)
+  const newStr=JSON.stringify(newData);
+  if(newStr===JSON.stringify(db)&&updatedAt===_lastDbUpdatedAt)return;
+  _lastDbUpdatedAt=updatedAt;
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
-  // Always refresh home + news (news is what trainers receive notifications about)
   refreshCompSelect();
   renderHome();
   renderNews();
-  // Also refresh whatever other tab is currently active
   const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
   if(activeTab&&tabRenderers[activeTab]&&activeTab!=='home'&&activeTab!=='news')
     tabRenderers[activeTab]();
