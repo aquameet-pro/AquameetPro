@@ -117,6 +117,7 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
 .stat-box.danger .stat-num{color:var(--danger)}
 /* TABLE */
 .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);position:relative}
+.mob-sub{display:none}
 .tbl-wrap.scrollable::after{content:'';pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right,transparent,rgba(0,119,182,.10));border-radius:0 var(--radius) var(--radius) 0}
 table{width:100%;border-collapse:collapse;font-size:.84rem;background:var(--card)}
 th{background:rgba(0,119,182,.09);color:var(--text-dim);font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.5px;padding:.52rem .7rem;text-align:left;border-bottom:1.5px solid var(--border)}
@@ -682,16 +683,25 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .org-comp-card{padding:.75rem}
   .tbl-wrap{font-size:.76rem}
   td,th{padding:.38rem .4rem}
-  /* Sticky first column on mobile */
+  /* Sticky first two columns on mobile */
   .tbl-wrap th:first-child,.tbl-wrap td:first-child{
     position:sticky;left:0;z-index:2;
-    background:var(--card);
-    box-shadow:2px 0 5px rgba(0,0,0,.07);
+    width:34px;min-width:34px;max-width:34px;
+    background:var(--card);padding:.38rem .25rem;text-align:center;
+    box-shadow:none;
   }
   .tbl-wrap thead th:first-child{background:rgba(0,119,182,.09);z-index:3}
-  tr:hover .tbl-wrap td:first-child{background:rgba(0,180,216,.06)}
-  /* Hide low-priority columns on mobile */
+  .tbl-wrap th:nth-child(2),.tbl-wrap td:nth-child(2){
+    position:sticky;left:34px;z-index:2;
+    background:var(--card);
+    box-shadow:3px 0 6px rgba(0,0,0,.08);
+  }
+  .tbl-wrap thead th:nth-child(2){background:rgba(0,119,182,.09);z-index:3}
+  tr:hover .tbl-wrap td:first-child,tr:hover .tbl-wrap td:nth-child(2){background:rgba(0,180,216,.06)}
+  /* Hide separate city/club/coach columns */
   .tbl-wrap th.mob-hide,.tbl-wrap td.mob-hide{display:none}
+  /* Sub-info line inside name cell */
+  .mob-sub{display:block;font-size:.64rem;color:var(--text-muted);font-weight:400;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px}
   .notif-panel{width:calc(100vw - 1.5rem);right:-.5rem}
   #sticky-top{position:sticky}
   .section-title{font-size:.95rem}
@@ -4100,7 +4110,7 @@ function renderAthletes(){
     if(!ent.length){
       const canAssign=comp&&comp.heats?.length&&['organizer','secretary','admin'].includes(_currentRole);
       const assignBtn=canAssign?`<button class="btn-secondary btn-xs" title="Додати до запливів" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)">📋 В заплив</button>`:'';
-      return[`<tr><td>${n++}</td><td><strong>${a.surname}</strong> ${a.name}${testMark}</td>
+      return[`<tr><td>${n++}</td><td><strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${[a.city,a.club].filter(Boolean).join(' · ')}</span></td>
       <td><span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span></td>
       <td>${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
       <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
@@ -4110,7 +4120,7 @@ function renderAthletes(){
     return ent.map((e,idx)=>{
       const day=(comp?.days||[]).find(d=>d.id===e.dayId);
       return`<tr><td>${idx===0?n++:''}</td>
-        <td>${idx===0?`<strong>${a.surname}</strong> ${a.name}${testMark}`:''}</td>
+        <td>${idx===0?`<strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${[a.city,a.club].filter(Boolean).join(' · ')}</span>`:''}</td>
         <td>${idx===0?`<span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span>`:''}</td>
         <td>${idx===0?a.birthYear:''}</td><td class="mob-hide">${idx===0?a.city||'–':''}</td><td class="mob-hide">${idx===0?a.club||'–':''}</td>
         <td class="mob-hide">${idx===0?a.coach||'–':''}</td>
@@ -5341,7 +5351,7 @@ function renderResults(){
       }
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
-        <td style="white-space:nowrap"><strong>${a.surname}</strong> ${a.name} ${exhMark}</td>
+        <td style="white-space:nowrap"><strong>${a.surname}</strong> ${a.name} ${exhMark}<span class="mob-sub">${[a.city,a.club].filter(Boolean).join(' · ')}</span></td>
         <td style="white-space:nowrap">${a.birthYear}</td>
         <td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${a.city||'–'}</td><td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${a.club||'–'}</td><td class="mob-hide" style="white-space:nowrap;font-size:.78rem;color:var(--text-muted)">${a.coach||'–'}</td>
         <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted);white-space:nowrap">${entry.seedTime||'–'}</td>
@@ -5631,7 +5641,7 @@ function renderProtocol(){
       const exhMark=isExh?'<span class="exh-badge" title="Поза конкурсом">ПК</span>':'';
       return`<tr${isExh?' style="background:rgba(244,162,49,.06)"':''}>
         <td style="text-align:center;white-space:nowrap">${placeCell}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
         <td style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
@@ -5768,7 +5778,7 @@ function renderPreProtocol(){
         :'<span style="color:var(--text-muted)">–</span>';
       return`<tr${isExh?' style="background:rgba(244,162,49,.06)"':''}>
         <td style="text-align:center;white-space:nowrap">${numCell}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
         <td style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
