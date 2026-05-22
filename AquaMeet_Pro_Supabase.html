@@ -5904,7 +5904,7 @@ function renderStandings(){
       const ln=heat?Object.entries(heat.lanes).find(([l,id])=>id===item.entry.id)?.[0]:'–';
       return`<tr class="rank-${place}">
         <td style="font-size:1.15rem;text-align:center">${medal}</td>
-        <td style="overflow-wrap:anywhere"><strong>${item.a.surname}</strong> ${item.a.name}<span class="mob-sub">${[item.a.city,item.a.club,item.a.coach].filter(Boolean).join(' · ')}</span></td>
+        <td style="overflow-wrap:anywhere"><strong>${item.a.surname}</strong> ${item.a.name}<span class="mob-sub">${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
         <td style="text-align:center">${item.a.birthYear}</td>
         <td class="mob-hide" style="overflow-wrap:anywhere">${item.a.city||'–'}</td>
         <td class="mob-hide" style="overflow-wrap:anywhere">${item.a.club||'–'}</td>
@@ -7943,9 +7943,9 @@ function buildRelayProtocolHtml(comp){
 
       return`<tr${t.exhibition?' style="background:rgba(244,162,49,.04)"':''}>
         <td style="text-align:center">${placeCell}</td>
-        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong></td>
-        <td style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
-        <td style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
+        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
+        <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
         <td style="font-size:.75rem">${legSummary}</td>
         <td style="font-size:.75rem">${splitsSummary}</td>
         <td>${statusCell}</td>
@@ -7960,7 +7960,7 @@ function buildRelayProtocolHtml(comp){
       </div>
       <div class="tbl-wrap"><table style="table-layout:fixed;min-width:700px">
         <colgroup><col style="width:50px"><col style="width:135px"><col style="width:105px"><col style="width:90px"><col style="width:160px"><col style="width:130px"><col style="width:100px"></colgroup>
-        <thead><tr><th>#</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th>По етапах</th><th>Результат</th></tr></thead>
+        <thead><tr><th>#</th><th>Команда</th><th class="mob-hide">Клуб</th><th class="mob-hide">Місто</th><th>Склад</th><th>По етапах</th><th>Результат</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -8027,9 +8027,9 @@ function buildRelayStandingsHtml(comp){
       }).join('<br>');
       return`<tr class="rank-${t.place}">
         <td style="font-size:1.1rem;text-align:center">${medal}</td>
-        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong></td>
-        <td style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
-        <td style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
+        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
+        <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
         <td style="font-size:.75rem;line-height:1.6">${legSummary}</td>
         <td style="font-family:monospace;font-weight:700;color:var(--success)">${t.result}</td>
       </tr>`;
@@ -8044,7 +8044,7 @@ function buildRelayStandingsHtml(comp){
       </div>
       <div class="tbl-wrap"><table style="table-layout:fixed;min-width:600px">
         <colgroup><col style="width:50px"><col style="width:145px"><col style="width:115px"><col style="width:100px"><col style="width:200px"><col style="width:100px"></colgroup>
-        <thead><tr><th>Місце</th><th>Команда</th><th>Клуб</th><th>Місто</th><th>Склад</th><th>Результат</th></tr></thead>
+        <thead><tr><th>Місце</th><th>Команда</th><th class="mob-hide">Клуб</th><th class="mob-hide">Місто</th><th>Склад</th><th>Результат</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
