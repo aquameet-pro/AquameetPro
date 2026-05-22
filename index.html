@@ -661,15 +661,17 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .bnav-drawer-btn.active{background:rgba(0,119,182,.15);border-color:var(--accent);color:var(--accent)}
 /* ── Mobile ── */
 @media(max-width:640px){
-  .app-header{padding:.45rem .75rem;gap:.5rem;flex-wrap:wrap}
-  .app-logo{font-size:1.1rem}
+  .app-header{padding:.4rem .65rem;gap:.4rem;flex-wrap:wrap}
+  .app-logo{font-size:1.05rem}
   .comp-selector{flex:1;min-width:0;max-width:none}
-  .comp-selector-btn{font-size:.78rem;padding:.3rem .55rem}
-  .header-actions{gap:.25rem;margin-left:0;width:100%}
-  #hdr-btn-backup,#hdr-btn-restore{display:none}
-  .user-badge{font-size:.68rem;padding:.2rem .5rem}
+  .comp-selector-btn{font-size:.78rem;padding:.3rem .5rem}
+  .header-actions{gap:.3rem;margin-left:0;width:100%;flex-wrap:nowrap;align-items:center}
+  #hdr-btn-backup,#hdr-btn-restore,#hdr-btn-new-comp{display:none}
+  .user-badge{font-size:.72rem;padding:.22rem .5rem;flex:1;min-width:0;overflow:hidden}
+  #user-display-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;display:inline-block}
   #user-role-label{display:none}
-  .btn-logout{font-size:.68rem;padding:.2rem .5rem}
+  .btn-chpass{display:none}
+  .btn-logout{font-size:.7rem;padding:.22rem .5rem;white-space:nowrap}
   .app-nav{display:none}
   #bottom-nav{display:flex}
   .app-main{padding:.75rem .6rem 80px}
