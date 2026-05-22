@@ -2252,10 +2252,12 @@ function saveDB(){
       );
       if(error){
         console.warn('[AquaMeet] Save error:',error.message);
+        showToast('⚠️ Помилка збереження в хмару: '+error.message,true);
       }else{
         _supaLastSaveTs=Date.now();
+        console.log('[AquaMeet] Saved to cloud, _savedAt:',db._savedAt);
       }
-    }catch(e){console.warn('[AquaMeet] Save exception:',e);}
+    }catch(e){console.warn('[AquaMeet] Save exception:',e);showToast('⚠️ Виняток збереження: '+e.message,true);}
   },200);
 }
 
@@ -12541,7 +12543,12 @@ function _applyRemoteDb(newData,updatedAt){
   else if(document.getElementById('tab-protocol')?.classList.contains('active'))renderProtocol();
   else if(document.getElementById('tab-standings')?.classList.contains('active'))renderStandings();
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  _setSyncIndicator('✅ '+t);
+  // Show _savedAt from fetched data (д:) and result count (r:) to diagnose sync issues
+  const savedAt=newData._savedAt
+    ?new Date(newData._savedAt).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
+    :'–';
+  const rc=(newData.competitions||[]).reduce((s,c)=>(c.entries||[]).reduce((ss,e)=>ss+(e.result?1:0),0)+s,0);
+  _setSyncIndicator(`✅${t} д:${savedAt} r:${rc}`);
 }
 
 // Close notif panel on outside click

@@ -1,5 +1,5 @@
-// Cache version — update this string on every deploy to trigger auto-refresh
-const CACHE = 'aquameet-20260522-2342';
+// Cache version вЂ” update this string on every deploy to trigger auto-refresh
+const CACHE = 'aquameet-20260522-2353';
 
 // Only pre-cache static assets (icons, manifest). HTML is network-first.
 const STATIC = [
@@ -29,7 +29,7 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
 
-  // Network-first for HTML pages — always get the freshest version
+  // Network-first for HTML pages вЂ” always get the freshest version
   if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
     e.respondWith(
       fetch(e.request)
