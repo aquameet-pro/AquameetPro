@@ -116,7 +116,8 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
 .stat-box.warn .stat-num{color:var(--warning)}
 .stat-box.danger .stat-num{color:var(--danger)}
 /* TABLE */
-.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow)}
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);position:relative}
+.tbl-wrap.scrollable::after{content:'';pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right,transparent,rgba(0,119,182,.10));border-radius:0 var(--radius) var(--radius) 0}
 table{width:100%;border-collapse:collapse;font-size:.84rem;background:var(--card)}
 th{background:rgba(0,119,182,.09);color:var(--text-dim);font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.5px;padding:.52rem .7rem;text-align:left;border-bottom:1.5px solid var(--border)}
 td{padding:.48rem .7rem;border-bottom:1px solid var(--border);vertical-align:middle}
@@ -680,7 +681,17 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .form-row{grid-template-columns:1fr!important}
   .org-comp-card{padding:.75rem}
   .tbl-wrap{font-size:.76rem}
-  td,th{padding:.38rem .45rem}
+  td,th{padding:.38rem .4rem}
+  /* Sticky first column on mobile */
+  .tbl-wrap th:first-child,.tbl-wrap td:first-child{
+    position:sticky;left:0;z-index:2;
+    background:var(--card);
+    box-shadow:2px 0 5px rgba(0,0,0,.07);
+  }
+  .tbl-wrap thead th:first-child{background:rgba(0,119,182,.09);z-index:3}
+  tr:hover .tbl-wrap td:first-child{background:rgba(0,180,216,.06)}
+  /* Hide low-priority columns on mobile */
+  .tbl-wrap th.mob-hide,.tbl-wrap td.mob-hide{display:none}
   .notif-panel{width:calc(100vw - 1.5rem);right:-.5rem}
   #sticky-top{position:sticky}
   .section-title{font-size:.95rem}
@@ -1108,8 +1119,8 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
   <div class="tbl-wrap">
     <table><thead><tr>
-      <th>#</th><th>ПІБ</th><th>Стать</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Розряд</th>
-      <th>Дист.</th><th>Стиль</th><th>День</th><th>Заявл.</th><th>Дії</th>
+      <th>#</th><th>ПІБ</th><th>Стать</th><th>Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Розряд</th>
+      <th>Дист.</th><th>Стиль</th><th class="mob-hide">День</th><th>Заявл.</th><th>Дії</th>
     </tr></thead><tbody id="ath-tbody"></tbody></table>
   </div>
 </div>
@@ -4091,7 +4102,7 @@ function renderAthletes(){
       const assignBtn=canAssign?`<button class="btn-secondary btn-xs" title="Додати до запливів" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)">📋 В заплив</button>`:'';
       return[`<tr><td>${n++}</td><td><strong>${a.surname}</strong> ${a.name}${testMark}</td>
       <td><span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span></td>
-      <td>${a.birthYear}</td><td>${a.city||'–'}</td><td>${a.club||'–'}</td><td>${a.coach||'–'}</td>
+      <td>${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
       <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
       <td colspan="4" style="color:var(--text-muted);font-style:italic">немає заявок</td>
       <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
@@ -4101,12 +4112,12 @@ function renderAthletes(){
       return`<tr><td>${idx===0?n++:''}</td>
         <td>${idx===0?`<strong>${a.surname}</strong> ${a.name}${testMark}`:''}</td>
         <td>${idx===0?`<span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span>`:''}</td>
-        <td>${idx===0?a.birthYear:''}</td><td>${idx===0?a.city||'–':''}</td><td>${idx===0?a.club||'–':''}</td>
-        <td>${idx===0?a.coach||'–':''}</td>
+        <td>${idx===0?a.birthYear:''}</td><td class="mob-hide">${idx===0?a.city||'–':''}</td><td class="mob-hide">${idx===0?a.club||'–':''}</td>
+        <td class="mob-hide">${idx===0?a.coach||'–':''}</td>
         <td>${idx===0?`<span class="badge badge-rank">${a.currentRank||'–'}</span>`:''}</td>
         <td><span class="badge badge-dist">${e.dist}м</span></td>
         <td><span class="badge badge-style">${e.style}</span></td>
-        <td style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
+        <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
         <td style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
         <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
       </tr>`;
@@ -5332,7 +5343,7 @@ function renderResults(){
         <td style="text-align:center;font-weight:700">${ln}</td>
         <td style="white-space:nowrap"><strong>${a.surname}</strong> ${a.name} ${exhMark}</td>
         <td style="white-space:nowrap">${a.birthYear}</td>
-        <td style="white-space:nowrap;font-size:.8rem">${a.city||'–'}</td><td style="white-space:nowrap;font-size:.8rem">${a.club||'–'}</td><td style="white-space:nowrap;font-size:.78rem;color:var(--text-muted)">${a.coach||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${a.city||'–'}</td><td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${a.club||'–'}</td><td class="mob-hide" style="white-space:nowrap;font-size:.78rem;color:var(--text-muted)">${a.coach||'–'}</td>
         <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted);white-space:nowrap">${entry.seedTime||'–'}</td>
         <td><div style="white-space:nowrap;display:flex;align-items:center;gap:.25rem;flex-wrap:nowrap">
           ${isPriv
@@ -5354,14 +5365,14 @@ function renderResults(){
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
       </div>
-      <div class="tbl-wrap" style="border-radius:0 0 8px 8px"><table style="min-width:820px;width:100%">
+      <div class="tbl-wrap scrollable" style="border-radius:0 0 8px 8px"><table style="min-width:820px;width:100%">
         <colgroup>
           <col style="width:55px"><col style="width:140px"><col style="width:42px"><col style="width:75px">
           <col style="width:100px"><col style="width:100px"><col style="width:75px"><col style="width:155px"><col style="width:55px">
           ${isPriv?'<col style="width:120px"><col style="width:90px">':''}
           <col style="width:50px">
         </colgroup>
-        <thead><tr><th>Дор.</th><th>Учасник</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Заявл.</th><th>Результат</th><th>Розряд</th>${extraTh}${isPriv?'<th>Дія</th>':'<th></th>'}</tr></thead>
+        <thead><tr><th>Дор.</th><th>Учасник</th><th>Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Заявл.</th><th>Результат</th><th>Розряд</th>${extraTh}${isPriv?'<th>Дія</th>':'<th></th>'}</tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -5622,9 +5633,9 @@ function renderProtocol(){
         <td style="text-align:center;white-space:nowrap">${placeCell}</td>
         <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}</td>
         <td style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
         <td style="text-align:center;white-space:nowrap">${fmtResultDisplay(item.entry.result)}</td>
         <td style="text-align:center;white-space:nowrap">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
       </tr>`;
@@ -5637,12 +5648,12 @@ function renderProtocol(){
         ${buildNormsInline(ev.style,ev.dist,ev.gender,comp)}
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted);white-space:nowrap">${enriched.length} учасників</span>
       </div>
-      <div class="tbl-wrap" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px;width:100%">
+      <div class="tbl-wrap scrollable" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px;width:100%">
         <colgroup>
           <col style="width:55px"><col style="width:140px"><col style="width:45px"><col style="width:95px">
           <col style="width:130px"><col style="width:115px"><col style="width:100px"><col style="width:75px">
         </colgroup>
-        <thead><tr><th>#</th><th>ПІБ</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Результат</th><th>Розряд</th></tr></thead>
+        <thead><tr><th>#</th><th>ПІБ</th><th>Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Результат</th><th>Розряд</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -5759,9 +5770,9 @@ function renderPreProtocol(){
         <td style="text-align:center;white-space:nowrap">${numCell}</td>
         <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}</td>
         <td style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
         <td style="text-align:center;white-space:nowrap">${seedDisp}</td>
         <td style="text-align:center;white-space:nowrap">${rankBadge}</td>
       </tr>`;
@@ -5774,12 +5785,12 @@ function renderPreProtocol(){
         ${buildNormsInline(ev.style,ev.dist,ev.gender,comp)}
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted);white-space:nowrap">${enriched.length} учасників</span>
       </div>
-      <div class="tbl-wrap" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px;width:100%">
+      <div class="tbl-wrap scrollable" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px;width:100%">
         <colgroup>
           <col style="width:55px"><col style="width:140px"><col style="width:45px"><col style="width:95px">
           <col style="width:130px"><col style="width:115px"><col style="width:115px"><col style="width:60px">
         </colgroup>
-        <thead><tr><th>#</th><th>ПІБ</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Попер. результат</th><th>Розряд</th></tr></thead>
+        <thead><tr><th>#</th><th>ПІБ</th><th>Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Попер. результат</th><th>Розряд</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -5872,7 +5883,7 @@ function renderStandings(){
         ${ag?`<span class="badge badge-heat">${ag.name}</span>`:''}
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted)">${ev.items.length} учасників · ${sorted.length} призер${sorted.length===1?'':'ів'}</span>
       </div>
-      <div class="tbl-wrap" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px">
+      <div class="tbl-wrap scrollable" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px">
         <colgroup>
           <col style="width:55px"><col style="width:140px"><col style="width:45px"><col style="width:95px">
           <col style="width:130px"><col style="width:115px"><col style="width:100px"><col style="width:75px">
