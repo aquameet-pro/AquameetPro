@@ -766,7 +766,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .swap-btn{display:none!important}
   /* Sub-info line inside name cell */
   .mob-sub{display:block;font-size:.64rem;color:var(--text-muted);font-weight:400;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .notif-panel{position:fixed!important;top:108px!important;left:.75rem!important;right:.75rem!important;width:auto!important;max-height:70vh!important}
+  .notif-panel{right:-.5rem}
   #sticky-top{position:sticky}
   .section-title{font-size:.95rem}
   .btn-primary,.btn-secondary{font-size:.78rem;padding:.35rem .65rem}
@@ -12394,8 +12394,24 @@ function toggleNotifPanel(){
   const panel=document.getElementById('notif-panel');
   if(!panel)return;
   const isOpen=panel.classList.toggle('open');
-  if(isOpen&&_notifs.some(n=>!n.read)){
-    markAllNotifsRead();
+  if(isOpen){
+    // On mobile: position panel to full viewport width, avoiding backdrop-filter stacking context issues
+    if(window.innerWidth<=640){
+      const wrap=document.getElementById('notif-wrap');
+      const rect=wrap?wrap.getBoundingClientRect():{left:0,bottom:0};
+      panel.style.position='fixed';
+      panel.style.top=(rect.bottom+4)+'px';
+      panel.style.left='12px';
+      panel.style.right='12px';
+      panel.style.width='auto';
+      panel.style.maxHeight='70vh';
+    }
+    if(_notifs.some(n=>!n.read))markAllNotifsRead();
+  } else {
+    if(window.innerWidth<=640){
+      panel.style.position='';panel.style.top='';panel.style.left='';
+      panel.style.right='';panel.style.width='';panel.style.maxHeight='';
+    }
   }
 }
 
@@ -12493,8 +12509,14 @@ function _applyRemoteDb(newData,updatedAt){
   _lastDbUpdatedAt=updatedAt||'';
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
+  // Always refresh home + news (news is what trainers receive notifications about)
+  refreshCompSelect();
+  renderHome();
+  renderNews();
+  // Also refresh whatever other tab is currently active
   const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
-  if(activeTab&&tabRenderers[activeTab])tabRenderers[activeTab]();
+  if(activeTab&&tabRenderers[activeTab]&&activeTab!=='home'&&activeTab!=='news')
+    tabRenderers[activeTab]();
 }
 
 // Close notif panel on outside click
