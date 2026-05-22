@@ -12543,12 +12543,7 @@ function _applyRemoteDb(newData,updatedAt){
   else if(document.getElementById('tab-protocol')?.classList.contains('active'))renderProtocol();
   else if(document.getElementById('tab-standings')?.classList.contains('active'))renderStandings();
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  // Show _savedAt from fetched data (д:) and result count (r:) to diagnose sync issues
-  const savedAt=newData._savedAt
-    ?new Date(newData._savedAt).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'})
-    :'–';
-  const rc=(newData.competitions||[]).reduce((s,c)=>(c.entries||[]).reduce((ss,e)=>ss+(e.result?1:0),0)+s,0);
-  _setSyncIndicator(`✅${t} д:${savedAt} r:${rc}`);
+  _setSyncIndicator('✅ '+t);
 }
 
 // Close notif panel on outside click
