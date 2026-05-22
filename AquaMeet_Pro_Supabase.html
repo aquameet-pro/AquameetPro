@@ -166,6 +166,10 @@ tr:hover td{background:rgba(0,180,216,.04)}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(2,62,138,0.38);backdrop-filter:blur(4px);z-index:300;align-items:center;justify-content:center;padding:1rem}
 .modal-overlay.open{display:flex}
 .modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.5rem;width:90%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,119,182,.22)}
+.modal-flex{padding:0!important;display:flex;flex-direction:column;overflow:hidden!important}
+.modal-flex .modal-header{padding:1rem 1.4rem .85rem;flex-shrink:0}
+.modal-flex .modal-body{flex:1;min-height:0;overflow-y:auto;padding:.85rem 1.4rem}
+.modal-flex .modal-footer{flex-shrink:0;padding:.75rem 1.4rem 1rem;margin-top:0}
 .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.2rem;padding-bottom:.7rem;border-bottom:1px solid var(--border)}
 .modal-title{font-size:1rem;font-weight:800;color:var(--text)}
 .modal-close{background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1;padding:.2rem}
@@ -716,6 +720,14 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     padding:.35rem .5rem!important;text-align:left!important;font-size:inherit!important;
   }
   .relay-teams-tbl thead th:first-child{background:rgba(0,119,182,.09)!important;z-index:3!important}
+  /* Спортсмени (тренер): sticky ПІБ = перша колонка */
+  .ta-dir-tbl th:first-child,.ta-dir-tbl td:first-child{
+    position:sticky!important;left:0!important;z-index:2!important;
+    background:var(--card)!important;box-shadow:3px 0 6px rgba(0,0,0,.08)!important;
+    width:auto!important;min-width:120px!important;max-width:170px!important;
+    padding:.35rem .5rem!important;text-align:left!important;font-size:inherit!important;
+  }
+  .ta-dir-tbl thead th:first-child{background:rgba(0,119,182,.09)!important;z-index:3!important}
   /* Heats: vertical list layout */
   .lanes-grid{display:flex!important;flex-direction:column;gap:0}
   .lane-cell{
@@ -1265,7 +1277,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 
 <!-- TRAINER ATHLETE MODALS -->
 <div class="modal-overlay" id="modal-ta-edit" onclick="if(event.target===this)closeTaModal('modal-ta-edit')">
-  <div class="modal" style="max-width:500px">
+  <div class="modal modal-flex" style="max-width:500px">
     <div class="modal-header"><span id="modal-ta-edit-title">Спортсмен</span><button class="modal-close" onclick="closeTaModal('modal-ta-edit')">✕</button></div>
     <div class="modal-body" id="modal-ta-edit-body"></div>
     <div class="modal-footer" id="modal-ta-edit-footer"></div>
@@ -3302,7 +3314,7 @@ function renderHome(){
       <div class="card">
         <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem">
           <div style="font-weight:800;color:var(--accent);flex:1">🏆 ${comp.name}</div>
-          <button class="btn-icon btn-xs" onclick="openEditComp(${comp.id})" title="Редагувати змагання">✏</button>
+          ${isPriv?`<button class="btn-icon btn-xs" onclick="openEditComp(${comp.id})" title="Редагувати змагання">✏</button>`:''}
         </div>
         <table style="font-size:.85rem;width:100%">
           <tr><td style="color:var(--text-muted);padding:.3rem 0;width:110px">📅 Дати:</td><td>${comp.dateFrom||'?'}${comp.dateTo&&comp.dateTo!==comp.dateFrom?' — '+comp.dateTo:''}</td></tr>
@@ -6428,13 +6440,14 @@ function renderTrainerAthletes(){
     const gradeCell=a.grade?`<span class="ach-badge">${escapeHtml(a.grade)}</span>`:'<span style="color:var(--text-muted)">–</span>';
     const results=_taGetResults(a);
     const hint=results.length?`<span style="font-size:.72rem;color:var(--text-muted);margin-left:.4rem">${results.length} виступ${results.length===1?'':'ів'}</span>`:'';
+    const cityClub=[a.city,a.club].filter(Boolean).join(' · ');
     return`<tr style="cursor:pointer" onclick="openTrainerAthleteStats('${a.id}')">
-      <td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${hint}</td>
-      <td>${gBadge}</td>
-      <td style="text-align:center">${a.birthYear||'–'}</td>
-      <td style="font-size:.82rem">${escapeHtml(a.city||'–')}</td>
-      <td style="font-size:.82rem">${escapeHtml(a.club||'–')}</td>
-      <td style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(a.coach||'–')}</td>
+      <td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${hint}<span class="mob-sub">${escapeHtml(cityClub)}</span></td>
+      <td class="mob-hide">${gBadge}</td>
+      <td class="mob-hide" style="text-align:center">${a.birthYear||'–'}</td>
+      <td class="mob-hide" style="font-size:.82rem">${escapeHtml(a.city||'–')}</td>
+      <td class="mob-hide" style="font-size:.82rem">${escapeHtml(a.club||'–')}</td>
+      <td class="mob-hide" style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(a.coach||'–')}</td>
       <td>${gradeCell}</td>
       <td style="white-space:nowrap">
         <button class="btn-icon btn-sm" onclick="event.stopPropagation();openTrainerAthleteEdit('${a.id}')" title="Редагувати">✏</button>
@@ -6443,8 +6456,8 @@ function renderTrainerAthletes(){
   }).join('');
 
   contentEl.innerHTML=`<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.5rem">${filtered.length} спортсменів · натисніть рядок для статистики</div>
-    <div class="tbl-wrap"><table style="min-width:680px">
-      <thead><tr><th>ПІБ</th><th>Ст.</th><th>Рік</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Розряд</th><th></th></tr></thead>
+    <div class="tbl-wrap"><table class="ta-dir-tbl">
+      <thead><tr><th>ПІБ</th><th class="mob-hide">Ст.</th><th class="mob-hide">Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Розряд</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
 }
