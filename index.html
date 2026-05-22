@@ -6008,7 +6008,7 @@ async function _notifyTrainersAboutNews(newsTitle){
   const ownerId=_getTargetOwnerId();if(!ownerId)return;
   try{
     const{data:invs}=await _supa.from('comp_invitations')
-      .select('trainer_id').eq('organizer_id',ownerId).eq('status','approved');
+      .select('trainer_id').eq('organizer_id',ownerId).neq('trainer_response','not_attending');
     if(!invs?.length)return;
     const orgName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
     await Promise.all(invs.map(inv=>_insertNotification(
@@ -12393,12 +12393,11 @@ async function markAllNotifsRead(){
 }
 
 async function _insertNotification(recipientId,type,title,body,data={}){
-  try{
-    await _supa.from('notifications').insert({recipient_id:recipientId,type,title,body,data});
-  }catch(e){console.warn('[AquaMeet] _insertNotification:',e.message);}
+  const{error}=await _supa.from('notifications').insert({recipient_id:recipientId,type,title,body,data});
+  if(error)console.warn('[AquaMeet] _insertNotification error:',error.message,{recipientId,type});
 }
 
-let _notifChannel=null;
+let _notifChannel=null,_notifPollTimer=null,_lastNotifCheckAt='';
 function _subscribeNotifications(){
   if(!_currentUser||_notifChannel)return;
   _notifChannel=_supa.channel('notif_'+_currentUser.id)
@@ -12406,17 +12405,43 @@ function _subscribeNotifications(){
       event:'INSERT',schema:'public',table:'notifications',
       filter:`recipient_id=eq.${_currentUser.id}`
     },payload=>{
+      if(_notifs.some(n=>n.id===payload.new.id))return;
       _notifs.unshift(payload.new);
       _renderNotifBadge();
       _renderNotifList();
       showToast(payload.new.title||'🔔 Нове сповіщення');
-      // If it's a news notification — refresh data immediately
       if(payload.new.type==='news')_trainerRefreshDb();
     })
     .subscribe();
+  // Polling fallback every 30s — fires when realtime subscription is not available
+  if(!_notifPollTimer){
+    _lastNotifCheckAt=new Date().toISOString();
+    _notifPollTimer=setInterval(()=>_pollNewNotifications(),30000);
+  }
+}
+async function _pollNewNotifications(){
+  if(!_currentUser||_supaOffline)return;
+  try{
+    const since=_lastNotifCheckAt;
+    _lastNotifCheckAt=new Date().toISOString();
+    const{data}=await _supa.from('notifications')
+      .select('*').eq('recipient_id',_currentUser.id)
+      .gt('created_at',since).order('created_at',{ascending:false});
+    if(!data?.length)return;
+    let hasNew=false;
+    for(const n of data){
+      if(_notifs.some(x=>x.id===n.id))continue;
+      _notifs.unshift(n);
+      showToast(n.title||'🔔 Нове сповіщення');
+      if(n.type==='news')_trainerRefreshDb();
+      hasNew=true;
+    }
+    if(hasNew){_renderNotifBadge();_renderNotifList();}
+  }catch(_){}
 }
 function _unsubscribeNotifications(){
   if(_notifChannel){_supa.removeChannel(_notifChannel);_notifChannel=null;}
+  if(_notifPollTimer){clearInterval(_notifPollTimer);_notifPollTimer=null;}
 }
 
 // ─── Auto-refresh DB data for trainer (realtime + polling fallback) ────────────
