@@ -1023,6 +1023,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       </div>
       <div class="jathlete" id="j-athlete"></div>
       <div class="jevent" id="j-event"></div>
+      <div id="j-sync-status" style="display:none;text-align:center;background:rgba(0,119,182,.1);border:1px solid rgba(0,119,182,.3);border-radius:8px;padding:.5rem .7rem;margin-bottom:.6rem;font-size:.88rem;font-weight:700;color:#023e8a"></div>
       <div class="sw-disp" id="sw-disp">00:00:00</div>
       <button class="sw-main-btn" id="sw-btn" onclick="swToggle()">▶&nbsp;СТАРТ</button>
       <div class="sw-row2">
@@ -1030,6 +1031,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
         <button class="sw-lap-btn" id="sw-lap" onclick="swLap()" style="display:none">📍 Відмітити</button>
       </div>
       <div id="j-splits-list" class="j-splits-list"></div>
+      <button id="j-ready-btn" style="display:none;width:100%;padding:.7rem;font-size:.95rem;font-weight:800;background:#06d6a0;color:#004d2e;border:none;border-radius:12px;cursor:pointer;margin-bottom:.6rem;transition:all .15s" onclick="judgeMarkReady()">✅ Підтвердити готовність</button>
       <div class="jdivider">або введіть вручну</div>
       <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="00:00:00" autocomplete="off" oninput="jManualInput(this)" onblur="jManualBlur(this)">
       <button class="jsubmit" id="j-submit" onclick="submitJudgeResult()">✓ Відправити результат</button>
@@ -1614,6 +1616,17 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <div style="display:flex;align-items:center;gap:.6rem;margin:.5rem 0;padding:.5rem .7rem;background:rgba(244,162,49,.07);border:1px solid rgba(244,162,49,.3);border-radius:8px">
     <input type="checkbox" id="nc-reg-closed" style="width:16px;height:16px;accent-color:#c87000;flex-shrink:0">
     <label for="nc-reg-closed" style="margin:0;cursor:pointer;font-size:.84rem;font-weight:600">🔒 Реєстрацію закрито — заборонити додавання нових учасників та імпорт Excel</label>
+  </div>
+  <div style="margin:.4rem 0;padding:.5rem .7rem;background:rgba(0,119,182,.05);border:1px solid rgba(0,119,182,.18);border-radius:8px">
+    <div style="font-size:.78rem;font-weight:700;color:var(--text-muted);margin-bottom:.4rem">📱 Суддівський інтерфейс</div>
+    <div style="display:flex;align-items:flex-start;gap:.6rem;margin-bottom:.35rem">
+      <input type="checkbox" id="nc-sync-timer" style="width:16px;height:16px;accent-color:#0077b6;flex-shrink:0;margin-top:.15rem">
+      <label for="nc-sync-timer" style="margin:0;cursor:pointer;font-size:.84rem"><strong>⏱ Синхронний старт-таймер</strong><span style="display:block;font-size:.76rem;color:var(--text-muted)">Організатор/Секретар запускає таймер на всіх суддівських екранах одночасно</span></label>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:.6rem">
+      <input type="checkbox" id="nc-readiness" style="width:16px;height:16px;accent-color:#06a870;flex-shrink:0;margin-top:.15rem">
+      <label for="nc-readiness" style="margin:0;cursor:pointer;font-size:.84rem"><strong>✅ Підтвердження готовності</strong><span style="display:block;font-size:.76rem;color:var(--text-muted)">Суддя підтверджує готовність перед запливом; Організатор бачить статус по кожній доріжці</span></label>
+    </div>
   </div>
 
   <!-- DETAILS FOR REGULATION DOCUMENT — collapsible -->
@@ -3088,6 +3101,8 @@ function openEditComp(id){
   }
   document.getElementById('nc-fee-waiver').checked=!!c.feeWaiver;
   document.getElementById('nc-reg-closed').checked=!!c.registrationClosed;
+  document.getElementById('nc-sync-timer').checked=!!c.syncTimerEnabled;
+  document.getElementById('nc-readiness').checked=!!c.readinessEnabled;
   renderLaneCheckboxes(c.activeLanes);
   initJudgePanelInModal(c);
   const hasRegData=['poolName','warmupFrom','entryEmail','contact1','fee1day'].some(p=>c[p]);
@@ -3128,6 +3143,8 @@ function createComp(){
   }
   data.feeWaiver=document.getElementById('nc-fee-waiver').checked;
   data.registrationClosed=document.getElementById('nc-reg-closed').checked;
+  data.syncTimerEnabled=document.getElementById('nc-sync-timer').checked;
+  data.readinessEnabled=document.getElementById('nc-readiness').checked;
   data.name=name;
   data.activeLanes=getActiveLanesFromModal();
   data.judgePanel=getJudgePanelFromModal();
@@ -5233,6 +5250,7 @@ function renderHeats(){
   const dayFilt=document.getElementById('hf-day')?.value||'';
   const alert_el=document.getElementById('heats-alert');
   const cont=document.getElementById('heats-content');
+  if(comp&&(comp.syncTimerEnabled||comp.readinessEnabled)&&['organizer','secretary','admin'].includes(_currentRole))_ensureOrgCtrlChannel();
   if(!comp?.heats?.length){
     alert_el.innerHTML='<div class="alert alert-warn">⚡ Натисніть «Генерувати запливи» для автоматичного розподілу учасників</div>';
     cont.innerHTML='';document.getElementById('heats-sub').textContent='';return;
@@ -5335,12 +5353,21 @@ function renderHeats(){
     const printRows=activeLns.map(printLaneBlock).join('');
     const printTable=`<table style="width:100%;border-collapse:collapse"><tbody>${printRows}</tbody></table>`;
     const inEvent=heat.totalHeatsInEvent?`${heat.heatInEvent}/${heat.totalHeatsInEvent}`:heat.heatInEvent;
+    const hIdx=comp.heats.indexOf(heat);
+    const isPriv2=['organizer','secretary','admin'].includes(_currentRole);
+    const showTimer=(comp.syncTimerEnabled||comp.readinessEnabled)&&isPriv2;
     return`<div class="heat-card">
       <div class="heat-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         <span class="badge badge-heat">Підзаплив ${inEvent}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
+        ${showTimer?`<span style="margin-left:auto;display:flex;align-items:center;gap:.4rem">
+          <button id="jstart-${heat.id}" class="btn-success btn-xs" onclick="broadcastHeatStart(${hIdx},${heat.id})" title="Запустити таймер для суддів">▶ Старт</button>
+          <button class="btn-secondary btn-xs" onclick="broadcastHeatReset(${hIdx},${heat.id})" title="Скинути">↺</button>
+          <span id="jtmr-${heat.id}" style="font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>
+        </span>`:''}
       </div>
+      ${comp.readinessEnabled&&isPriv2?`<div id="jrdy-${hIdx}" style="display:flex;gap:.3rem;flex-wrap:wrap;padding:.35rem .8rem;border-bottom:1px solid var(--border);min-height:28px"></div>`:''}
       <div class="lanes-grid print-hide">${cells}</div>
       <div class="heat-print-table" style="display:none">
         <div style="font-size:8pt;font-weight:600;background:#dde8f0;padding:2px 5px;border:1px solid #888;border-bottom:none">
@@ -12621,7 +12648,8 @@ function _initJudgeMode(){
   const p=new URLSearchParams(location.search);
   if(!p.has('judge'))return false;
   _judgeMode=true;
-  _judgeP={oid:p.get('oid')||'',cid:p.get('cid')||'',l:p.get('l')||'1',r:p.get('r')||'0'};
+  _judgeP={oid:p.get('oid')||'',cid:p.get('cid')||'',l:p.get('l')||'1',r:p.get('r')||'0',
+    syn:p.get('syn')==='1',rdy:p.get('rdy')==='1'};
 
   // Decode heats array from 'd' param
   try{
@@ -12663,6 +12691,8 @@ function _initJudgeMode(){
   // Показати бейдж якщо є незинхронізовані результати, і спробувати відправити
   _jqUpdateBadge();
   if(navigator.onLine)_jqFlush();
+  _judgeSubscribeCtrl();
+  if(_judgeP.rdy){const b=document.getElementById('j-ready-btn');if(b)b.style.display='';}
   return true;
 }
 
@@ -12735,6 +12765,61 @@ function _judgeShowCurrent(){
   const retry=document.getElementById('j-retry');if(retry)retry.style.display='none';
   const sb=document.getElementById('j-submit');
   if(sb){sb.disabled=false;sb.textContent=h.submitted?'↺ Перевідправити':'✓ Відправити результат';}
+  // Reset readiness button for new heat
+  if(_judgeP.rdy){
+    const rb=document.getElementById('j-ready-btn');
+    if(rb){rb.disabled=false;rb.style.background='';rb.style.opacity='';rb.textContent='✅ Підтвердити готовність';}
+  }
+  // Update sync status banner
+  const ss=document.getElementById('j-sync-status');
+  if(ss){
+    if(_judgeP.syn&&!h.submitted){ss.style.display='block';ss.textContent='⏳ Очікування сигналу старту від Організатора...';}
+    else{ss.style.display='none';}
+  }
+}
+
+// ── Judge broadcast channel (sync timer + readiness) ──────────
+let _judgeCtrlChannel=null;
+function _judgeSubscribeCtrl(){
+  if(!_judgeP.oid||!_judgeP.cid)return;
+  _judgeCtrlChannel=_supa.channel('jctrl_'+_judgeP.oid+'_'+_judgeP.cid)
+    .on('broadcast',{event:'hctrl'},({payload})=>{
+      if(payload.type==='heat_start')_judgeOnSyncStart(payload.heatIdx,payload.startTs);
+      else if(payload.type==='heat_reset')_judgeOnSyncReset(payload.heatIdx);
+    }).subscribe();
+}
+function _judgeOnSyncStart(heatIdx,startTs){
+  if(!_judgeP.syn)return;
+  const heat=_judgeHeats[_judgeCurIdx];
+  if(!heat||heat.h!==heatIdx)return;
+  if(_swRunning)return; // already running — judge started manually
+  cancelAnimationFrame(_swRaf);_swRaf=null;
+  _swElapsedMs=0;
+  _swStartTs=startTs; // server timestamp → elapsed = Date.now()-startTs
+  _swRunning=true;
+  const btn=document.getElementById('sw-btn');
+  const disp=document.getElementById('sw-disp');
+  if(btn){btn.innerHTML='⏹&nbsp;СТОП';btn.classList.add('run');}
+  if(disp){disp.classList.add('sw-run');disp.classList.remove('sw-stop');}
+  _swRaf=requestAnimationFrame(_swTick);
+  const ss=document.getElementById('j-sync-status');
+  if(ss){ss.textContent='🟢 Заплив розпочато!';ss.style.background='rgba(6,214,160,.15)';ss.style.borderColor='#06d6a0';ss.style.color='#004d2e';}
+}
+function _judgeOnSyncReset(heatIdx){
+  const heat=_judgeHeats[_judgeCurIdx];
+  if(!heat||heat.h!==heatIdx)return;
+  swReset(true);
+  const ss=document.getElementById('j-sync-status');
+  if(ss&&_judgeP.syn){ss.style.display='block';ss.textContent='⏳ Очікування сигналу старту від Організатора...';ss.style.background='';ss.style.borderColor='';ss.style.color='';}
+}
+function judgeMarkReady(){
+  const heat=_judgeHeats[_judgeCurIdx];if(!heat)return;
+  if(_judgeCtrlChannel){
+    _judgeCtrlChannel.send({type:'broadcast',event:'hctrl',
+      payload:{type:'judge_ready',lane:parseInt(_judgeP.l),heatIdx:heat.h}});
+  }
+  const btn=document.getElementById('j-ready-btn');
+  if(btn){btn.disabled=true;btn.style.background='#aad7c9';btn.style.opacity='.7';btn.textContent='✅ Готовність підтверджена';}
 }
 
 function swToggle(){
@@ -12987,6 +13072,67 @@ window.addEventListener('online',()=>{
   _jqFlush();
 });
 
+// ── Organizer: broadcast channel for sync timer + readiness ────
+let _orgCtrlChannel=null,_orgCtrlKey='';
+let _orgReadyLanes={}; // heatIdx → Set of ready lane numbers
+let _orgTimerRaf=null,_orgTimerHeatId=null,_orgTimerStartTs=0;
+
+function _ensureOrgCtrlChannel(){
+  const comp=activeComp();
+  const ownerId=_getTargetOwnerId();
+  if(!comp||!ownerId)return null;
+  const key=ownerId+'_'+comp.id;
+  if(_orgCtrlKey===key&&_orgCtrlChannel)return _orgCtrlChannel;
+  if(_orgCtrlChannel){try{_supa.removeChannel(_orgCtrlChannel);}catch(_){}_orgCtrlChannel=null;}
+  _orgReadyLanes={};_orgCtrlKey=key;
+  _orgCtrlChannel=_supa.channel('jctrl_'+ownerId+'_'+comp.id)
+    .on('broadcast',{event:'hctrl'},({payload})=>{
+      if(payload.type==='judge_ready')_orgHandleReady(payload.lane,payload.heatIdx);
+    }).subscribe();
+  return _orgCtrlChannel;
+}
+function _orgHandleReady(lane,heatIdx){
+  if(!_orgReadyLanes[heatIdx])_orgReadyLanes[heatIdx]=new Set();
+  _orgReadyLanes[heatIdx].add(lane);
+  const el=document.getElementById('jrdy-'+heatIdx);
+  if(el)_renderOrgReadiness(el,heatIdx);
+}
+function _renderOrgReadiness(el,heatIdx){
+  const comp=activeComp();if(!comp||!comp.heats[heatIdx])return;
+  const heat=comp.heats[heatIdx];
+  const lanes=Object.keys(heat.lanes||{}).map(Number).filter(l=>heat.lanes[l]).sort((a,b)=>a-b);
+  const ready=_orgReadyLanes[heatIdx]||new Set();
+  el.innerHTML=lanes.map(l=>`<span style="display:inline-flex;align-items:center;gap:.2rem;background:${ready.has(l)?'rgba(6,214,160,.15)':'rgba(0,119,182,.07)'};border:1px solid ${ready.has(l)?'#06d6a0':'var(--border)'};border-radius:12px;padding:.1rem .5rem;font-size:.75rem;font-weight:700;color:${ready.has(l)?'#00522d':'var(--text-muted)'}">Д.${l} ${ready.has(l)?'✅':'⏳'}</span>`).join('');
+}
+async function broadcastHeatStart(heatIdx,heatId){
+  const comp=activeComp();if(!comp)return;
+  const ch=_ensureOrgCtrlChannel();if(!ch)return;
+  const startTs=Date.now();
+  if(_orgTimerRaf)cancelAnimationFrame(_orgTimerRaf);
+  _orgTimerHeatId=heatId;_orgTimerStartTs=startTs;
+  _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
+  _orgReadyLanes[heatIdx]=new Set();
+  const rdy=document.getElementById('jrdy-'+heatIdx);if(rdy)rdy.innerHTML='';
+  const btn=document.getElementById('jstart-'+heatId);
+  if(btn){btn.disabled=true;btn.style.background='var(--success)';btn.textContent='🟢 Іде...';}
+  await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_start',heatIdx,startTs}});
+}
+async function broadcastHeatReset(heatIdx,heatId){
+  const comp=activeComp();if(!comp)return;
+  const ch=_ensureOrgCtrlChannel();if(!ch)return;
+  if(_orgTimerHeatId===heatId){cancelAnimationFrame(_orgTimerRaf);_orgTimerRaf=null;_orgTimerHeatId=null;}
+  const btn=document.getElementById('jstart-'+heatId);
+  if(btn){btn.disabled=false;btn.style.background='';btn.textContent='▶ Старт';}
+  const timerEl=document.getElementById('jtmr-'+heatId);if(timerEl)timerEl.textContent='';
+  await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_reset',heatIdx}});
+}
+function _tickOrgTimer(){
+  if(!_orgTimerHeatId)return;
+  const el=document.getElementById('jtmr-'+_orgTimerHeatId);
+  if(el)el.textContent=fmtTime(Math.floor((Date.now()-_orgTimerStartTs)/10));
+  _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
+}
+
 // ── Secretary/Organizer: subscribe to judge inputs ─────────────
 function subscribeJudgeInputs(ownerId){
   if(_judgeChannel){_judgeChannel.unsubscribe();_judgeChannel=null;}
@@ -13211,7 +13357,9 @@ function openRelayJudgeLinks(){
     anyLane=true;
 
     const d=btoa(unescape(encodeURIComponent(JSON.stringify(laneHeats))));
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1&d='+encodeURIComponent(d);
+    const syn=comp.syncTimerEnabled?'&syn=1':'';
+    const rdy=comp.readinessEnabled?'&rdy=1':'';
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy+'&d='+encodeURIComponent(d);
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
@@ -13280,7 +13428,9 @@ function openJudgeLinks(regen){
     anyLane=true;
 
     const d=btoa(unescape(encodeURIComponent(JSON.stringify(laneHeats))));
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&d='+encodeURIComponent(d);
+    const syn=comp.syncTimerEnabled?'&syn=1':'';
+    const rdy=comp.readinessEnabled?'&rdy=1':'';
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy+'&d='+encodeURIComponent(d);
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
