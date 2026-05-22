@@ -12500,19 +12500,20 @@ function _subscribeDataUpdates(){
   }
 }
 async function _trainerRefreshDb(){
-  if(_currentRole!=='trainer'||_supaOffline)return;
-  const ownerId=_getTargetOwnerId();if(!ownerId)return;
+  if(_currentRole!=='trainer')return;
+  if(_supaOffline){console.warn('[Sync] skipped: offline');return;}
+  const ownerId=_getTargetOwnerId();
+  if(!ownerId){console.warn('[Sync] skipped: no ownerId');return;}
   try{
     const{data,error}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
-    if(error||!data?.data)return;
+    if(error){console.warn('[Sync] error:',error.message);return;}
+    if(!data?.data){console.warn('[Sync] no data');return;}
     _applyRemoteDb(data.data,data.updated_at||'');
-  }catch(_){}
+  }catch(e){console.warn('[Sync] exception:',e.message);}
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
-  // Always apply — skip only if updated_at is identical (Supabase guarantees this changes on every save)
-  if(updatedAt&&updatedAt===_lastDbUpdatedAt)return;
-  _lastDbUpdatedAt=updatedAt;
+  _lastDbUpdatedAt=updatedAt||'';
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
