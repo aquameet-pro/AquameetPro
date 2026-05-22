@@ -733,6 +733,15 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   button[onclick^="openEditDay"],button[onclick^="deleteDay"]{display:none!important}
   /* Архів: адаптація */
   .archive-tbl-ach .mob-hide{display:none}
+  /* Протокол: прибираємо фіксовану ширину таблиці */
+  .proto-section .tbl-wrap table{table-layout:auto!important;min-width:0!important;width:100%!important}
+  .proto-section .tbl-wrap table col{width:auto!important}
+  /* Фільтр-бар Учасників — адаптація */
+  .filter-bar{gap:.35rem}
+  .filter-bar select{min-width:0;flex:1}
+  .filter-bar input{width:100%!important}
+  /*Ховаємо службові кнопки в Учасниках */
+  button[onclick="downloadTemplate()"],button[onclick="generateTestData()"]{display:none!important}
   /* Heats: vertical list layout */
   .lanes-grid{display:flex!important;flex-direction:column;gap:0}
   .lane-cell{
@@ -1155,7 +1164,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     <div style="display:flex;gap:.45rem;flex-wrap:wrap">
       <button class="btn-danger btn-sm" id="btn-del-test" onclick="deleteTestData()" style="display:none">🗑 Видалити тестові</button>
       <button class="btn-secondary btn-sm" id="btn-refresh-trainer-ath" style="display:none" onclick="refreshTrainerAthletes()">🔄 Тренери</button>
-      <button class="btn-secondary btn-sm" onclick="openImportExcel()">📊 Імпорт Excel</button>
+      <button class="btn-secondary btn-sm" id="btn-import-excel" onclick="openImportExcel()">📊 Імпорт Excel</button>
       <button class="btn-secondary btn-sm" onclick="downloadTemplate()">📥 Шаблон Excel</button>
       <button class="btn-secondary btn-sm" onclick="generateTestData()">🧪 500 тестових</button>
       <button class="btn-secondary btn-sm" onclick="openQuickGuest()">⚡ Гість</button>
@@ -1183,8 +1192,8 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
   <div class="tbl-wrap">
     <table><thead><tr>
-      <th>#</th><th>ПІБ</th><th>Стать</th><th>Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Розряд</th>
-      <th>Дист.</th><th>Стиль</th><th class="mob-hide">День</th><th>Заявл.</th><th>Дії</th>
+      <th>#</th><th>ПІБ</th><th class="mob-hide">Стать</th><th class="mob-hide">Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Розряд</th>
+      <th>Дист.</th><th>Стиль</th><th class="mob-hide">День</th><th class="mob-hide">Заявл.</th><th>Дії</th>
     </tr></thead><tbody id="ath-tbody"></tbody></table>
   </div>
 </div>
@@ -4166,25 +4175,27 @@ function renderAthletes(){
     if(!ent.length){
       const canAssign=comp&&comp.heats?.length&&['organizer','secretary','admin'].includes(_currentRole);
       const assignBtn=canAssign?`<button class="btn-secondary btn-xs" title="Додати до запливів" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)">📋 В заплив</button>`:'';
-      return[`<tr><td>${n++}</td><td><strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${[a.city,a.club].filter(Boolean).join(' · ')}</span></td>
-      <td><span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span></td>
-      <td>${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
+      const _gStr=a.gender==='M'?'Ч':'Ж';
+      return[`<tr><td>${n++}</td><td><strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${_gStr} · ${a.birthYear} · ${[a.city,a.club].filter(Boolean).join(' · ')}</span></td>
+      <td class="mob-hide"><span class="badge badge-${a.gender.toLowerCase()}">${_gStr}</span></td>
+      <td class="mob-hide">${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
       <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
       <td colspan="4" style="color:var(--text-muted);font-style:italic">немає заявок</td>
       <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
     }
+    const _gStrE=a.gender==='M'?'Ч':'Ж';
     return ent.map((e,idx)=>{
       const day=(comp?.days||[]).find(d=>d.id===e.dayId);
       return`<tr><td>${idx===0?n++:''}</td>
-        <td>${idx===0?`<strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${[a.city,a.club].filter(Boolean).join(' · ')}</span>`:''}</td>
-        <td>${idx===0?`<span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span>`:''}</td>
-        <td>${idx===0?a.birthYear:''}</td><td class="mob-hide">${idx===0?a.city||'–':''}</td><td class="mob-hide">${idx===0?a.club||'–':''}</td>
+        <td>${idx===0?`<strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${_gStrE} · ${a.birthYear} · ${[a.city,a.club].filter(Boolean).join(' · ')}</span>`:''}</td>
+        <td class="mob-hide">${idx===0?`<span class="badge badge-${a.gender.toLowerCase()}">${_gStrE}</span>`:''}</td>
+        <td class="mob-hide">${idx===0?a.birthYear:''}</td><td class="mob-hide">${idx===0?a.city||'–':''}</td><td class="mob-hide">${idx===0?a.club||'–':''}</td>
         <td class="mob-hide">${idx===0?a.coach||'–':''}</td>
         <td>${idx===0?`<span class="badge badge-rank">${a.currentRank||'–'}</span>`:''}</td>
         <td><span class="badge badge-dist">${e.dist}м</span></td>
         <td><span class="badge badge-style">${e.style}</span></td>
         <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
-        <td style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
+        <td class="mob-hide" style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
         <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
       </tr>`;
     });
@@ -5697,8 +5708,8 @@ function renderProtocol(){
       const exhMark=isExh?'<span class="exh-badge" title="Поза конкурсом">ПК</span>':'';
       return`<tr${isExh?' style="background:rgba(244,162,49,.06)"':''}>
         <td style="text-align:center;white-space:nowrap">${placeCell}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
-        <td style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${item.a.birthYear} · ${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
+        <td class="mob-hide" style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
@@ -5719,7 +5730,7 @@ function renderProtocol(){
           <col style="width:55px"><col style="width:140px"><col style="width:45px"><col style="width:95px">
           <col style="width:130px"><col style="width:115px"><col style="width:100px"><col style="width:75px">
         </colgroup>
-        <thead><tr><th>#</th><th>ПІБ</th><th>Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Результат</th><th>Розряд</th></tr></thead>
+        <thead><tr><th>#</th><th>ПІБ</th><th class="mob-hide">Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Результат</th><th>Розряд</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -5834,8 +5845,8 @@ function renderPreProtocol(){
         :'<span style="color:var(--text-muted)">–</span>';
       return`<tr${isExh?' style="background:rgba(244,162,49,.06)"':''}>
         <td style="text-align:center;white-space:nowrap">${numCell}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
-        <td style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${item.a.birthYear} · ${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
+        <td class="mob-hide" style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
