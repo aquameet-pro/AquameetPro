@@ -12529,22 +12529,19 @@ async function _trainerRefreshDb(){
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
-  // Compare _savedAt embedded in data — reliable even if Supabase ignores updated_at column
-  const newSavedAt=newData._savedAt||updatedAt||'';
-  const prevSavedAt=db._savedAt||_lastDbUpdatedAt||'';
-  const changed=newSavedAt!==prevSavedAt;
-  if(!changed)return; // truly no change
-  _lastDbUpdatedAt=newSavedAt;
+  _lastDbUpdatedAt=newData._savedAt||updatedAt||'';
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
+  // Always re-render tabs trainers commonly watch
   renderHome();
   renderNews();
-  const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
-  if(activeTab&&tabRenderers[activeTab]&&activeTab!=='home'&&activeTab!=='news')
-    tabRenderers[activeTab]();
+  if(document.getElementById('tab-results')?.classList.contains('active'))renderResults();
+  else if(document.getElementById('tab-heats')?.classList.contains('active'))renderHeats();
+  else if(document.getElementById('tab-protocol')?.classList.contains('active'))renderProtocol();
+  else if(document.getElementById('tab-standings')?.classList.contains('active'))renderStandings();
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  _setSyncIndicator('✅ '+activeTab+' '+t);
+  _setSyncIndicator('✅ '+t);
 }
 
 // Close notif panel on outside click
