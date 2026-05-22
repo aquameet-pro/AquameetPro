@@ -6001,6 +6001,20 @@ function saveNews(){
     body:document.getElementById('nn-body').value.trim(),
     link:document.getElementById('nn-link').value.trim()});
   saveDB();closeModal('modal-add-news');renderNews();renderHome();showToast('✅ Новину опубліковано');
+  _notifyTrainersAboutNews(title);
+}
+async function _notifyTrainersAboutNews(newsTitle){
+  if(!_currentUser||_currentRole==='trainer')return;
+  const ownerId=_getTargetOwnerId();if(!ownerId)return;
+  try{
+    const{data:invs}=await _supa.from('comp_invitations')
+      .select('trainer_id').eq('organizer_id',ownerId).eq('status','approved');
+    if(!invs?.length)return;
+    const orgName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
+    await Promise.all(invs.map(inv=>_insertNotification(
+      inv.trainer_id,'news','📰 Нова новина',`${orgName}: ${newsTitle}`,{organizer_id:ownerId}
+    )));
+  }catch(e){console.warn('[AquaMeet] _notifyTrainersAboutNews:',e.message);}
 }
 function delNews(id){db.news=db.news.filter(n=>n.id!==id);saveDB();renderNews();}
 
@@ -10607,6 +10621,7 @@ async function startApp(){
   try{await loadDB();}catch(e){
     try{const s=localStorage.getItem(_lsKey());if(s)db=JSON.parse(s);}catch(_){}
   }
+  _subscribeDataUpdates(); // trainer: realtime + polling refresh
   hideAuthOverlay();
 
   // Always reset to home tab
@@ -12395,11 +12410,48 @@ function _subscribeNotifications(){
       _renderNotifBadge();
       _renderNotifList();
       showToast(payload.new.title||'🔔 Нове сповіщення');
+      // If it's a news notification — refresh data immediately
+      if(payload.new.type==='news')_trainerRefreshDb();
     })
     .subscribe();
 }
 function _unsubscribeNotifications(){
   if(_notifChannel){_supa.removeChannel(_notifChannel);_notifChannel=null;}
+}
+
+// ─── Auto-refresh DB data for trainer (realtime + polling fallback) ────────────
+let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
+function _subscribeDataUpdates(){
+  if(_currentRole!=='trainer')return;
+  const ownerId=_getTargetOwnerId();if(!ownerId)return;
+  // Realtime channel (works if app_state has replication enabled in Supabase)
+  if(!_dataChannel){
+    _dataChannel=_supa.channel('dbupd_'+ownerId)
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state',filter:`id=eq.${ownerId}`},
+        payload=>{if(payload.new?.data)_applyRemoteDb(payload.new.data,payload.new.updated_at);})
+      .subscribe();
+  }
+  // Polling fallback every 60s
+  if(!_trainerPollTimer){
+    _trainerPollTimer=setInterval(()=>_trainerRefreshDb(),60000);
+  }
+}
+async function _trainerRefreshDb(){
+  if(_currentRole!=='trainer'||_supaOffline)return;
+  const ownerId=_getTargetOwnerId();if(!ownerId)return;
+  try{
+    const{data}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
+    if(data?.updated_at&&data.updated_at!==_lastDbUpdatedAt)
+      _applyRemoteDb(data.data,data.updated_at);
+  }catch(_){}
+}
+function _applyRemoteDb(newData,updatedAt){
+  if(!newData)return;
+  _lastDbUpdatedAt=updatedAt||'';
+  db=newData;
+  try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
+  const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
+  if(activeTab&&tabRenderers[activeTab])tabRenderers[activeTab]();
 }
 
 // Close notif panel on outside click
