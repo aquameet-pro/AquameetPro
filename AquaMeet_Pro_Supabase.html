@@ -1341,7 +1341,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <div class="tab-panel" id="tab-news">
   <div class="section-header">
     <div><div class="section-title">📰 Новини та анонси</div></div>
-    <button class="btn-primary" onclick="openModal('modal-add-news')">＋ Новина / Анонс</button>
+    <button class="btn-primary" onclick="openAddNews()">＋ Новина / Анонс</button>
   </div>
   <div id="news-content"></div>
 </div>
@@ -5992,6 +5992,14 @@ function renderNews(){
     <div style="margin-top:.6rem;text-align:right"><button class="btn-icon btn-xs news-edit-btn" style="color:var(--danger)" onclick="delNews(${n.id})">✕ Видалити</button></div>
   </div>`;}).join('');
 }
+function openAddNews(){
+  document.getElementById('nn-title').value='';
+  document.getElementById('nn-date').value='';
+  document.getElementById('nn-type').value='news';
+  document.getElementById('nn-body').value='';
+  document.getElementById('nn-link').value='';
+  openModal('modal-add-news');
+}
 function saveNews(){
   const title=document.getElementById('nn-title').value.trim();
   if(!title){alert('Введіть заголовок');return;}
@@ -6007,13 +6015,22 @@ async function _notifyTrainersAboutNews(newsTitle){
   if(!_currentUser||_currentRole==='trainer')return;
   const ownerId=_getTargetOwnerId();if(!ownerId)return;
   try{
-    const{data:invs}=await _supa.from('comp_invitations')
+    const{data:invs,error:qErr}=await _supa.from('comp_invitations')
       .select('trainer_id').eq('organizer_id',ownerId).neq('trainer_response','not_attending');
-    if(!invs?.length)return;
+    if(qErr){console.warn('[AquaMeet] invs query error:',qErr.message);return;}
+    if(!invs?.length){console.warn('[AquaMeet] _notifyTrainersAboutNews: no trainers found for ownerId=',ownerId);return;}
     const orgName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
-    await Promise.all(invs.map(inv=>_insertNotification(
-      inv.trainer_id,'news','📰 Нова новина',`${orgName}: ${newsTitle}`,{organizer_id:ownerId}
-    )));
+    let ok=0,fail=0;
+    await Promise.all(invs.map(async inv=>{
+      const{error}=await _supa.from('notifications').insert({
+        recipient_id:inv.trainer_id,type:'news',
+        title:'📰 Нова новина',body:`${orgName}: ${newsTitle}`,
+        data:{organizer_id:ownerId}
+      });
+      if(error){console.warn('[AquaMeet] notif insert error:',error.message,error.code);fail++;}
+      else ok++;
+    }));
+    if(fail>0)showToast(`⚠️ Сповіщення: ${ok} ок, ${fail} помилок — перевір права Supabase`,true);
   }catch(e){console.warn('[AquaMeet] _notifyTrainersAboutNews:',e.message);}
 }
 function delNews(id){db.news=db.news.filter(n=>n.id!==id);saveDB();renderNews();}
