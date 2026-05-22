@@ -7827,8 +7827,8 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
       const exh=t.exhibition?'<span class="badge" style="background:rgba(244,162,49,.18);color:#b45309;font-size:.68rem;margin-left:.3rem">ПК</span>':'';
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
-        <td><strong>${escapeHtml(t.name)}</strong>${exh}</td>
-        <td>${escapeHtml(t.club||'–')}</td>
+        <td><strong>${escapeHtml(t.name)}</strong>${exh}<span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td class="mob-hide">${escapeHtml(t.club||'–')}</td>
         <td style="font-size:.78rem;color:var(--text-muted)">${legList}</td>
         <td style="font-family:monospace;color:var(--text-muted)">${t.seedTime||'–'}</td>
         <td style="padding:.3rem .4rem">
@@ -7854,7 +7854,7 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
       <div class="tbl-wrap" style="border-radius:0 0 var(--radius) var(--radius)">
         <table style="table-layout:fixed;min-width:800px">
           <colgroup><col style="width:55px"><col style="width:160px"><col style="width:120px"><col style="width:180px"><col style="width:80px"><col style="width:200px"><col style="width:60px"></colgroup>
-          <thead><tr><th>Дор.</th><th>Команда</th><th>Клуб</th><th>Склад</th><th>Заявл.</th><th>Результат</th><th></th></tr></thead>
+          <thead><tr><th>Дор.</th><th>Команда</th><th class="mob-hide">Клуб</th><th>Склад</th><th>Заявл.</th><th>Результат</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
