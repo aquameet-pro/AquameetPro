@@ -13554,7 +13554,25 @@ async function _bootApp(user){
 <script>
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    // updateViaCache:'none' — browser always fetches sw.js fresh (bypasses HTTP cache)
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'})
+      .then(reg=>{
+        // Check for update every time user returns to the app
+        document.addEventListener('visibilitychange',()=>{
+          if(document.visibilityState==='visible') reg.update();
+        });
+        // Also check every hour while app is open
+        setInterval(()=>reg.update(), 60*60*1000);
+      }).catch(()=>{});
+
+    // When new SW takes control → reload the page automatically
+    let _swRefreshing=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(_swRefreshing)return;
+      _swRefreshing=true;
+      // Small delay so any in-flight saves complete
+      setTimeout(()=>window.location.reload(),800);
+    });
   });
 }
 </script>
