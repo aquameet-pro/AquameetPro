@@ -2900,6 +2900,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     setTimeout(applyPermissions,50);
     _syncBnav(t);
     closeBnavDrawer();
+    // Trainer: refresh data when switching to result-heavy tabs
+    if(_currentRole==='trainer'&&['results','heats','protocol','relays','standings'].includes(t)){
+      _trainerRefreshDb();
+    }
     // Organizer: do NOT reload trainer athletes on every tab switch —
     // it purges/rebuilds athletes and breaks heat lane references.
     // Use manual "🔄 Тренери" button or org-panel open to refresh.
@@ -12490,9 +12494,9 @@ function _subscribeDataUpdates(){
         payload=>{if(payload.new?.data)_applyRemoteDb(payload.new.data,payload.new.updated_at);})
       .subscribe();
   }
-  // Polling fallback every 60s
+  // Polling fallback every 20s
   if(!_trainerPollTimer){
-    _trainerPollTimer=setInterval(()=>_trainerRefreshDb(),60000);
+    _trainerPollTimer=setInterval(()=>_trainerRefreshDb(),20000);
   }
 }
 async function _trainerRefreshDb(){
