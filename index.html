@@ -1023,6 +1023,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       </div>
       <div class="jathlete" id="j-athlete"></div>
       <div class="jevent" id="j-event"></div>
+      <button id="j-ready-btn" style="display:none;width:100%;padding:.7rem;font-size:.95rem;font-weight:800;background:#06d6a0;color:#004d2e;border:none;border-radius:12px;cursor:pointer;margin-bottom:.6rem;transition:all .15s" onclick="judgeMarkReady()">✅ Підтвердити готовність</button>
       <div id="j-sync-status" style="display:none;text-align:center;background:rgba(0,119,182,.1);border:1px solid rgba(0,119,182,.3);border-radius:8px;padding:.5rem .7rem;margin-bottom:.6rem;font-size:.88rem;font-weight:700;color:#023e8a"></div>
       <div class="sw-disp" id="sw-disp">00:00:00</div>
       <button class="sw-main-btn" id="sw-btn" onclick="swToggle()">▶&nbsp;СТАРТ</button>
@@ -1031,7 +1032,6 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
         <button class="sw-lap-btn" id="sw-lap" onclick="swLap()" style="display:none">📍 Відмітити</button>
       </div>
       <div id="j-splits-list" class="j-splits-list"></div>
-      <button id="j-ready-btn" style="display:none;width:100%;padding:.7rem;font-size:.95rem;font-weight:800;background:#06d6a0;color:#004d2e;border:none;border-radius:12px;cursor:pointer;margin-bottom:.6rem;transition:all .15s" onclick="judgeMarkReady()">✅ Підтвердити готовність</button>
       <div class="jdivider">або введіть вручну</div>
       <input class="jmanual" id="j-manual" type="text" inputmode="decimal" placeholder="00:00:00" autocomplete="off" oninput="jManualInput(this)" onblur="jManualBlur(this)">
       <button class="jsubmit" id="j-submit" onclick="submitJudgeResult()">✓ Відправити результат</button>
@@ -1220,6 +1220,24 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 
 <!-- RESULTS -->
 <div class="tab-panel" id="tab-results">
+  <!-- Heat control panel: sync timer + readiness (shown when comp.syncTimerEnabled or readinessEnabled) -->
+  <div id="heat-ctrl-panel" style="display:none;margin-bottom:.6rem">
+    <div style="background:var(--card);border:1.5px solid var(--border);border-radius:12px;overflow:hidden">
+      <div style="background:#e0f2fe;padding:.45rem 1rem;display:flex;align-items:center;gap:.5rem;font-weight:700;font-size:.82rem;color:#023e8a">
+        <span>🎬 Керування запливом</span>
+        <span id="hcp-timer" style="margin-left:auto;font-family:monospace;font-size:.95rem;font-weight:900;color:var(--accent)"></span>
+      </div>
+      <div style="padding:.5rem 1rem;display:flex;flex-wrap:wrap;align-items:center;gap:.45rem">
+        <button class="btn-secondary btn-xs" onclick="hcpPrev()" title="Попередній заплив">‹</button>
+        <span id="hcp-label" style="font-weight:700;font-size:.85rem;min-width:85px;text-align:center;color:var(--text)">—</span>
+        <button class="btn-secondary btn-xs" onclick="hcpNext()" title="Наступний заплив">›</button>
+        <span id="hcp-event" style="font-size:.78rem;color:var(--text-muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+        <button id="hcp-start-btn" class="btn-success btn-sm" onclick="hcpStart()">▶ Старт</button>
+        <button class="btn-secondary btn-sm" onclick="hcpReset()" title="Скинути">↺</button>
+      </div>
+      <div id="hcp-ready" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.3rem 1rem .5rem;border-top:1px solid var(--border)"></div>
+    </div>
+  </div>
   <div id="judge-inputs-panel" style="display:none">
     <div class="jinputs-panel">
       <div class="jinputs-hdr" onclick="toggleJudgeInputsPanel()">
@@ -5384,6 +5402,7 @@ function renderHeats(){
 // ═══════════════════════════════════════════════════════════════
 function renderResults(){
   syncEventFilters();
+  _updateHeatCtrlPanel();
   const comp=activeComp();
   const filt=document.getElementById('rf-event')?.value||'';
   const dayFilt=document.getElementById('rf-day')?.value||'';
@@ -13076,6 +13095,7 @@ window.addEventListener('online',()=>{
 let _orgCtrlChannel=null,_orgCtrlKey='';
 let _orgReadyLanes={}; // heatIdx → Set of ready lane numbers
 let _orgTimerRaf=null,_orgTimerHeatId=null,_orgTimerStartTs=0;
+let _orgCurrentHeatIdx=0; // which heat is selected in the Results-tab control panel
 
 function _ensureOrgCtrlChannel(){
   const comp=activeComp();
@@ -13094,8 +13114,14 @@ function _ensureOrgCtrlChannel(){
 function _orgHandleReady(lane,heatIdx){
   if(!_orgReadyLanes[heatIdx])_orgReadyLanes[heatIdx]=new Set();
   _orgReadyLanes[heatIdx].add(lane);
+  // Update Heats tab card
   const el=document.getElementById('jrdy-'+heatIdx);
   if(el)_renderOrgReadiness(el,heatIdx);
+  // Update Results tab panel if showing same heat
+  if(heatIdx===_orgCurrentHeatIdx){
+    const pe=document.getElementById('hcp-ready');
+    if(pe){pe.style.display='flex';_renderOrgReadiness(pe,heatIdx);}
+  }
 }
 function _renderOrgReadiness(el,heatIdx){
   const comp=activeComp();if(!comp||!comp.heats[heatIdx])return;
@@ -13103,6 +13129,52 @@ function _renderOrgReadiness(el,heatIdx){
   const lanes=Object.keys(heat.lanes||{}).map(Number).filter(l=>heat.lanes[l]).sort((a,b)=>a-b);
   const ready=_orgReadyLanes[heatIdx]||new Set();
   el.innerHTML=lanes.map(l=>`<span style="display:inline-flex;align-items:center;gap:.2rem;background:${ready.has(l)?'rgba(6,214,160,.15)':'rgba(0,119,182,.07)'};border:1px solid ${ready.has(l)?'#06d6a0':'var(--border)'};border-radius:12px;padding:.1rem .5rem;font-size:.75rem;font-weight:700;color:${ready.has(l)?'#00522d':'var(--text-muted)'}">Д.${l} ${ready.has(l)?'✅':'⏳'}</span>`).join('');
+}
+// Results tab: heat control panel
+function _updateHeatCtrlPanel(){
+  const comp=activeComp();
+  const panel=document.getElementById('heat-ctrl-panel');
+  if(!panel)return;
+  const show=comp&&(comp.syncTimerEnabled||comp.readinessEnabled)&&
+    ['organizer','secretary','admin'].includes(_currentRole)&&(comp.heats?.length>0);
+  panel.style.display=show?'':'none';
+  if(!show)return;
+  _ensureOrgCtrlChannel();
+  _orgCurrentHeatIdx=Math.max(0,Math.min(_orgCurrentHeatIdx,(comp.heats.length||1)-1));
+  const heat=comp.heats[_orgCurrentHeatIdx];
+  const lbl=document.getElementById('hcp-label');
+  if(lbl)lbl.textContent='Заплив №'+(heat?.globalNum||(_orgCurrentHeatIdx+1));
+  const ev=document.getElementById('hcp-event');
+  if(ev&&heat)ev.textContent=evLabel(heat.dist,heat.style,heat.gender)||'';
+  // Reflect timer state
+  const isActive=heat&&heat.id===_orgTimerHeatId;
+  const sbtn=document.getElementById('hcp-start-btn');
+  if(sbtn){sbtn.disabled=isActive;sbtn.style.background=isActive?'var(--success)':'';sbtn.textContent=isActive?'🟢 Іде...':'▶ Старт';}
+  if(!isActive){const t=document.getElementById('hcp-timer');if(t)t.textContent='';}
+  // Readiness
+  const rdyEl=document.getElementById('hcp-ready');
+  if(rdyEl){
+    if(comp.readinessEnabled&&heat){
+      rdyEl.style.display='flex';_renderOrgReadiness(rdyEl,_orgCurrentHeatIdx);
+    }else{rdyEl.style.display='none';}
+  }
+}
+function hcpPrev(){
+  if(_orgCurrentHeatIdx>0){_orgCurrentHeatIdx--;_updateHeatCtrlPanel();}
+}
+function hcpNext(){
+  const comp=activeComp();
+  if(comp&&_orgCurrentHeatIdx<(comp.heats?.length||1)-1){_orgCurrentHeatIdx++;_updateHeatCtrlPanel();}
+}
+async function hcpStart(){
+  const comp=activeComp();if(!comp)return;
+  const heat=comp.heats[_orgCurrentHeatIdx];if(!heat)return;
+  await broadcastHeatStart(_orgCurrentHeatIdx,heat.id);
+}
+async function hcpReset(){
+  const comp=activeComp();if(!comp)return;
+  const heat=comp.heats[_orgCurrentHeatIdx];if(!heat)return;
+  await broadcastHeatReset(_orgCurrentHeatIdx,heat.id);
 }
 async function broadcastHeatStart(heatIdx,heatId){
   const comp=activeComp();if(!comp)return;
@@ -13112,24 +13184,46 @@ async function broadcastHeatStart(heatIdx,heatId){
   _orgTimerHeatId=heatId;_orgTimerStartTs=startTs;
   _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
   _orgReadyLanes[heatIdx]=new Set();
+  // Reset readiness displays
   const rdy=document.getElementById('jrdy-'+heatIdx);if(rdy)rdy.innerHTML='';
+  if(heatIdx===_orgCurrentHeatIdx){const pr=document.getElementById('hcp-ready');if(pr)pr.innerHTML='';}
+  // Update Heats tab button
   const btn=document.getElementById('jstart-'+heatId);
   if(btn){btn.disabled=true;btn.style.background='var(--success)';btn.textContent='🟢 Іде...';}
+  // Update Results panel button
+  if(heatIdx===_orgCurrentHeatIdx){
+    const pb=document.getElementById('hcp-start-btn');
+    if(pb){pb.disabled=true;pb.style.background='var(--success)';pb.textContent='🟢 Іде...';}
+  }
   await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_start',heatIdx,startTs}});
 }
 async function broadcastHeatReset(heatIdx,heatId){
   const comp=activeComp();if(!comp)return;
   const ch=_ensureOrgCtrlChannel();if(!ch)return;
   if(_orgTimerHeatId===heatId){cancelAnimationFrame(_orgTimerRaf);_orgTimerRaf=null;_orgTimerHeatId=null;}
+  // Reset Heats tab
   const btn=document.getElementById('jstart-'+heatId);
   if(btn){btn.disabled=false;btn.style.background='';btn.textContent='▶ Старт';}
   const timerEl=document.getElementById('jtmr-'+heatId);if(timerEl)timerEl.textContent='';
+  // Reset Results panel
+  if(heatIdx===_orgCurrentHeatIdx){
+    const pb=document.getElementById('hcp-start-btn');
+    if(pb){pb.disabled=false;pb.style.background='';pb.textContent='▶ Старт';}
+    const pt=document.getElementById('hcp-timer');if(pt)pt.textContent='';
+  }
   await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_reset',heatIdx}});
 }
 function _tickOrgTimer(){
   if(!_orgTimerHeatId)return;
+  const t=fmtTime(Math.floor((Date.now()-_orgTimerStartTs)/10));
+  // Update Heats tab card timer
   const el=document.getElementById('jtmr-'+_orgTimerHeatId);
-  if(el)el.textContent=fmtTime(Math.floor((Date.now()-_orgTimerStartTs)/10));
+  if(el)el.textContent=t;
+  // Update Results panel timer if showing same heat
+  const comp=activeComp();
+  if(comp&&comp.heats[_orgCurrentHeatIdx]?.id===_orgTimerHeatId){
+    const pt=document.getElementById('hcp-timer');if(pt)pt.textContent=t;
+  }
   _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
 }
 
