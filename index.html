@@ -728,6 +728,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     padding:.35rem .5rem!important;text-align:left!important;font-size:inherit!important;
   }
   .ta-dir-tbl thead th:first-child{background:rgba(0,119,182,.09)!important;z-index:3!important}
+  /* Ховаємо дії зі структурою змагань — на мобільному не редагують */
+  #btn-add-day,#btn-gen-heats,#btn-gen-relay-heats{display:none!important}
+  button[onclick^="openEditDay"],button[onclick^="deleteDay"]{display:none!important}
+  /* Архів: адаптація */
+  .archive-tbl-ach .mob-hide{display:none}
   /* Heats: vertical list layout */
   .lanes-grid{display:flex!important;flex-direction:column;gap:0}
   .lane-cell{
@@ -3289,6 +3294,7 @@ function deleteComp(id){
 function renderHome(){
   const el=document.getElementById('home-content');
   const comp=activeComp();
+  const isPriv=['organizer','secretary','admin'].includes(_currentRole);
   if(!comp){
     el.innerHTML=`<div style="text-align:center;padding:4rem 1rem">
       <div style="font-size:4rem;margin-bottom:1rem">🏊</div>
@@ -6129,10 +6135,11 @@ function renderArchive(){
         <div style="font-size:.78rem;color:var(--text-muted)">${activeCompName}</div>
       </div>
       ${clubRank.length?`<div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th>Місто</th><th>Клуб</th><th>🥇</th><th>🥈</th><th>🥉</th><th>∑</th></tr></thead>
+        <thead><tr><th>#</th><th>Клуб</th><th class="mob-hide">Місто</th><th>🥇</th><th>🥈</th><th>🥉</th><th>∑</th></tr></thead>
         <tbody>${clubRank.map((c,i)=>`<tr>
           <td style="text-align:center;font-weight:700">${i+1}</td>
-          <td style="font-size:.85rem">${c.city||'–'}</td><td><strong>${c.club}</strong></td>
+          <td><strong>${c.club}</strong><span class="mob-sub">${c.city||'–'}</span></td>
+          <td class="mob-hide" style="font-size:.85rem">${c.city||'–'}</td>
           <td style="color:var(--gold);font-weight:800;text-align:center">${c.g}</td>
           <td style="color:var(--silver);font-weight:700;text-align:center">${c.s}</td>
           <td style="color:var(--bronze);font-weight:700;text-align:center">${c.b}</td>
@@ -6145,20 +6152,39 @@ function renderArchive(){
         <div style="font-weight:800;color:var(--accent)">🎖 Вперше виконані нормативи розрядів</div>
         <div style="font-size:.78rem;color:var(--text-muted)">${activeCompName} · результат кращий за заявлений</div>
       </div>
-      ${rankAchs.length?`<div class="tbl-wrap"><table>
-        <thead><tr><th>#</th><th>Спортсмен</th><th>Рік</th><th>Стать</th><th>Місто</th><th>Клуб</th><th>Тренер</th><th>Дистанція</th><th>Заявл.</th><th>Результат</th><th>Розряд</th><th>Змагання</th><th>Дата</th></tr></thead>
-        <tbody>${rankAchs.map((x,i)=>`<tr>
+      ${rankAchs.length?`<div class="tbl-wrap"><table class="archive-tbl-ach">
+        <thead><tr>
+          <th>#</th>
+          <th>Спортсмен</th>
+          <th class="mob-hide">Рік</th>
+          <th class="mob-hide">Стать</th>
+          <th class="mob-hide">Місто</th>
+          <th class="mob-hide">Клуб</th>
+          <th class="mob-hide">Тренер</th>
+          <th>Дистанція</th>
+          <th class="mob-hide">Заявл.</th>
+          <th>Результат</th>
+          <th>Розряд</th>
+          <th class="mob-hide">Змагання</th>
+          <th class="mob-hide">Дата</th>
+        </tr></thead>
+        <tbody>${rankAchs.map((x,i)=>{
+          const cityClub=[x.a.city,x.a.club].filter(Boolean).join(' · ');
+          return`<tr>
           <td style="text-align:center">${i+1}</td>
-          <td><strong>${x.a.surname}</strong> ${x.a.name}</td>
-          <td>${x.a.birthYear}</td>
-          <td style="text-align:center"><span class="badge badge-${x.a.gender.toLowerCase()}">${x.a.gender==='M'?'Ч':'Ж'}</span></td>
-          <td>${x.a.city||'–'}</td><td>${x.a.club||'–'}</td><td style="font-size:.8rem">${x.a.coach||'–'}</td>
-          <td>${x.dist}м ${x.style}</td>
-          <td style="font-family:monospace;color:var(--text-muted);font-size:.82rem">${x.seedTime||'–'}</td>
+          <td><strong>${x.a.surname}</strong> ${x.a.name}<span class="mob-sub">${escapeHtml(cityClub)}</span></td>
+          <td class="mob-hide">${x.a.birthYear}</td>
+          <td class="mob-hide" style="text-align:center"><span class="badge badge-${x.a.gender.toLowerCase()}">${x.a.gender==='M'?'Ч':'Ж'}</span></td>
+          <td class="mob-hide">${x.a.city||'–'}</td>
+          <td class="mob-hide">${x.a.club||'–'}</td>
+          <td class="mob-hide" style="font-size:.8rem">${x.a.coach||'–'}</td>
+          <td style="font-size:.82rem">${x.dist}м ${x.style}</td>
+          <td class="mob-hide" style="font-family:monospace;color:var(--text-muted);font-size:.82rem">${x.seedTime||'–'}</td>
           <td style="font-family:monospace;color:var(--success);font-weight:700">${x.result}</td>
           <td><span class="ach-badge">${x.rank}</span></td>
-          <td style="font-size:.8rem">${x.compName}</td><td style="font-size:.8rem">${x.date||'–'}</td>
-        </tr>`).join('')}</tbody>
+          <td class="mob-hide" style="font-size:.8rem">${x.compName}</td>
+          <td class="mob-hide" style="font-size:.8rem">${x.date||'–'}</td>
+        </tr>`;}).join('')}</tbody>
       </table></div>`:'<p style="color:var(--text-muted)">Немає спортсменів, що вперше виконали норматив для цього вибору</p>'}
     </div>
   </div>`;
