@@ -1094,6 +1094,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     <button class="btn-secondary btn-sm" onclick="exportDB()" id="hdr-btn-backup">⬇ Бекап</button>
     <button class="btn-secondary btn-sm" onclick="importDBClick()" id="hdr-btn-restore">⬆ Відновити</button>
     <input type="file" id="db-import-file" accept=".json" style="display:none" onchange="importDBFile(event)">
+    <span id="sync-indicator" style="display:none;font-size:.65rem;color:var(--text-muted);white-space:nowrap" title="Останній синк з сервером"></span>
     <div id="notif-wrap">
       <button class="btn-notif" id="btn-notif" onclick="toggleNotifPanel()" title="Сповіщення">🔔<span class="notif-badge" id="notif-badge"></span></button>
       <div class="notif-panel" id="notif-panel">
@@ -5557,6 +5558,7 @@ function saveResult(eid,val){
   } else {
     // dns or dsq — store the normalized "Н/С" / "Д/К" string, no rank possible
     entry.result=norm.value;
+    entry.achievedRank=null; // clear any previously stored rank
     const inp=document.getElementById('res-'+eid);if(inp&&inp.value!==norm.value)inp.value=norm.value;
     if(rankCell)rankCell.innerHTML='<span style="color:var(--text-muted)">—</span>';
   }
@@ -12484,32 +12486,43 @@ function _unsubscribeNotifications(){
 
 // ─── Auto-refresh DB data for trainer (realtime + polling fallback) ────────────
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
+function _setSyncIndicator(text){
+  const el=document.getElementById('sync-indicator');
+  if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text;}
+}
 function _subscribeDataUpdates(){
   if(_currentRole!=='trainer')return;
-  const ownerId=_getTargetOwnerId();if(!ownerId)return;
-  // Realtime channel (works if app_state has replication enabled in Supabase)
+  const ownerId=_getTargetOwnerId();
+  if(!ownerId){_setSyncIndicator('⚠ no ownerId');return;}
+  // Realtime channel
   if(!_dataChannel){
     _dataChannel=_supa.channel('dbupd_'+ownerId)
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state',filter:`id=eq.${ownerId}`},
         payload=>{if(payload.new?.data)_applyRemoteDb(payload.new.data,payload.new.updated_at);})
       .subscribe();
   }
-  // Polling fallback every 20s
-  if(!_trainerPollTimer){
-    _trainerPollTimer=setInterval(()=>_trainerRefreshDb(),20000);
-  }
+  // Recursive setTimeout — more reliable than setInterval
+  if(!_trainerPollTimer) _scheduleTrainerPoll();
+}
+function _scheduleTrainerPoll(){
+  _trainerPollTimer=setTimeout(async()=>{
+    await _trainerRefreshDb();
+    _scheduleTrainerPoll();
+  },20000);
 }
 async function _trainerRefreshDb(){
   if(_currentRole!=='trainer')return;
-  if(_supaOffline){console.warn('[Sync] skipped: offline');return;}
+  const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if(_supaOffline){_setSyncIndicator('📵 офлайн '+t);return;}
   const ownerId=_getTargetOwnerId();
-  if(!ownerId){console.warn('[Sync] skipped: no ownerId');return;}
+  if(!ownerId){_setSyncIndicator('⚠ no id '+t);return;}
   try{
     const{data,error}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
-    if(error){console.warn('[Sync] error:',error.message);return;}
-    if(!data?.data){console.warn('[Sync] no data');return;}
+    if(error){_setSyncIndicator('⚠ err '+t);return;}
+    if(!data?.data){_setSyncIndicator('⚠ null '+t);return;}
+    _setSyncIndicator('🔄 '+t);
     _applyRemoteDb(data.data,data.updated_at||'');
-  }catch(e){console.warn('[Sync] exception:',e.message);}
+  }catch(e){_setSyncIndicator('⚠ exc '+t);}
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
