@@ -766,7 +766,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .swap-btn{display:none!important}
   /* Sub-info line inside name cell */
   .mob-sub{display:block;font-size:.64rem;color:var(--text-muted);font-weight:400;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .notif-panel{width:calc(100vw - 1.5rem);right:-.5rem}
+  .notif-panel{position:fixed!important;top:108px!important;left:.75rem!important;right:.75rem!important;width:auto!important;max-height:70vh!important}
   #sticky-top{position:sticky}
   .section-title{font-size:.95rem}
   .btn-primary,.btn-secondary{font-size:.78rem;padding:.35rem .65rem}
@@ -6017,8 +6017,8 @@ async function _notifyTrainersAboutNews(newsTitle){
   try{
     const{data:invs,error:qErr}=await _supa.from('comp_invitations')
       .select('trainer_id').eq('organizer_id',ownerId).neq('trainer_response','not_attending');
-    if(qErr){console.warn('[AquaMeet] invs query error:',qErr.message);return;}
-    if(!invs?.length){console.warn('[AquaMeet] _notifyTrainersAboutNews: no trainers found for ownerId=',ownerId);return;}
+    if(qErr){showToast(`⚠️ Помилка запиту: ${qErr.message}`,true);return;}
+    if(!invs?.length){showToast('ℹ️ Тренерів для сповіщення не знайдено',true);return;}
     const orgName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
     let ok=0,fail=0;
     await Promise.all(invs.map(async inv=>{
@@ -6030,7 +6030,8 @@ async function _notifyTrainersAboutNews(newsTitle){
       if(error){console.warn('[AquaMeet] notif insert error:',error.message,error.code);fail++;}
       else ok++;
     }));
-    if(fail>0)showToast(`⚠️ Сповіщення: ${ok} ок, ${fail} помилок — перевір права Supabase`,true);
+    if(fail>0)showToast(`⚠️ Сповіщення: ${ok} ок, ${fail} помилок (RLS?)`,true);
+    else showToast(`🔔 Надіслано сповіщень тренерам: ${ok}`);
   }catch(e){console.warn('[AquaMeet] _notifyTrainersAboutNews:',e.message);}
 }
 function delNews(id){db.news=db.news.filter(n=>n.id!==id);saveDB();renderNews();}
