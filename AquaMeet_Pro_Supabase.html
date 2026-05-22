@@ -2248,12 +2248,10 @@ function saveDB(){
       );
       if(error){
         console.warn('[AquaMeet] Save error:',error.message);
-        showToast('⚠ Збереження: '+error.message,true);
       }else{
         _supaLastSaveTs=Date.now();
-        showToast('💾 Збережено в хмару');
       }
-    }catch(e){showToast('⚠ Save exception: '+e.message,true);}
+    }catch(e){console.warn('[AquaMeet] Save exception:',e);}
   },200);
 }
 
@@ -12502,24 +12500,18 @@ function _subscribeDataUpdates(){
   }
 }
 async function _trainerRefreshDb(){
-  if(_currentRole!=='trainer')return;
-  if(_supaOffline){showToast('⚠️ Sync: offline flag is set',true);return;}
-  const ownerId=_getTargetOwnerId();
-  if(!ownerId){showToast('⚠️ Sync: no ownerId',true);return;}
+  if(_currentRole!=='trainer'||_supaOffline)return;
+  const ownerId=_getTargetOwnerId();if(!ownerId)return;
   try{
     const{data,error}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
-    if(error){showToast('⚠️ Sync error: '+error.message,true);return;}
-    if(!data?.data){showToast('⚠️ Sync: no data returned',true);return;}
-    const changed=JSON.stringify(data.data)!==JSON.stringify(db);
-    showToast(changed?'🔄 Дані оновлено':'✓ Sync: без змін ('+(data.updated_at||'').substr(11,8)+')');
-    if(data?.data)_applyRemoteDb(data.data,data.updated_at||'');
-  }catch(e){showToast('⚠️ Sync exception: '+e.message,true);}
+    if(error||!data?.data)return;
+    _applyRemoteDb(data.data,data.updated_at||'');
+  }catch(_){}
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
-  // Skip re-render if data is identical (compare JSON to avoid unnecessary re-draws)
-  const newStr=JSON.stringify(newData);
-  if(newStr===JSON.stringify(db)&&updatedAt===_lastDbUpdatedAt)return;
+  // Always apply — skip only if updated_at is identical (Supabase guarantees this changes on every save)
+  if(updatedAt&&updatedAt===_lastDbUpdatedAt)return;
   _lastDbUpdatedAt=updatedAt;
   db=newData;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
