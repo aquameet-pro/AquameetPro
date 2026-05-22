@@ -12501,12 +12501,18 @@ function _subscribeDataUpdates(){
   }
 }
 async function _trainerRefreshDb(){
-  if(_currentRole!=='trainer'||_supaOffline)return;
-  const ownerId=_getTargetOwnerId();if(!ownerId)return;
+  if(_currentRole!=='trainer')return;
+  if(_supaOffline){showToast('⚠️ Sync: offline flag is set',true);return;}
+  const ownerId=_getTargetOwnerId();
+  if(!ownerId){showToast('⚠️ Sync: no ownerId',true);return;}
   try{
-    const{data}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
+    const{data,error}=await _supa.from(SUPA_TABLE).select('data,updated_at').eq('id',ownerId).maybeSingle();
+    if(error){showToast('⚠️ Sync error: '+error.message,true);return;}
+    if(!data?.data){showToast('⚠️ Sync: no data returned',true);return;}
+    const changed=JSON.stringify(data.data)!==JSON.stringify(db);
+    showToast(changed?'🔄 Дані оновлено':'✓ Sync: без змін ('+(data.updated_at||'').substr(11,8)+')');
     if(data?.data)_applyRemoteDb(data.data,data.updated_at||'');
-  }catch(_){}
+  }catch(e){showToast('⚠️ Sync exception: '+e.message,true);}
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
