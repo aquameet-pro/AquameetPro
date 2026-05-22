@@ -622,6 +622,40 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .city-tag{background:rgba(0,119,182,.1);border:1px solid rgba(0,119,182,.2);border-radius:12px;padding:.1rem .5rem;font-size:.7rem;color:#0055a0;font-weight:600}
 @media(max-width:1100px){.org-stats-dashboard{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:640px){.org-stats-dashboard{grid-template-columns:repeat(2,1fr)}.org-dash-sticky{top:90px}}
+/* ── Bottom nav ── */
+#bottom-nav{
+  display:none;position:fixed;bottom:0;left:0;right:0;height:62px;
+  background:var(--card);border-top:1px solid var(--border);
+  z-index:900;justify-content:space-around;align-items:stretch;
+  box-shadow:0 -2px 12px rgba(0,0,0,.1);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.bnav-btn{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;background:none;border:none;cursor:pointer;padding:.35rem .2rem;
+  flex:1;color:var(--text-muted);font-size:.6rem;font-weight:700;
+  letter-spacing:.2px;line-height:1;transition:color .15s;
+}
+.bnav-btn .bi{font-size:1.35rem;line-height:1;display:block}
+.bnav-btn.active{color:var(--accent)}
+.bnav-btn.active .bi{transform:scale(1.12);transition:transform .15s}
+#bnav-drawer-overlay{display:none;position:fixed;inset:0;z-index:950;background:rgba(0,0,0,.35)}
+#bnav-drawer{
+  display:none;position:fixed;bottom:62px;left:0;right:0;z-index:960;
+  background:var(--card);border-top:2px solid var(--accent);
+  border-radius:16px 16px 0 0;padding:.75rem .75rem 1rem;
+  max-height:65vh;overflow-y:auto;
+  box-shadow:0 -4px 24px rgba(0,0,0,.18);
+}
+.bnav-drawer-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem}
+.bnav-drawer-btn{
+  display:flex;flex-direction:column;align-items:center;gap:.3rem;
+  background:rgba(0,119,182,.06);border:1px solid var(--border);
+  border-radius:10px;padding:.6rem .3rem;cursor:pointer;font-size:.7rem;
+  font-weight:700;color:var(--text);line-height:1.2;text-align:center;
+}
+.bnav-drawer-btn .bi{font-size:1.5rem}
+.bnav-drawer-btn.active{background:rgba(0,119,182,.15);border-color:var(--accent);color:var(--accent)}
 /* ── Mobile ── */
 @media(max-width:640px){
   .app-header{padding:.45rem .75rem;gap:.5rem;flex-wrap:wrap}
@@ -633,9 +667,9 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .user-badge{font-size:.68rem;padding:.2rem .5rem}
   #user-role-label{display:none}
   .btn-logout{font-size:.68rem;padding:.2rem .5rem}
-  .app-nav{padding:0 .25rem}
-  .tab-btn{padding:.55rem .6rem;font-size:.74rem}
-  .app-main{padding:.75rem .6rem}
+  .app-nav{display:none}
+  #bottom-nav{display:flex}
+  .app-main{padding:.75rem .6rem 80px}
   .section-header{flex-direction:column;align-items:flex-start;gap:.4rem}
   .grid-2,.grid-3,.cols-2,.cols-3,.cols-4{grid-template-columns:1fr!important}
   .stats-row{gap:.5rem}
@@ -1009,6 +1043,16 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <button class="tab-btn" data-tab="orgpanel" id="nav-org-btn" style="display:none">🗂 Мої змагання</button>
   <button class="tab-btn" data-tab="invitations" id="nav-inv-btn" style="display:none">📬 Запрошення<span class="notif-badge" id="inv-badge" style="display:none">0</span></button>
 </nav>
+<!-- ══ BOTTOM NAV (mobile) ══ -->
+<nav id="bottom-nav">
+  <button class="bnav-btn active" data-bnav="home" onclick="switchTab('home')"><span class="bi">🏠</span>Головна</button>
+  <button class="bnav-btn" data-bnav="schedule" onclick="switchTab('schedule')"><span class="bi">📅</span>Розклад</button>
+  <button class="bnav-btn" data-bnav="heats" onclick="switchTab('heats')"><span class="bi">🏊</span>Запливи</button>
+  <button class="bnav-btn" data-bnav="results" onclick="switchTab('results')"><span class="bi">🏁</span>Результати</button>
+  <button class="bnav-btn" id="bnav-more-btn" onclick="toggleBnavDrawer()"><span class="bi">☰</span>Ще</button>
+</nav>
+<div id="bnav-drawer-overlay" onclick="closeBnavDrawer()"></div>
+<div id="bnav-drawer"><div class="bnav-drawer-grid" id="bnav-drawer-grid"></div></div>
 <div id="offline-banner">
   <strong>⚠ Офлайн-режим</strong> — зміни зберігаються локально і синхронізуються автоматично при відновленні з'єднання.
   <button onclick="_tryReconnect(this)">↺ Перевірити зараз</button>
@@ -2770,12 +2814,64 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.getElementById('tab-'+t).classList.add('active');
     tabRenderers[t]?.();
     setTimeout(applyPermissions,50);
+    _syncBnav(t);
+    closeBnavDrawer();
     // Organizer: do NOT reload trainer athletes on every tab switch —
     // it purges/rebuilds athletes and breaks heat lane references.
     // Use manual "🔄 Тренери" button or org-panel open to refresh.
   });
 });
 function switchTab(name){document.querySelector(`.tab-btn[data-tab="${name}"]`)?.click();}
+
+// ── Bottom nav ──────────────────────────────────────────
+const _BNAV_MAIN=['home','schedule','heats','results'];
+const _BNAV_ALL=[
+  {tab:'athletes',   icon:'👥', label:'Учасники'},
+  {tab:'protocol',   icon:'📋', label:'Протокол'},
+  {tab:'standings',  icon:'🏆', label:'Призери'},
+  {tab:'relays',     icon:'🤝', label:'Естафети'},
+  {tab:'athletes-dir',icon:'🏊',label:'Спортсмени'},
+  {tab:'archive',    icon:'📚', label:'Архів/Рейтинг'},
+  {tab:'news',       icon:'📰', label:'Новини'},
+  {tab:'reglament',  icon:'📜', label:'Регламент'},
+  {tab:'settings',   icon:'⚙️', label:'Налаштування'},
+  {tab:'orgpanel',   icon:'🗂', label:'Мої змагання'},
+  {tab:'invitations',icon:'📬', label:'Запрошення'},
+  {tab:'admin',      icon:'👑', label:'Адмін'},
+];
+function _syncBnav(tab){
+  document.querySelectorAll('.bnav-btn[data-bnav]').forEach(b=>b.classList.toggle('active',b.dataset.bnav===tab));
+  const inMain=_BNAV_MAIN.includes(tab);
+  document.getElementById('bnav-more-btn')?.classList.toggle('active',!inMain);
+}
+function _buildBnavDrawer(activeTab){
+  const grid=document.getElementById('bnav-drawer-grid');
+  if(!grid)return;
+  const items=_BNAV_ALL.filter(item=>{
+    const topBtn=document.querySelector(`.tab-btn[data-tab="${item.tab}"]`);
+    return topBtn&&topBtn.style.display!=='none'&&!topBtn.closest('[style*="display:none"]');
+  });
+  grid.innerHTML=items.map(item=>`
+    <button class="bnav-drawer-btn${activeTab===item.tab?' active':''}" onclick="switchTab('${item.tab}');closeBnavDrawer()">
+      <span class="bi">${item.icon}</span>${item.label}
+    </button>`).join('');
+}
+function toggleBnavDrawer(){
+  const overlay=document.getElementById('bnav-drawer-overlay');
+  const drawer=document.getElementById('bnav-drawer');
+  const isOpen=drawer.style.display==='block';
+  if(isOpen){closeBnavDrawer();}
+  else{
+    const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab||'home';
+    _buildBnavDrawer(activeTab);
+    overlay.style.display='block';drawer.style.display='block';
+  }
+}
+function closeBnavDrawer(){
+  document.getElementById('bnav-drawer-overlay').style.display='none';
+  document.getElementById('bnav-drawer').style.display='none';
+}
+// ────────────────────────────────────────────────────────
 
 // ═══════════════════════════════════════════════════════════════
 // MODAL HELPERS
