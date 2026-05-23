@@ -12614,7 +12614,9 @@ let _judgeInputsCache=[];
 let _jinputsPanelOpen=true;
 
 function _judgeResKey(hIdx){
-  return 'jres_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.l+'_'+hIdx;
+  // Include ts (QR generation timestamp) so re-generated heats don't reuse old localStorage entries
+  const ts=_judgeP.ts||'0';
+  return 'jres_'+_judgeP.oid+'_'+_judgeP.cid+'_'+_judgeP.l+'_'+ts+'_'+hIdx;
 }
 
 // ── Офлайн черга суддів ────────────────────────────────────────
@@ -12668,7 +12670,7 @@ async function _initJudgeMode(){
   if(!p.has('judge'))return false;
   _judgeMode=true;
   _judgeP={oid:p.get('oid')||'',cid:p.get('cid')||'',l:p.get('l')||'1',r:p.get('r')||'0',
-    syn:p.get('syn')==='1',rdy:p.get('rdy')==='1'};
+    syn:p.get('syn')==='1',rdy:p.get('rdy')==='1',ts:p.get('ts')||'0'};
 
   // Show overlay immediately (before any async work)
   document.getElementById('auth-overlay').style.display='none';
@@ -13503,7 +13505,7 @@ function openRelayJudgeLinks(){
 
     const syn=comp.syncTimerEnabled?'&syn=1':'';
     const rdy=comp.readinessEnabled?'&rdy=1':'';
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy;
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy+'&ts='+(comp.judgeQrTs||Date.now());
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
@@ -13573,7 +13575,7 @@ function openJudgeLinks(regen){
 
     const syn=comp.syncTimerEnabled?'&syn=1':'';
     const rdy=comp.readinessEnabled?'&rdy=1':'';
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy;
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy+'&ts='+(comp.judgeQrTs||Date.now());
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
