@@ -5493,10 +5493,18 @@ function renderResults(){
         </td>`:'<td></td>'}
       </tr>`;
     }).filter(Boolean).join('');
+    const hIdxForCtrl=heatOrigIdx.get(heat)??-1;
+    const showCtrl=(comp.syncTimerEnabled||comp.readinessEnabled)&&isPriv&&hIdxForCtrl>=0;
+    const ctrlHtml=showCtrl?`<div style="margin-left:auto;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">${
+      comp.readinessEnabled?`<div id="rrdy-${hIdxForCtrl}" style="display:flex;flex-wrap:wrap;gap:.25rem;align-items:center"></div>`:''
+    }<span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>${
+      comp.syncTimerEnabled?`<button id="rstart-${heat.id}" class="btn-success btn-sm" onclick="broadcastHeatStart(${hIdxForCtrl},${heat.id})" style="padding:.18rem .55rem;font-size:.76rem">▶ Старт</button><button class="btn-secondary btn-sm" onclick="rHeatReset(${hIdxForCtrl},${heat.id})" style="padding:.18rem .45rem;font-size:.76rem" title="Скинути (з підтвердженням)">↺</button>`:''
+    }</div>`:'';
     return`<div class="proto-section">
       <div class="proto-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
+        ${ctrlHtml}
       </div>
       <div class="tbl-wrap scrollable" style="border-radius:0 0 8px 8px"><table style="min-width:820px;width:100%">
         <colgroup>
@@ -12920,7 +12928,25 @@ function judgeMarkReady(){
       payload:{type:'judge_ready',lane:parseInt(_judgeP.l),heatIdx:heat.h}});
   }
   const btn=document.getElementById('j-ready-btn');
-  if(btn){btn.disabled=true;btn.style.background='#aad7c9';btn.style.opacity='.7';btn.textContent='✅ Готовність підтверджена';}
+  if(btn){
+    btn.disabled=false;
+    btn.style.background='#aad7c9';
+    btn.textContent='✅ Готовність підтверджена — скасувати?';
+    btn.onclick=judgeCancelReady;
+  }
+}
+function judgeCancelReady(){
+  const heat=_judgeHeats[_judgeCurIdx];if(!heat)return;
+  if(_judgeCtrlChannel){
+    _judgeCtrlChannel.send({type:'broadcast',event:'hctrl',
+      payload:{type:'judge_cancel_ready',lane:parseInt(_judgeP.l),heatIdx:heat.h}});
+  }
+  const btn=document.getElementById('j-ready-btn');
+  if(btn){
+    btn.style.background='';btn.style.opacity='';
+    btn.textContent='✅ Підтвердити готовність';
+    btn.onclick=judgeMarkReady;
+  }
 }
 
 function swToggle(){
@@ -13190,8 +13216,17 @@ function _ensureOrgCtrlChannel(){
   _orgCtrlChannel=_supa.channel('jctrl_'+ownerId+'_'+comp.id)
     .on('broadcast',{event:'hctrl'},({payload})=>{
       if(payload.type==='judge_ready')_orgHandleReady(payload.lane,payload.heatIdx);
+      else if(payload.type==='judge_cancel_ready')_orgHandleCancelReady(payload.lane,payload.heatIdx);
     }).subscribe();
   return _orgCtrlChannel;
+}
+function _orgHandleCancelReady(lane,heatIdx){
+  if(_orgReadyLanes[heatIdx])_orgReadyLanes[heatIdx].delete(lane);
+  const el=document.getElementById('jrdy-'+heatIdx);if(el)_renderOrgReadiness(el,heatIdx);
+  const re=document.getElementById('rrdy-'+heatIdx);if(re)_renderOrgReadiness(re,heatIdx);
+  if(heatIdx===_orgCurrentHeatIdx){
+    const pe=document.getElementById('hcp-ready');if(pe)_renderOrgReadiness(pe,heatIdx);
+  }
 }
 function _orgHandleReady(lane,heatIdx){
   if(!_orgReadyLanes[heatIdx])_orgReadyLanes[heatIdx]=new Set();
@@ -13199,11 +13234,16 @@ function _orgHandleReady(lane,heatIdx){
   // Update Heats tab card
   const el=document.getElementById('jrdy-'+heatIdx);
   if(el)_renderOrgReadiness(el,heatIdx);
-  // Update Results tab panel if showing same heat
+  // Update Results tab panel (old sticky panel)
   if(heatIdx===_orgCurrentHeatIdx){
     const pe=document.getElementById('hcp-ready');
     if(pe){pe.style.display='flex';_renderOrgReadiness(pe,heatIdx);}
   }
+  // Update Results table inline readiness strip
+  const re=document.getElementById('rrdy-'+heatIdx);
+  if(re)_renderOrgReadiness(re,heatIdx);
+  // Auto-stop timer if all lanes ready (optional: remove if unwanted)
+  _checkAutoStopTimer(heatIdx);
 }
 function _renderOrgReadiness(el,heatIdx){
   const comp=activeComp();if(!comp||!comp.heats[heatIdx])return;
@@ -13258,6 +13298,10 @@ async function hcpReset(){
   const heat=comp.heats[_orgCurrentHeatIdx];if(!heat)return;
   await broadcastHeatReset(_orgCurrentHeatIdx,heat.id);
 }
+async function rHeatReset(heatIdx,heatId){
+  if(!confirm('Скинути таймер для всіх суддів цього запливу?'))return;
+  await broadcastHeatReset(heatIdx,heatId);
+}
 async function broadcastHeatStart(heatIdx,heatId){
   const comp=activeComp();if(!comp)return;
   const ch=_ensureOrgCtrlChannel();if(!ch)return;
@@ -13272,11 +13316,14 @@ async function broadcastHeatStart(heatIdx,heatId){
   // Update Heats tab button
   const btn=document.getElementById('jstart-'+heatId);
   if(btn){btn.disabled=true;btn.style.background='var(--success)';btn.textContent='🟢 Іде...';}
-  // Update Results panel button
+  // Update Results panel button (old sticky panel)
   if(heatIdx===_orgCurrentHeatIdx){
     const pb=document.getElementById('hcp-start-btn');
     if(pb){pb.disabled=true;pb.style.background='var(--success)';pb.textContent='🟢 Іде...';}
   }
+  // Update Results table inline button
+  const rb=document.getElementById('rstart-'+heatId);
+  if(rb){rb.disabled=true;rb.style.background='var(--success)';rb.textContent='🟢 Іде...';}
   await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_start',heatIdx,startTs}});
 }
 async function broadcastHeatReset(heatIdx,heatId){
@@ -13287,12 +13334,17 @@ async function broadcastHeatReset(heatIdx,heatId){
   const btn=document.getElementById('jstart-'+heatId);
   if(btn){btn.disabled=false;btn.style.background='';btn.textContent='▶ Старт';}
   const timerEl=document.getElementById('jtmr-'+heatId);if(timerEl)timerEl.textContent='';
-  // Reset Results panel
+  // Reset Results panel (old sticky panel)
   if(heatIdx===_orgCurrentHeatIdx){
     const pb=document.getElementById('hcp-start-btn');
     if(pb){pb.disabled=false;pb.style.background='';pb.textContent='▶ Старт';}
     const pt=document.getElementById('hcp-timer');if(pt)pt.textContent='';
   }
+  // Reset Results table inline button and timer
+  const rb2=document.getElementById('rstart-'+heatId);
+  if(rb2){rb2.disabled=false;rb2.style.background='';rb2.textContent='▶ Старт';}
+  const rtmr2=document.getElementById('rtmr-'+heatId);
+  if(rtmr2)rtmr2.textContent='';
   await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_reset',heatIdx}});
 }
 function _tickOrgTimer(){
@@ -13301,12 +13353,35 @@ function _tickOrgTimer(){
   // Update Heats tab card timer
   const el=document.getElementById('jtmr-'+_orgTimerHeatId);
   if(el)el.textContent=t;
-  // Update Results panel timer if showing same heat
+  // Update Results panel timer (old sticky panel)
   const comp=activeComp();
   if(comp&&comp.heats[_orgCurrentHeatIdx]?.id===_orgTimerHeatId){
     const pt=document.getElementById('hcp-timer');if(pt)pt.textContent=t;
   }
+  // Update Results table inline timer
+  const rtmr=document.getElementById('rtmr-'+_orgTimerHeatId);
+  if(rtmr)rtmr.textContent=t;
   _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
+}
+
+// Auto-stop organizer timer when all occupied lanes for a heat have submitted results
+function _checkAutoStopTimer(heatIdx){
+  if(!_orgTimerHeatId)return;
+  const comp=activeComp();if(!comp)return;
+  const heat=comp.heats[heatIdx];if(!heat)return;
+  if(heat.id!==_orgTimerHeatId)return;
+  // Count occupied lanes vs submitted judge results
+  const occupiedLanes=Object.values(heat.lanes||{}).filter(Boolean).length;
+  if(!occupiedLanes)return;
+  const submitted=(_judgeInputsCache||[]).filter(r=>
+    String(r.comp_id)===String(comp.id)&&r.heat_idx===heatIdx&&r.heat_type!=='relay'
+  ).length;
+  if(submitted>=occupiedLanes){
+    cancelAnimationFrame(_orgTimerRaf);_orgTimerRaf=null;_orgTimerHeatId=null;
+    const tmr=document.getElementById('jtmr-'+heat.id);if(tmr)tmr.textContent='✅';
+    const rtmr=document.getElementById('rtmr-'+heat.id);if(rtmr)rtmr.textContent='✅';
+    const hcpt=document.getElementById('hcp-timer');if(hcpt)hcpt.textContent='✅';
+  }
 }
 
 // ── Secretary/Organizer: subscribe to judge inputs ─────────────
@@ -13331,6 +13406,8 @@ function subscribeJudgeInputs(ownerId){
       renderJudgeInputsPanel();
       _showJudgeInputsBadge(_judgeInputsCache.filter(r=>r.status==='pending').length);
       showToast('📥 Новий результат: '+payload.new.athlete_name+' — '+fmtTime(payload.new.result_cs));
+      // Auto-stop timer when all lanes submitted
+      if(typeof payload.new.heat_idx==='number')_checkAutoStopTimer(payload.new.heat_idx);
     })
     .subscribe();
 }
