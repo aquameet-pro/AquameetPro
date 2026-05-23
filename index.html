@@ -13627,6 +13627,10 @@ function openJudgeLinks(regen){
   // Save QR generation timestamp
   comp.judgeQrTs=Date.now();comp.judgeQrDirty=false;
   saveDB();_renderJudgeQrBanner();
+  // Mark app_state as public so judges (anonymous users) can read competition data via RLS
+  _supa.from('app_state').update({is_public:true}).eq('id',ownerId).then(({error})=>{
+    if(error)console.warn('Judge QR: could not set is_public',error);
+  });
 
   bodyEl.innerHTML=html;
   // Generate QR codes client-side via qrcodejs (cdnjs)
