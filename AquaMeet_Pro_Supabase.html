@@ -1024,6 +1024,9 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       <div class="jathlete" id="j-athlete"></div>
       <div class="jevent" id="j-event"></div>
       <button id="j-ready-btn" style="display:none;width:100%;padding:.7rem;font-size:.95rem;font-weight:800;background:#06d6a0;color:#004d2e;border:none;border-radius:12px;cursor:pointer;margin-bottom:.6rem;transition:all .15s" onclick="judgeMarkReady()">✅ Підтвердити готовність</button>
+      <!-- Active heat banner (set by organizer) -->
+      <div id="j-active-heat" style="display:none;text-align:center;background:rgba(0,119,182,.08);border:1px solid rgba(0,119,182,.25);border-radius:8px;padding:.4rem .7rem;margin-bottom:.5rem;font-size:.82rem;font-weight:700;color:#023e8a"></div>
+      <!-- Sync status banner (waiting / running / other heat running) -->
       <div id="j-sync-status" style="display:none;text-align:center;background:rgba(0,119,182,.1);border:1px solid rgba(0,119,182,.3);border-radius:8px;padding:.5rem .7rem;margin-bottom:.6rem;font-size:.88rem;font-weight:700;color:#023e8a"></div>
       <div class="sw-disp" id="sw-disp">00:00:00</div>
       <button class="sw-main-btn" id="sw-btn" onclick="swToggle()">▶&nbsp;СТАРТ</button>
@@ -5379,11 +5382,7 @@ function renderHeats(){
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         <span class="badge badge-heat">Підзаплив ${inEvent}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
-        ${showTimer?`<span style="margin-left:auto;display:flex;align-items:center;gap:.4rem">
-          <button id="jstart-${heat.id}" class="btn-success btn-xs" onclick="broadcastHeatStart(${hIdx},${heat.id})" title="Запустити таймер для суддів">▶ Старт</button>
-          <button class="btn-secondary btn-xs" onclick="broadcastHeatReset(${hIdx},${heat.id})" title="Скинути">↺</button>
-          <span id="jtmr-${heat.id}" style="font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>
-        </span>`:''}
+        ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
       </div>
       ${comp.readinessEnabled&&isPriv2?`<div id="jrdy-${hIdx}" style="display:flex;gap:.3rem;flex-wrap:wrap;padding:.35rem .8rem;border-bottom:1px solid var(--border);min-height:28px"></div>`:''}
       <div class="lanes-grid print-hide">${cells}</div>
@@ -5497,7 +5496,8 @@ function renderResults(){
     const showCtrl=(comp.syncTimerEnabled||comp.readinessEnabled)&&isPriv&&hIdxForCtrl>=0;
     const ctrlHtml=showCtrl?`<div style="margin-left:auto;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">${
       comp.readinessEnabled?`<div id="rrdy-${hIdxForCtrl}" style="display:flex;flex-wrap:wrap;gap:.25rem;align-items:center"></div>`:''
-    }<span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>${
+    }<span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>
+    <button id="ract-${heat.id}" class="btn-secondary btn-sm" onclick="broadcastSetActive(${hIdxForCtrl})" style="padding:.18rem .5rem;font-size:.76rem">📍 Активний</button>${
       comp.syncTimerEnabled?`<button id="rstart-${heat.id}" class="btn-success btn-sm" onclick="broadcastHeatStart(${hIdxForCtrl},${heat.id})" style="padding:.18rem .55rem;font-size:.76rem">▶ Старт</button><button class="btn-secondary btn-sm" onclick="rHeatReset(${hIdxForCtrl},${heat.id})" style="padding:.18rem .45rem;font-size:.76rem" title="Скинути (з підтвердженням)">↺</button>`:''
     }</div>`:'';
     return`<div class="proto-section">
@@ -5627,7 +5627,7 @@ function saveResult(eid,val){
   saveDB();
   if(norm.kind==='time')showNormHint(eid,norm.value);
   else{const h=document.getElementById(`nh-${eid}`);if(h)h.textContent='';}
-  if(norm.kind!=='empty')onResultSaved();
+  if(norm.kind!=='empty'){onResultSaved();_checkManualResultsComplete(eid);}
 }
 function setResultStatus(eid,code){
   const inp=document.getElementById('res-'+eid);
@@ -12730,6 +12730,9 @@ async function _initJudgeMode(){
           }).filter(Boolean);
           if(!_judgeHeats.length)
             _judgeLoadMsg='ℹ Для доріжки '+lane+' немає запливів (всього запливів: '+heatSource.length+', учасників: '+(comp.entries?.length||0)+')';
+          _judgeComp=comp;
+          if(typeof comp.activeHeatIdx==='number')
+            setTimeout(()=>_judgeOnActiveHeat(comp.activeHeatIdx,comp.heats[comp.activeHeatIdx]?.globalNum),200);
         }
       }
     }catch(e){
@@ -12879,6 +12882,7 @@ function _judgeSubscribeCtrl(){
     .on('broadcast',{event:'hctrl'},({payload})=>{
       if(payload.type==='heat_start')_judgeOnSyncStart(payload.heatIdx,payload.startTs);
       else if(payload.type==='heat_reset')_judgeOnSyncReset(payload.heatIdx);
+      else if(payload.type==='heat_active')_judgeOnActiveHeat(payload.heatIdx,payload.globalNum);
     }).subscribe();
 }
 function _judgeOnSyncStart(heatIdx,startTs){
@@ -12920,6 +12924,33 @@ function _judgeOnSyncReset(heatIdx){
   swReset(true);
   const ss=document.getElementById('j-sync-status');
   if(ss&&_judgeP.syn){ss.style.display='block';ss.textContent='⏳ Очікування сигналу старту від Організатора...';ss.style.background='';ss.style.borderColor='';ss.style.color='';}
+}
+function _judgeOnActiveHeat(heatIdx,globalNum){
+  const gn=globalNum||heatIdx+1;
+  // Auto-navigate judge to the matching heat in their list
+  const localIdx=_judgeHeats.findIndex(h=>h.h===heatIdx);
+  if(localIdx>=0&&!_judgeHeats[localIdx].submitted){
+    _judgeCurIdx=localIdx;
+    swReset(true);
+    _judgeRenderList();
+    _judgeShowCurrent();
+    // Reset ready button for new heat
+    if(_judgeP.rdy){
+      const rb=document.getElementById('j-ready-btn');
+      if(rb){rb.disabled=false;rb.style.background='';rb.style.opacity='';rb.textContent='✅ Підтвердити готовність';rb.onclick=judgeMarkReady;}
+    }
+  }
+  // Update active heat banner
+  const el=document.getElementById('j-active-heat');if(!el)return;
+  const myHeat=_judgeHeats[_judgeCurIdx];
+  if(myHeat&&myHeat.h===heatIdx){
+    el.style.display='block';el.textContent='🎬 Ваш заплив активний — Заплив №'+gn;
+    el.style.background='rgba(6,214,160,.15)';el.style.borderColor='#06d6a0';el.style.color='#004d2e';
+  }else{
+    el.style.display='block';
+    el.textContent='🎬 Активний: Заплив №'+gn+(myHeat?' (ваш: №'+(myHeat.h+1)+')':'');
+    el.style.background='rgba(0,119,182,.08)';el.style.borderColor='rgba(0,119,182,.25)';el.style.color='#023e8a';
+  }
 }
 function judgeMarkReady(){
   const heat=_judgeHeats[_judgeCurIdx];if(!heat)return;
@@ -13204,6 +13235,8 @@ let _orgCtrlChannel=null,_orgCtrlKey='';
 let _orgReadyLanes={}; // heatIdx → Set of ready lane numbers
 let _orgTimerRaf=null,_orgTimerHeatId=null,_orgTimerStartTs=0;
 let _orgCurrentHeatIdx=0; // which heat is selected in the Results-tab control panel
+let _orgActiveHeatIdx=-1; // currently active heat set by organizer
+let _judgeComp=null; // full competition object loaded in judge mode
 
 function _ensureOrgCtrlChannel(){
   const comp=activeComp();
@@ -13217,6 +13250,7 @@ function _ensureOrgCtrlChannel(){
     .on('broadcast',{event:'hctrl'},({payload})=>{
       if(payload.type==='judge_ready')_orgHandleReady(payload.lane,payload.heatIdx);
       else if(payload.type==='judge_cancel_ready')_orgHandleCancelReady(payload.lane,payload.heatIdx);
+      else if(payload.type==='heat_active')_orgHandleActiveHeat(payload.heatIdx);
     }).subscribe();
   return _orgCtrlChannel;
 }
@@ -13255,7 +13289,9 @@ function _renderOrgReadiness(el,heatIdx){
 // Results tab: heat control panel
 function _updateHeatCtrlPanel(){
   const comp=activeComp();
+  // Panel replaced by inline controls in each Results table row
   const panel=document.getElementById('heat-ctrl-panel');
+  if(panel)panel.style.display='none';
   if(!panel)return;
   const show=comp&&(comp.syncTimerEnabled||comp.readinessEnabled)&&
     ['organizer','secretary','admin'].includes(_currentRole)&&(comp.heats?.length>0);
@@ -13297,6 +13333,29 @@ async function hcpReset(){
   const comp=activeComp();if(!comp)return;
   const heat=comp.heats[_orgCurrentHeatIdx];if(!heat)return;
   await broadcastHeatReset(_orgCurrentHeatIdx,heat.id);
+}
+async function broadcastSetActive(heatIdx){
+  const comp=activeComp();if(!comp)return;
+  _orgActiveHeatIdx=heatIdx;
+  comp.activeHeatIdx=heatIdx;
+  saveDB();
+  _orgUpdateActiveButtons(heatIdx);
+  const ch=_ensureOrgCtrlChannel();if(!ch)return;
+  const heat=comp.heats[heatIdx];
+  await ch.send({type:'broadcast',event:'hctrl',payload:{type:'heat_active',heatIdx,globalNum:heat?.globalNum||heatIdx+1}});
+}
+function _orgUpdateActiveButtons(heatIdx){
+  const comp=activeComp();if(!comp)return;
+  document.querySelectorAll('[id^="ract-"]').forEach(btn=>{
+    btn.style.background='';btn.style.color='';btn.textContent='📍 Активний';
+  });
+  const heat=comp.heats[heatIdx];if(!heat)return;
+  const btn=document.getElementById('ract-'+heat.id);
+  if(btn){btn.style.background='#f4a261';btn.style.color='#fff';btn.textContent='🟢 Активний';}
+}
+function _orgHandleActiveHeat(heatIdx){
+  _orgActiveHeatIdx=heatIdx;
+  _orgUpdateActiveButtons(heatIdx);
 }
 async function rHeatReset(heatIdx,heatId){
   if(!confirm('Скинути таймер для всіх суддів цього запливу?'))return;
@@ -13381,6 +13440,26 @@ function _checkAutoStopTimer(heatIdx){
     const tmr=document.getElementById('jtmr-'+heat.id);if(tmr)tmr.textContent='✅';
     const rtmr=document.getElementById('rtmr-'+heat.id);if(rtmr)rtmr.textContent='✅';
     const hcpt=document.getElementById('hcp-timer');if(hcpt)hcpt.textContent='✅';
+    // Auto-advance active heat to next
+    if(_orgActiveHeatIdx===heatIdx&&heatIdx+1<(comp.heats?.length||0)){
+      broadcastSetActive(heatIdx+1);
+    }
+  }
+}
+// Check if all results manually entered for a heat, then auto-advance active heat
+function _checkManualResultsComplete(eid){
+  const comp=activeComp();if(!comp)return;
+  // Find which heat contains this entry
+  let heatIdx=-1;
+  comp.heats.forEach((h,i)=>{if(Object.values(h.lanes||{}).includes(eid))heatIdx=i;});
+  if(heatIdx<0||heatIdx!==_orgActiveHeatIdx)return;
+  const heat=comp.heats[heatIdx];
+  const allEntered=Object.values(heat.lanes||{}).filter(Boolean).every(entryId=>{
+    const e=(comp.entries||[]).find(en=>en.id===entryId);
+    return e&&e.result;
+  });
+  if(allEntered&&heatIdx+1<(comp.heats?.length||0)){
+    broadcastSetActive(heatIdx+1);
   }
 }
 
