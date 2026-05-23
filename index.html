@@ -12809,8 +12809,17 @@ function _judgeSubscribeCtrl(){
 }
 function _judgeOnSyncStart(heatIdx,startTs){
   if(!_judgeP.syn)return;
-  const heat=_judgeHeats[_judgeCurIdx];
-  if(!heat||heat.h!==heatIdx)return;
+  const myHeat=_judgeHeats[_judgeCurIdx];
+  const ss=document.getElementById('j-sync-status');
+  // Not our heat — show "другий заплив іде, ваш — №N"
+  if(!myHeat||myHeat.h!==heatIdx){
+    if(ss&&myHeat){
+      ss.style.display='block';
+      ss.textContent='🔄 Заплив №'+(heatIdx+1)+' іде... (ваш заплив: №'+(myHeat.h+1)+')';
+      ss.style.background='rgba(244,162,49,.12)';ss.style.borderColor='#f4a261';ss.style.color='#7a4000';
+    }
+    return;
+  }
   if(_swRunning)return; // already running — judge started manually
   cancelAnimationFrame(_swRaf);_swRaf=null;
   _swElapsedMs=0;
@@ -12821,12 +12830,19 @@ function _judgeOnSyncStart(heatIdx,startTs){
   if(btn){btn.innerHTML='⏹&nbsp;СТОП';btn.classList.add('run');}
   if(disp){disp.classList.add('sw-run');disp.classList.remove('sw-stop');}
   _swRaf=requestAnimationFrame(_swTick);
-  const ss=document.getElementById('j-sync-status');
   if(ss){ss.textContent='🟢 Заплив розпочато!';ss.style.background='rgba(6,214,160,.15)';ss.style.borderColor='#06d6a0';ss.style.color='#004d2e';}
 }
 function _judgeOnSyncReset(heatIdx){
   const heat=_judgeHeats[_judgeCurIdx];
-  if(!heat||heat.h!==heatIdx)return;
+  // If reset is for a different heat — just clear the "інший заплив іде" banner
+  if(!heat||heat.h!==heatIdx){
+    const ss=document.getElementById('j-sync-status');
+    if(ss&&_judgeP.syn&&heat&&!heat.submitted){
+      ss.style.display='block';ss.textContent='⏳ Очікування сигналу старту від Організатора...';
+      ss.style.background='';ss.style.borderColor='';ss.style.color='';
+    }
+    return;
+  }
   swReset(true);
   const ss=document.getElementById('j-sync-status');
   if(ss&&_judgeP.syn){ss.style.display='block';ss.textContent='⏳ Очікування сигналу старту від Організатора...';ss.style.background='';ss.style.borderColor='';ss.style.color='';}
