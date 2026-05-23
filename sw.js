@@ -1,5 +1,5 @@
-// Cache version Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎС™ update this string on every deploy to trigger auto-refresh
-const CACHE = 'aquameet-20260523-0153';
+// Cache version Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРЎв„ў update this string on every deploy to trigger auto-refresh
+const CACHE = 'aquameet-20260523-1326';
 
 // Only pre-cache static assets (icons, manifest). HTML is network-first.
 const STATIC = [
@@ -34,7 +34,7 @@ self.addEventListener('fetch', e => {
   // would always get stale data until they cleared the browser cache.
   if (url.origin !== self.location.origin) return;
 
-  // Network-first for HTML pages Р В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р вЂ Р В РІР‚С™Р РЋРЎС™ always get the freshest version
+  // Network-first for HTML pages Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р В РІР‚В Р В Р’В Р Р†Р вЂљРЎв„ўР В Р Р‹Р РЋРЎв„ў always get the freshest version
   if (url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
     e.respondWith(
       fetch(e.request)

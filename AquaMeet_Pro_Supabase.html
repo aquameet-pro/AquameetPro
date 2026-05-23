@@ -13580,7 +13580,8 @@ function _renderJudgeQrBanner(){
   const comp=activeComp();
   const container=document.getElementById('judge-qr-banner-wrap');
   if(!container)return;
-  if(comp&&comp.judgeQrTs&&comp.judgeQrDirty){
+  const canRegen=['organizer','secretary','admin'].includes(_currentRole);
+  if(comp&&comp.judgeQrTs&&comp.judgeQrDirty&&canRegen){
     container.innerHTML=`<div class="judge-qr-stale">⚠ Склад учасників змінився після генерації QR — судді мають <strong>відсканувати нові QR-коди</strong> <button onclick="openJudgeLinks(true)">↺ Регенерувати QR</button></div>`;
   }else{
     container.innerHTML='';
