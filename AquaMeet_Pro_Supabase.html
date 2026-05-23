@@ -12687,12 +12687,20 @@ async function _initJudgeMode(){
   // No 'd' param (new short-URL mode) — load competition data from Supabase
   if(!_judgeHeats.length && _judgeP.oid && _judgeP.cid){
     _setJudgeStatus('⏳ Завантаження запливів…','');
+    let _judgeLoadMsg='';
     try{
       const{data,error}=await _supa.from('app_state').select('data').eq('id',_judgeP.oid).maybeSingle();
-      if(!error && data?.data){
+      if(error){
+        _judgeLoadMsg='❌ Supabase: '+error.message;
+        console.error('Judge fetch error:',error);
+      }else if(!data?.data){
+        _judgeLoadMsg='❌ Дані організатора не знайдено (oid='+_judgeP.oid+')';
+      }else{
         const compData=data.data;
         const comp=compData.competitions?.find(c=>String(c.id)===String(_judgeP.cid));
-        if(comp){
+        if(!comp){
+          _judgeLoadMsg='❌ Змагання не знайдено (cid='+_judgeP.cid+', всього: '+(compData.competitions?.length||0)+')';
+        }else{
           const isRelay=_judgeP.r==='1';
           const heatSource=isRelay?(comp.relayHeats||[]):(comp.heats||[]);
           const athletes=compData.athletes||[];
@@ -12712,10 +12720,17 @@ async function _initJudgeMode(){
               return{h:hIdx,an,ev,submitted:false,resultCs:null};
             }
           }).filter(Boolean);
+          if(!_judgeHeats.length)
+            _judgeLoadMsg='ℹ Для доріжки '+lane+' немає запливів (всього запливів: '+heatSource.length+', учасників: '+(comp.entries?.length||0)+')';
         }
       }
-    }catch(e){console.warn('Judge: failed to load from Supabase',e);}
+    }catch(e){
+      _judgeLoadMsg='❌ Виняток: '+e.message;
+      console.error('Judge load exception:',e);
+    }
     _setJudgeStatus('','');
+    // Save load error message so _judgeShowCurrent can display it
+    if(_judgeLoadMsg) window._judgeLoadMsg=_judgeLoadMsg;
   }
 
   // Restore already-submitted results from localStorage
@@ -12786,7 +12801,21 @@ function _judgeShowCurrent(){
   const allDone=document.getElementById('j-all-done');
   if(_judgeCurIdx>=_judgeHeats.length){
     if(content)content.style.display='none';
-    if(allDone)allDone.style.display='block';
+    if(allDone){
+      allDone.style.display='block';
+      // Show load error instead of "all done" if heats are empty due to error
+      if(!_judgeHeats.length && window._judgeLoadMsg){
+        allDone.innerHTML=`<div style="font-size:2rem">⚠️</div>
+          <div style="font-weight:700;color:#c0392b;font-size:.95rem;margin-top:.5rem;padding:0 .5rem">${window._judgeLoadMsg}</div>
+          <button onclick="location.reload()" style="margin-top:1rem;padding:.5rem 1.2rem;background:#023e8a;color:#fff;border:none;border-radius:8px;font-size:.9rem;cursor:pointer">🔄 Спробувати ще раз</button>`;
+      }else if(!_judgeHeats.length){
+        allDone.innerHTML=`<div style="font-size:3rem">🏁</div>
+          <div style="font-weight:800;color:#023e8a;font-size:1.1rem;margin-top:.5rem">Всі запливи завершено!</div>`;
+      }else{
+        allDone.innerHTML=`<div style="font-size:3rem">🏁</div>
+          <div style="font-weight:800;color:#023e8a;font-size:1.1rem;margin-top:.5rem">Всі запливи завершено!</div>`;
+      }
+    }
     return;
   }
   if(content)content.style.display='block';
