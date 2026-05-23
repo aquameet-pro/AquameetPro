@@ -12663,18 +12663,58 @@ async function _jqFlush(){
   }
 }
 
-function _initJudgeMode(){
+async function _initJudgeMode(){
   const p=new URLSearchParams(location.search);
   if(!p.has('judge'))return false;
   _judgeMode=true;
   _judgeP={oid:p.get('oid')||'',cid:p.get('cid')||'',l:p.get('l')||'1',r:p.get('r')||'0',
     syn:p.get('syn')==='1',rdy:p.get('rdy')==='1'};
 
-  // Decode heats array from 'd' param
+  // Show overlay immediately (before any async work)
+  document.getElementById('auth-overlay').style.display='none';
+  document.getElementById('app').style.display='none';
+  document.getElementById('judge-overlay').classList.add('active');
+  document.getElementById('j-lane-badge').textContent='Доріжка '+_judgeP.l;
+
+  // Decode heats array from legacy 'd' param (short URLs no longer include it)
   try{
     const d=p.get('d');
     if(d) _judgeHeats=JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(d))))).map(h=>({...h,submitted:false,resultCs:null}));
   }catch(e){_judgeHeats=[];}
+
+  // No 'd' param (new short-URL mode) — load competition data from Supabase
+  if(!_judgeHeats.length && _judgeP.oid && _judgeP.cid){
+    _setJudgeStatus('⏳ Завантаження запливів…','');
+    try{
+      const{data,error}=await _supa.from('app_state').select('data').eq('id',_judgeP.oid).maybeSingle();
+      if(!error && data?.data){
+        const compData=data.data;
+        const comp=compData.competitions?.find(c=>String(c.id)===String(_judgeP.cid));
+        if(comp){
+          const isRelay=_judgeP.r==='1';
+          const heatSource=isRelay?(comp.relayHeats||[]):(comp.heats||[]);
+          const athletes=compData.athletes||[];
+          const lane=parseInt(_judgeP.l);
+          _judgeHeats=heatSource.map((heat,hIdx)=>{
+            const eid=heat.lanes?.[lane]||heat.lanes?.[String(lane)];
+            if(!eid)return null;
+            if(isRelay){
+              const team=comp.relays?.find(t=>t.id===eid);if(!team)return null;
+              const ev=(typeof RELAY_TYPES!=='undefined'&&RELAY_TYPES[heat.type]?.label)||(heat.type||'Естафета');
+              return{h:hIdx,an:team.name,ev,submitted:false,resultCs:null};
+            }else{
+              const entry=comp.entries?.find(e=>e.id===eid);if(!entry)return null;
+              const ath=athletes.find(a=>a.id===entry.athleteId);
+              const an=((ath?(ath.surname||'')+' '+(ath.name||''):'Спортсмен')).trim();
+              const ev=((entry.dist?entry.dist+'м ':'')+(entry.style||heat.eventName||'')).trim();
+              return{h:hIdx,an,ev,submitted:false,resultCs:null};
+            }
+          }).filter(Boolean);
+        }
+      }
+    }catch(e){console.warn('Judge: failed to load from Supabase',e);}
+    _setJudgeStatus('','');
+  }
 
   // Restore already-submitted results from localStorage
   _judgeHeats.forEach(h=>{
@@ -12684,20 +12724,15 @@ function _initJudgeMode(){
     }catch(_){}
   });
 
-  document.getElementById('auth-overlay').style.display='none';
-  document.getElementById('app').style.display='none';
-  document.getElementById('judge-overlay').classList.add('active');
-  document.getElementById('j-lane-badge').textContent='Доріжка '+_judgeP.l;
-
   // Auto-enable relay mode if r=1; hide toggle button for individual heats
   const relayToggleBtn=document.getElementById('j-relay-toggle');
   if(_judgeP.r==='1'){
     _relayMode=true;
-    if(relayToggleBtn){relayToggleBtn.style.display='none';} // прихований — режим вже увімкнено
+    if(relayToggleBtn){relayToggleBtn.style.display='none';}
     const lapBtn=document.getElementById('sw-lap');
-    if(lapBtn)lapBtn.style.display=''; // покажемо після _judgeShowCurrent
+    if(lapBtn)lapBtn.style.display='';
   }else{
-    if(relayToggleBtn){relayToggleBtn.style.display='none';} // завжди прихована — режим визначається URL
+    if(relayToggleBtn){relayToggleBtn.style.display='none';}
     _relayMode=false;
   }
 
@@ -13466,10 +13501,9 @@ function openRelayJudgeLinks(){
     if(!laneHeats.length)continue;
     anyLane=true;
 
-    const d=btoa(unescape(encodeURIComponent(JSON.stringify(laneHeats))));
     const syn=comp.syncTimerEnabled?'&syn=1':'';
     const rdy=comp.readinessEnabled?'&rdy=1':'';
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy+'&d='+encodeURIComponent(d);
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy;
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
@@ -13537,10 +13571,9 @@ function openJudgeLinks(regen){
     if(!laneHeats.length)continue;
     anyLane=true;
 
-    const d=btoa(unescape(encodeURIComponent(JSON.stringify(laneHeats))));
     const syn=comp.syncTimerEnabled?'&syn=1':'';
     const rdy=comp.readinessEnabled?'&rdy=1':'';
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy+'&d='+encodeURIComponent(d);
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy;
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
@@ -13638,7 +13671,7 @@ async function _bootApp(user){
 
 (async()=>{
   // Judge mode — no auth needed, bypass everything
-  if(_initJudgeMode())return;
+  if(await _initJudgeMode())return;
 
   // Check for public share link first (no auth needed)
   const isPublic=await checkPublicHash();
