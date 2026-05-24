@@ -5448,8 +5448,7 @@ function renderHeats(){
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         <span class="badge badge-heat">Підзаплив ${inEvent}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
-        ${showTimer?`<div id="jrdy-${hIdx}" style="margin-left:auto;display:flex;gap:.25rem;flex-wrap:wrap;align-items:center"></div>
-        <span id="jtmr-${heat.id}" style="font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
+        ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
       </div>
       <div class="lanes-grid print-hide">${cells}</div>
       <div class="heat-print-table" style="display:none">
@@ -5580,7 +5579,6 @@ function renderResults(){
     }).filter(Boolean).join('');
     const hIdxForCtrl=heatOrigIdx.get(heat)??-1;
     const ctrlHtml=isPriv&&hIdxForCtrl>=0?`<div style="margin-left:auto;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">
-      <div id="rrdy-${hIdxForCtrl}" style="display:flex;flex-wrap:wrap;gap:.2rem;align-items:center"></div>
       <span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>
       <button id="ract-${heat.id}" class="btn-secondary btn-sm" onclick="broadcastSetActive(${hIdxForCtrl})" style="padding:.18rem .5rem;font-size:.76rem">📍 Активний</button>
       <button id="rstart-${heat.id}" class="btn-success btn-sm" onclick="broadcastHeatStart(${hIdxForCtrl},${heat.id})" style="padding:.18rem .55rem;font-size:.76rem">▶ Старт</button>
