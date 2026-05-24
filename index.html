@@ -796,6 +796,10 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 /* ═══════════ JUDGE MODE ═══════════ */
 #judge-overlay{position:fixed;inset:0;z-index:9998;background:linear-gradient(150deg,#03045e 0%,#0077b6 55%,#00b4d8 100%);display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:max(env(safe-area-inset-top,0px),1.2rem) 1rem 2rem;overflow-y:auto;-webkit-overflow-scrolling:touch}
 #judge-overlay.active{display:flex}
+#starter-overlay{position:fixed;inset:0;z-index:9997;background:linear-gradient(150deg,#03045e 0%,#0077b6 55%,#00b4d8 100%);display:none;flex-direction:column;align-items:center;justify-content:center;padding:max(env(safe-area-inset-top,0px),1.5rem) 1rem 2rem;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#starter-overlay.active{display:flex}
+#st-start-btn.st-running{background:#1b4332 !important;color:#fff !important;box-shadow:none !important;cursor:default}
+#st-timer.st-running{color:#06d6a0}
 .jcard{background:rgba(255,255,255,.97);border-radius:20px;padding:1.5rem 1.4rem;width:100%;max-width:440px;box-shadow:0 12px 48px rgba(0,0,50,.35);margin-top:.5rem}
 .jlogo{font-size:1.15rem;font-weight:900;color:#0077b6;text-align:center;margin-bottom:1.2rem}.jlogo span{color:#00b4d8}
 .jheat{background:#e8f4fd;border-radius:12px;padding:.8rem 1rem;margin-bottom:1rem;text-align:center}
@@ -1052,6 +1056,31 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       <div style="font-weight:800;color:#023e8a;font-size:1.1rem;margin-top:.5rem">Всі запливи завершено!</div>
       <div style="color:#1a6a9a;font-size:.85rem;margin-top:.3rem">Дякуємо за роботу</div>
     </div>
+  </div>
+</div>
+
+<!-- ══ STARTER MODE OVERLAY ══ -->
+<div id="starter-overlay">
+  <div class="jcard" style="max-width:480px">
+    <div class="jlogo">Aqua<span>Meet</span><sup>PRO</sup></div>
+    <div class="jlane-badge" style="background:#e63946;font-size:1rem;letter-spacing:1px">🚦 Суддя-стартер</div>
+    <!-- Heat info -->
+    <div style="text-align:center;padding:.7rem;margin-bottom:.5rem;background:rgba(0,119,182,.07);border-radius:12px;min-height:3.6rem;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div id="st-heat-name" style="font-size:1.05rem;font-weight:800;color:#023e8a">⏳ Очікування активного запливу…</div>
+      <div id="st-heat-num" style="font-size:.82rem;color:#5a9ab8;margin-top:.15rem"></div>
+    </div>
+    <!-- Lane athletes grid -->
+    <div id="st-athletes" style="margin-bottom:.5rem"></div>
+    <!-- Readiness strip (from lane judges) -->
+    <div id="st-ready" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem;min-height:28px"></div>
+    <!-- Timer -->
+    <div id="st-timer" class="sw-disp" style="font-size:3rem;margin:.2rem 0 .8rem">00:00:00</div>
+    <!-- START button -->
+    <button id="st-start-btn" class="sw-main-btn" style="font-size:1.35rem;padding:1.25rem;background:#06d6a0;color:#003d2e;box-shadow:0 6px 24px rgba(6,214,160,.4)" onclick="starterDoStart()">▶▶ СТАРТ</button>
+    <!-- RESET button -->
+    <button id="st-reset-btn" style="width:100%;margin-top:.55rem;padding:.7rem;font-size:.92rem;font-weight:700;border:2px solid #b8dff0;background:transparent;color:#023e8a;border-radius:12px;cursor:pointer;transition:all .12s" onclick="starterDoReset()">↺ Скинути таймер</button>
+    <!-- Status -->
+    <div id="st-status" style="margin-top:.65rem;text-align:center;font-size:.86rem;font-weight:700;min-height:1.4rem;color:#5a9ab8"></div>
   </div>
 </div>
 
@@ -2239,12 +2268,24 @@ async function _tryReconnect(btn){
     if(error)throw error;
     _supaOffline=false;
     _updateOfflineBanner();
-    // Push local changes to Supabase
-    _supa.from(SUPA_TABLE).upsert(
-      {id:ownerId,owner_id:ownerId,data:db,updated_at:new Date().toISOString()},
-      {onConflict:'id'}
-    ).then(({error:ue})=>{if(ue)console.warn('[AquaMeet] reconnect save:',ue.message);});
-    showToast('✅ З\'єднання відновлено, дані синхронізовано');
+    // Compare timestamps: use whichever is newer (server or local)
+    const serverSavedAt=data?.data?._savedAt||null;
+    const localSavedAt=db._savedAt||null;
+    const serverNewer=serverSavedAt&&localSavedAt&&serverSavedAt>localSavedAt;
+    if(serverNewer){
+      // Server has newer data — load it instead of overwriting
+      db=data.data;
+      try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(e){}
+      if(['organizer','secretary','admin'].includes(_currentRole))renderOrgPanel({silent:true});
+      showToast('✅ З\'єднання відновлено — завантажено серверну версію (новіша)');
+    }else{
+      // Local is same or newer — push to server
+      _supa.from(SUPA_TABLE).upsert(
+        {id:ownerId,owner_id:ownerId,data:db,updated_at:new Date().toISOString()},
+        {onConflict:'id'}
+      ).then(({error:ue})=>{if(ue)console.warn('[AquaMeet] reconnect save:',ue.message);});
+      showToast('✅ З\'єднання відновлено, дані синхронізовано');
+    }
     if(['organizer','secretary','admin'].includes(_currentRole))renderOrgPanel({silent:true});
   }catch(e){
     if(btn){btn.disabled=false;btn.textContent='↺ Перевірити зараз';}
@@ -3249,10 +3290,14 @@ function assignLateAthlete(athleteId){
   let added=0,created=0;
 
   for(const entry of unassigned){
-    const evKey=`${entry.dist}|${entry.style}|${entry.gender||db.athletes.find(a=>a.id===entry.athleteId)?.gender||''}|${entry.dayId||''}`;
-    // Find heats for this event
-    const evHeats=comp.heats.filter(h=>h.eventKey===evKey||
-      (h.dist===entry.dist&&h.style===entry.style&&h.dayId===entry.dayId));
+    const ath=db.athletes.find(a=>a.id===entry.athleteId);
+    const eGender=ath?.gender||'';
+    // Use same format as evKey() helper: dist|style|genderSlot (no dayId)
+    const matchKey=evKey(entry.dist,entry.style,eGender);
+    const matchKeyMix=evKey(entry.dist,entry.style,'MIX');
+    // Find heats for this event (match by eventKey or by dist/style/dayId/gender)
+    const evHeats=comp.heats.filter(h=>h.eventKey===matchKey||h.eventKey===matchKeyMix||
+      (h.dist===entry.dist&&h.style===entry.style&&h.dayId===entry.dayId&&(h.gender===eGender||h.gender==='MIX')));
     // Find heat with free lane
     let placed=false;
     for(const heat of evHeats){
@@ -3343,6 +3388,16 @@ function deleteComp(id){
   db.competitions=db.competitions.filter(c=>c.id!==id);
   if(db.activeCompId===id)db.activeCompId=db.competitions[0]?.id||null;
   saveDB();refreshCompSelect();renderHome();renderArchive();
+  // Clean up orphaned Supabase records for this competition
+  if(_supa){
+    const ownerId=_getTargetOwnerId();
+    if(ownerId){
+      _supa.from('judge_inputs').delete().eq('comp_id',id).eq('owner_id',ownerId)
+        .then(({error})=>{if(error)console.warn('[AquaMeet] deleteComp judge_inputs:',error.message);});
+      _supa.from('comp_invitations').delete().eq('comp_id',id).eq('organizer_id',ownerId)
+        .then(({error})=>{if(error)console.warn('[AquaMeet] deleteComp comp_invitations:',error.message);});
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5121,10 +5176,16 @@ function startSwap(heatId,lane){
   showToast('⇄ Тепер натисніть ⇄ на іншій доріжці щоб поміняти. Або ще раз ⇄ на цій — скасувати.');
 }
 
+let _genHeatsInProgress=false;
 function generateHeats(){
+  if(_genHeatsInProgress)return;
   const comp=activeComp();
   if(!comp){alert('Оберіть змагання');return;}
   if(!(comp.entries||[]).length){alert('Немає заявок. Додайте учасників спочатку.');return;}
+  if((comp.heats||[]).length&&!confirm(`⚠ Вже є ${comp.heats.length} запливів. Перегенерувати? Всі поточні запливи та QR-коди суддів буде скинуто.`))return;
+  _genHeatsInProgress=true;
+  const btn=document.getElementById('btn-gen-heats');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Генерація…';}
   const SPLIT_THRESHOLD=3; // girls (or boys) form their own heats only if there are at least this many
 
   const heats=[];let gNum=0;
@@ -5263,6 +5324,9 @@ function generateHeats(){
   comp.heats=heats;saveDB();_markJudgeQrDirty();syncEventFilters();renderHeats();
   showToast(`✅ Згенеровано ${heats.length} запливів згідно розкладу`);
   onHeatsGenerated();
+  _genHeatsInProgress=false;
+  const _gbtn=document.getElementById('btn-gen-heats');
+  if(_gbtn){_gbtn.disabled=false;_gbtn.innerHTML='⚡ Генерувати запливи';}
 }
 function renderHeats(){
   syncEventFilters();
@@ -5271,7 +5335,7 @@ function renderHeats(){
   const dayFilt=document.getElementById('hf-day')?.value||'';
   const alert_el=document.getElementById('heats-alert');
   const cont=document.getElementById('heats-content');
-  if(comp&&(comp.syncTimerEnabled||comp.readinessEnabled)&&['organizer','secretary','admin'].includes(_currentRole))_ensureOrgCtrlChannel();
+  if(comp&&['organizer','secretary','admin'].includes(_currentRole))_ensureOrgCtrlChannel();
   if(!comp?.heats?.length){
     alert_el.innerHTML='<div class="alert alert-warn">⚡ Натисніть «Генерувати запливи» для автоматичного розподілу учасників</div>';
     cont.innerHTML='';document.getElementById('heats-sub').textContent='';return;
@@ -5333,6 +5397,7 @@ function renderHeats(){
       <div>${totalLine}</div>${dayLines}${awardsLine}${relayLine}${help}
     </div>`;
   }
+  const isPriv3=['organizer','secretary','admin'].includes(_currentRole);
   cont.innerHTML=banner+heats.map(heat=>{
     const activeLns=(comp.activeLanes&&comp.activeLanes.length)?[...comp.activeLanes].sort((a,b)=>a-b):[1,2,3,4,5,6];
     const centerLns=buildLaneOrder(activeLns).slice(0,Math.min(2,Math.floor(activeLns.length/2)));
@@ -5376,7 +5441,7 @@ function renderHeats(){
     const inEvent=heat.totalHeatsInEvent?`${heat.heatInEvent}/${heat.totalHeatsInEvent}`:heat.heatInEvent;
     const hIdx=comp.heats.indexOf(heat);
     const isPriv2=['organizer','secretary','admin'].includes(_currentRole);
-    const showTimer=(comp.syncTimerEnabled||comp.readinessEnabled)&&isPriv2;
+    const showTimer=isPriv2;
     return`<div class="heat-card">
       <div class="heat-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
@@ -5384,7 +5449,6 @@ function renderHeats(){
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
         ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
       </div>
-      ${comp.readinessEnabled&&isPriv2?`<div id="jrdy-${hIdx}" style="display:flex;gap:.3rem;flex-wrap:wrap;padding:.35rem .8rem;border-bottom:1px solid var(--border);min-height:28px"></div>`:''}
       <div class="lanes-grid print-hide">${cells}</div>
       <div class="heat-print-table" style="display:none">
         <div style="font-size:8pt;font-weight:600;background:#dde8f0;padding:2px 5px;border:1px solid #888;border-bottom:none">
@@ -5394,6 +5458,26 @@ function renderHeats(){
       </div>
     </div>`;
   }).join('');
+
+  // Restore heat control state after re-render (Heats tab)
+  if(isPriv3){
+    const comp3=activeComp();
+    if(comp3){
+      if(_orgActiveHeatIdx<0&&typeof comp3.activeHeatIdx==='number')
+        _orgActiveHeatIdx=comp3.activeHeatIdx;
+      comp3.heats.forEach((_,hIdx)=>{
+        const rdyEl=document.getElementById('jrdy-'+hIdx);
+        if(rdyEl)_renderOrgReadiness(rdyEl,hIdx);
+      });
+      if(_orgActiveHeatIdx>=0)_orgUpdateActiveButtons(_orgActiveHeatIdx);
+      if(_orgTimerHeatId){
+        const jb=document.getElementById('jstart-'+_orgTimerHeatId);
+        if(jb){jb.disabled=true;jb.style.background='var(--success)';jb.textContent='🟢 Іде...';}
+        const jt=document.getElementById('jtmr-'+_orgTimerHeatId);
+        if(jt){const ms=Date.now()-_orgTimerStartTs;jt.textContent=fmtTime(Math.floor(ms/10));}
+      }
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5493,13 +5577,13 @@ function renderResults(){
       </tr>`;
     }).filter(Boolean).join('');
     const hIdxForCtrl=heatOrigIdx.get(heat)??-1;
-    const showCtrl=(comp.syncTimerEnabled||comp.readinessEnabled)&&isPriv&&hIdxForCtrl>=0;
-    const ctrlHtml=showCtrl?`<div style="margin-left:auto;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">${
-      comp.readinessEnabled?`<div id="rrdy-${hIdxForCtrl}" style="display:flex;flex-wrap:wrap;gap:.25rem;align-items:center"></div>`:''
-    }<span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>
-    <button id="ract-${heat.id}" class="btn-secondary btn-sm" onclick="broadcastSetActive(${hIdxForCtrl})" style="padding:.18rem .5rem;font-size:.76rem">📍 Активний</button>${
-      comp.syncTimerEnabled?`<button id="rstart-${heat.id}" class="btn-success btn-sm" onclick="broadcastHeatStart(${hIdxForCtrl},${heat.id})" style="padding:.18rem .55rem;font-size:.76rem">▶ Старт</button><button class="btn-secondary btn-sm" onclick="rHeatReset(${hIdxForCtrl},${heat.id})" style="padding:.18rem .45rem;font-size:.76rem" title="Скинути (з підтвердженням)">↺</button>`:''
-    }</div>`:'';
+    const ctrlHtml=isPriv&&hIdxForCtrl>=0?`<div style="margin-left:auto;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">
+      <div id="rrdy-${hIdxForCtrl}" style="display:flex;flex-wrap:wrap;gap:.2rem;align-items:center"></div>
+      <span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>
+      <button id="ract-${heat.id}" class="btn-secondary btn-sm" onclick="broadcastSetActive(${hIdxForCtrl})" style="padding:.18rem .5rem;font-size:.76rem">📍 Активний</button>
+      <button id="rstart-${heat.id}" class="btn-success btn-sm" onclick="broadcastHeatStart(${hIdxForCtrl},${heat.id})" style="padding:.18rem .55rem;font-size:.76rem">▶ Старт</button>
+      <button class="btn-secondary btn-sm" onclick="rHeatReset(${hIdxForCtrl},${heat.id})" style="padding:.18rem .45rem;font-size:.76rem" title="Скинути таймер">↺</button>
+    </div>`:'';
     return`<div class="proto-section">
       <div class="proto-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
@@ -5550,6 +5634,28 @@ function renderResults(){
   }
 
   el.innerHTML=sections.join('')||'<div class="alert alert-warn">Немає запливів для відображення</div>';
+
+  // Restore inline heat control state after re-render
+  if(isPriv){
+    const comp2=activeComp();
+    if(comp2){
+      // Sync _orgActiveHeatIdx from saved comp state if not yet set
+      if(_orgActiveHeatIdx<0&&typeof comp2.activeHeatIdx==='number')
+        _orgActiveHeatIdx=comp2.activeHeatIdx;
+      // Restore readiness badges for all heats
+      comp2.heats.forEach((_,hIdx)=>{
+        const rdyEl=document.getElementById('rrdy-'+hIdx);
+        if(rdyEl)_renderOrgReadiness(rdyEl,hIdx);
+      });
+      // Restore active button highlight
+      if(_orgActiveHeatIdx>=0)_orgUpdateActiveButtons(_orgActiveHeatIdx);
+      // Restore running timer button state
+      if(_orgTimerHeatId){
+        const rb=document.getElementById('rstart-'+_orgTimerHeatId);
+        if(rb){rb.disabled=true;rb.style.background='var(--success)';rb.textContent='🟢 Іде...';}
+      }
+    }
+  }
 }
 function showNormHint(eid,val){
   const el=document.getElementById(`nh-${eid}`);if(!el)return;
@@ -5600,6 +5706,7 @@ function saveResult(eid,val){
   if(norm.kind==='empty'){
     entry.result=null;
     entry.achievedRank=null;
+    entry.confirmedBy=null;
     if(rankCell)rankCell.innerHTML='<span style="color:var(--text-muted)">–</span>';
   } else if(norm.kind==='time'){
     entry.result=norm.value;
@@ -5971,10 +6078,11 @@ function renderStandings(){
   }
   const keys=Object.keys(groups).sort((a,b)=>{
     const ea=groups[a],eb=groups[b];
-    // Same order as Protocol: women first → distance → style → age group (youngest first)
-    if(ea.gender!==eb.gender)return ea.gender==='F'?-1:1;
+    // Same order as Protocol: style (canonical) → distance → gender (F first) → age group (youngest first)
+    const sa=STYLES.indexOf(ea.style),sb=STYLES.indexOf(eb.style);
+    if(sa!==sb)return sa-sb;
     if(ea.dist!==eb.dist)return ea.dist-eb.dist;
-    if(ea.style!==eb.style)return ea.style.localeCompare(eb.style);
+    if(ea.gender!==eb.gender)return ea.gender==='F'?-1:1;
     const ya=getAg(ea.agId),yb=getAg(eb.agId);
     const yfA=ya?ya.yearFrom:-Infinity;
     const yfB=yb?yb.yearFrom:-Infinity;
@@ -6188,7 +6296,7 @@ function _computeArchiveData(){
       const actualCs=parseTime(entry.result);
       const seedCs=parseTime(entry.seedTime);
       if(actualCs===null)continue;
-      if(seedCs===null||actualCs>=seedCs)continue;
+      if(seedCs!==null&&actualCs>=seedCs)continue;
       const rk=entry.achievedRank!==undefined?entry.achievedRank:checkRank(entry.style,entry.dist,a.gender,actualCs);
       if(!rk)continue;
       rankAchs.push({a,rank:rk,result:entry.result,seedTime:entry.seedTime,dist:entry.dist,style:entry.style,compName:comp.name,date:comp.dateFrom});
@@ -7489,15 +7597,18 @@ function saveRelayResult(id){
   const comp=activeComp();if(!comp)return;
   ensureRelayData(comp);
   const team=comp.relays.find(t=>t.id===id);if(!team)return;
-  const total=document.getElementById('rl-res-total').value.trim();
-  team.result=total||null;
-  // Save optional leg times
+  const rawTotal=document.getElementById('rl-res-total').value.trim();
+  const normTotal=normalizeResult(rawTotal);
+  if(rawTotal&&!normTotal.ok){showToast('⚠ Неправильний формат часу (xx:xx:xx, Н/С або Д/К)',true);return;}
+  team.result=normTotal.value;
+  // Save optional leg times (also normalized)
   const rtype=RELAY_TYPES[team.type];
   if(!team.legs)team.legs=[null,null,null,null];
   rtype.legs.forEach((_,i)=>{
     const v=document.getElementById(`rl-res-leg${i}`)?.value?.trim()||'';
+    const normLeg=normalizeResult(v);
     if(!team.legs[i])team.legs[i]={};
-    team.legs[i].legTime=v||null;
+    team.legs[i].legTime=normLeg.ok?normLeg.value:v||null;
   });
   saveDB();closeRelayResultModal();renderRelays();showToast('✅ Результат збережено');
   onResultSaved();
@@ -9625,13 +9736,16 @@ function doImportExcel(){
         // Accept both Ukrainian (Ч/Ж) and Latin (M/F) markers; normalize to internal M/F
         const gender=(rawGender==='Ч'||rawGender==='M')?'M':(rawGender==='Ж'||rawGender==='F')?'F':'';
         const birthYear=parseInt(r[3]);
+        if(!birthYear||birthYear<1940||birthYear>new Date().getFullYear()){skipped++;continue;}
         const city=String(r[4]||'').trim();
         const club=String(r[5]||'').trim();
         const coach=String(r[6]||'').trim();
         const rank=String(r[7]||'').trim();
         const dist=parseInt(r[8]);
         const style=String(r[9]||'').trim().toLowerCase();
-        const time=String(r[10]||'').trim();
+        const rawTime=String(r[10]||'').trim();
+        const normTime=normalizeResult(rawTime);
+        const time=(normTime.ok&&normTime.kind==='time')?normTime.value:null;
         // "Поза конкурсом" flag — accept "Так"/"так"/"yes"/"1"/true; anything else (including "Ні"/blank) is false
         const rawExh=String(r[11]||'').trim().toLowerCase();
         const exhibition=['так','yes','y','1','true','x','+'].includes(rawExh);
@@ -9650,7 +9764,10 @@ function doImportExcel(){
         }
         added++;
       }
-      if(comp)comp.heats=[];
+      if(comp&&(comp.heats||[]).length){
+        if(!confirm(`⚠ Імпорт скине всі вже згенеровані запливи (${comp.heats.length} шт.).\nПродовжити?`)){return;}
+        comp.heats=[];
+      }
       saveDB();closeModal('modal-import');renderAthletes();renderHome();
       showToast(`✅ Імпортовано ${added} записів${skipped?', пропущено '+skipped:''}`);}
     catch(err){alert('Помилка читання файлу: '+err.message);}
@@ -9732,12 +9849,12 @@ async function exportResultsExcel(){
       s.forEach(({e,a})=>{const cs=parseTime(e.result);pc++;const pl=cs===last?lp:pc;last=cs;lp=pl;
         if(pl>3)return;
         const k=`${(a.city||'').trim()}|${(a.club||'—').trim()}`;
-        if(!cs2[k])cs2[k]={club:(a.club||'').trim(),city:(a.city||'').trim(),g:0,s:0,b:0};
+        if(!cs2[k])cs2[k]={club:(a.club||'—').trim(),city:(a.city||'').trim(),g:0,s:0,b:0};
         if(pl===1)cs2[k].g++;else if(pl===2)cs2[k].s++;else cs2[k].b++;
       });
     }
     Object.values(cs2).sort((a,b)=>b.g-a.g||b.s-a.s||b.b-a.b).forEach((c,i)=>{
-      ws2.addRow({n:i+1,club:c.label||c.club,city:c.city,g:c.g,s:c.s,b:c.b,t:c.g+c.s+c.b});
+      ws2.addRow({n:i+1,club:c.club,city:c.city,g:c.g,s:c.s,b:c.b,t:c.g+c.s+c.b});
     });
 
     const buf=await wb.xlsx.writeBuffer();
@@ -10705,6 +10822,22 @@ async function startApp(){
     try{const s=localStorage.getItem(_lsKey());if(s)db=JSON.parse(s);}catch(_){}
   }
   _subscribeDataUpdates(); // trainer: realtime + polling refresh
+
+  // One-time migration: clear stale achievedRank/confirmedBy on entries without a result
+  if(!db._migrated_clear_stale_rank){
+    let fixed=0;
+    for(const comp of (db.competitions||[])){
+      for(const entry of (comp.entries||[])){
+        if(!entry.result){
+          if(entry.achievedRank!==undefined&&entry.achievedRank!==null){entry.achievedRank=null;fixed++;}
+          if(entry.confirmedBy){entry.confirmedBy=null;fixed++;}
+        }
+      }
+    }
+    db._migrated_clear_stale_rank=true;
+    if(fixed>0){saveDB();console.log('[AquaMeet] migration: cleared stale rank/status on',fixed,'entries');}
+  }
+
   hideAuthOverlay();
 
   // Always reset to home tab
@@ -12645,14 +12778,15 @@ function _jqUpdateBadge(){
   const q=_jqLoad();
   if(q.length===0){el.className='j-offline-badge';el.textContent='';return;}
   el.className='j-offline-badge visible';
-  el.textContent='📵 '+q.length+' результат'+(q.length===1?'':'и')+' очікують синхронізації';
+  el.textContent='📵 '+q.length+' результат'+(q.length===1?'':'и')+' очікують синхронізації — натисніть для відправки';
+  el.onclick=()=>_jqFlush();
 }
 async function _jqFlush(){
   if(!navigator.onLine)return;
   const q=_jqLoad();if(!q.length)return;
   const el=document.getElementById('j-offline-badge');
   if(el){el.className='j-offline-badge visible syncing';el.textContent='🔄 Синхронізація…';}
-  let synced=0;const failed=[];
+  let synced=0;const failed=[];let lastErr='';
   for(const row of q){
     const{_qts,...r}=row;
     try{
@@ -12662,7 +12796,11 @@ async function _jqFlush(){
       // Відновити submitted-стан у _judgeHeats
       const h=_judgeHeats.find(h=>h.h===r.heat_idx);
       if(h){h.submitted=true;h.resultCs=r.result_cs;h.status=r.status||null;}
-    }catch(_){failed.push(row);}
+    }catch(e){
+      failed.push(row);
+      lastErr=e?.message||String(e)||'невідома помилка';
+      console.error('[AquaMeet] jqFlush error:',e);
+    }
   }
   _jqSave(failed);
   _jqUpdateBadge();
@@ -12670,6 +12808,8 @@ async function _jqFlush(){
     _setJudgeStatus('✅ Синхронізовано '+synced+' результат'+(synced===1?'':'и')+' із черги','ok');
     _judgeRenderList();
     setTimeout(()=>_setJudgeStatus('',''),4000);
+  }else if(failed.length&&lastErr){
+    _setJudgeStatus('⚠️ Черга не надіслана: '+lastErr,'warn');
   }
 }
 
@@ -12875,7 +13015,208 @@ function _judgeShowCurrent(){
 }
 
 // ── Judge broadcast channel (sync timer + readiness) ──────────
-let _judgeCtrlChannel=null;
+// ── Starter Judge mode ─────────────────────────────────────────────────────
+let _starterMode=false,_starterP={};
+let _starterCtrlChannel=null,_starterCtrlHeartbeat=null;
+let _starterHeatIdx=-1,_starterComp=null,_starterAthletes=[];
+let _starterTimerRaf=null,_starterTimerStartTs=0,_starterTimerRunning=false;
+let _starterReadyLanes={}; // heatIdx → Set of ready lane numbers
+
+async function _initStarterMode(){
+  const p=new URLSearchParams(location.search);
+  if(!p.has('starter'))return false;
+  _starterMode=true;
+  _starterP={oid:p.get('oid')||'',cid:p.get('cid')||''};
+  document.getElementById('auth-overlay').style.display='none';
+  document.getElementById('app').style.display='none';
+  document.getElementById('starter-overlay').classList.add('active');
+  _starterSetStatus('⏳ Завантаження змагання…');
+  try{
+    const{data,error}=await _supa.from('app_state').select('data').eq('id',_starterP.oid).maybeSingle();
+    if(error||!data?.data){
+      _starterSetStatus('❌ '+(error?.message||'Дані організатора не знайдено'));
+    }else{
+      const comp=data.data.competitions?.find(c=>String(c.id)===String(_starterP.cid));
+      if(!comp){
+        _starterSetStatus('❌ Змагання не знайдено');
+      }else{
+        _starterComp=comp;
+        _starterAthletes=data.data.athletes||[];
+        _starterSetStatus('✅ Підключено. Очікую активний заплив…');
+        if(typeof comp.activeHeatIdx==='number')
+          setTimeout(()=>_starterOnActiveHeat(comp.activeHeatIdx),200);
+      }
+    }
+  }catch(e){_starterSetStatus('❌ Помилка: '+e.message);}
+  _starterSubscribeCtrl();
+  return true;
+}
+
+function _starterSubscribeCtrl(){
+  if(!_starterP.oid||!_starterP.cid)return;
+  _starterCtrlChannel=_supa.channel('jctrl_'+_starterP.oid+'_'+_starterP.cid)
+    .on('broadcast',{event:'hctrl'},({payload})=>{
+      if(payload.type==='heat_active')_starterOnActiveHeat(payload.heatIdx);
+      else if(payload.type==='heat_start')_starterOnExternalStart(payload.heatIdx,payload.startTs);
+      else if(payload.type==='heat_reset')_starterOnExternalReset(payload.heatIdx);
+      else if(payload.type==='judge_ready')_starterOnJudgeReady(payload.lane,payload.heatIdx);
+      else if(payload.type==='judge_cancel_ready')_starterOnJudgeCancelReady(payload.lane,payload.heatIdx);
+    }).subscribe();
+  if(_starterCtrlHeartbeat)clearInterval(_starterCtrlHeartbeat);
+  _starterCtrlHeartbeat=setInterval(()=>{
+    if(!_starterCtrlChannel)return;
+    const st=_starterCtrlChannel.state;
+    if(st==='closed'||st==='errored'||st==='timed_out'){
+      _starterCtrlChannel.unsubscribe();_starterCtrlChannel=null;
+      _starterSubscribeCtrl();
+    }
+  },30000);
+}
+
+function _starterOnActiveHeat(heatIdx){
+  _starterHeatIdx=heatIdx;
+  if(!_starterReadyLanes[heatIdx])_starterReadyLanes[heatIdx]=new Set();
+  const nameEl=document.getElementById('st-heat-name');
+  const numEl=document.getElementById('st-heat-num');
+  if(_starterComp&&nameEl){
+    const heat=_starterComp.heats?.[heatIdx];
+    if(heat){
+      const gLabel=heat.gender==='MIX'?'Змішаний':heat.gender==='M'?'Хлопці':'Дівчата';
+      nameEl.textContent=(heat.dist?heat.dist+'м ':'')+heat.style+(heat.gender?' — '+gLabel:'');
+      if(numEl)numEl.textContent='Заплив №'+(heat.globalNum||heatIdx+1);
+    }else{
+      nameEl.textContent='Заплив '+(heatIdx+1);
+      if(numEl)numEl.textContent='';
+    }
+    _starterRenderAthletes(heatIdx);
+    _starterRenderReady(heatIdx);
+  }
+  // Reset timer UI if timer not already running
+  if(!_starterTimerRunning){
+    const timerEl=document.getElementById('st-timer');
+    if(timerEl){timerEl.textContent='00:00:00';timerEl.classList.remove('st-running');}
+    const btn=document.getElementById('st-start-btn');
+    if(btn){btn.textContent='▶▶ СТАРТ';btn.style.background='#06d6a0';btn.style.color='#003d2e';btn.disabled=false;btn.classList.remove('st-running');}
+  }
+  _starterSetStatus('🎬 Активний заплив №'+(heatIdx+1)+'. Очікування готовності суддів…');
+}
+
+function _starterOnExternalStart(heatIdx,startTs){
+  // Another source (organizer) started — sync our display
+  if(heatIdx!==_starterHeatIdx)return;
+  if(_starterTimerRunning){_starterTimerStartTs=startTs;return;}
+  _starterTimerRunning=true;_starterTimerStartTs=startTs;
+  cancelAnimationFrame(_starterTimerRaf);
+  _starterTimerRaf=requestAnimationFrame(_tickStarterTimer);
+  const timerEl=document.getElementById('st-timer');if(timerEl)timerEl.classList.add('st-running');
+  const btn=document.getElementById('st-start-btn');
+  if(btn){btn.textContent='🟢 Іде...';btn.style.background='#1b4332';btn.style.color='#fff';btn.disabled=true;btn.classList.add('st-running');}
+  _starterSetStatus('🟢 Заплив розпочато (синхронізовано з організатором)');
+}
+
+function _starterOnExternalReset(heatIdx){
+  if(heatIdx!==_starterHeatIdx)return;
+  _starterStopTimer();
+  const timerEl=document.getElementById('st-timer');
+  if(timerEl){timerEl.textContent='00:00:00';timerEl.classList.remove('st-running');}
+  const btn=document.getElementById('st-start-btn');
+  if(btn){btn.textContent='▶▶ СТАРТ';btn.style.background='#06d6a0';btn.style.color='#003d2e';btn.disabled=false;btn.classList.remove('st-running');}
+  _starterSetStatus('↺ Таймер скинуто');
+}
+
+function _starterOnJudgeReady(lane,heatIdx){
+  if(!_starterReadyLanes[heatIdx])_starterReadyLanes[heatIdx]=new Set();
+  _starterReadyLanes[heatIdx].add(lane);
+  if(heatIdx===_starterHeatIdx)_starterRenderReady(heatIdx);
+}
+function _starterOnJudgeCancelReady(lane,heatIdx){
+  if(_starterReadyLanes[heatIdx])_starterReadyLanes[heatIdx].delete(lane);
+  if(heatIdx===_starterHeatIdx)_starterRenderReady(heatIdx);
+}
+
+function _starterRenderAthletes(heatIdx){
+  const el=document.getElementById('st-athletes');if(!el||!_starterComp)return;
+  const heat=_starterComp.heats?.[heatIdx];if(!heat){el.innerHTML='';return;}
+  const lanes=Object.entries(heat.lanes||{}).filter(([,eid])=>eid).sort(([a],[b])=>Number(a)-Number(b));
+  if(!lanes.length){el.innerHTML='';return;}
+  const entries=_starterComp.entries||[];
+  el.innerHTML='<div style="display:grid;grid-template-columns:auto 1fr;gap:.25rem .6rem;font-size:.8rem;margin-bottom:.4rem">'+
+    lanes.map(([l,eid])=>{
+      const en=entries.find(e=>e.id===eid);
+      let label='—';
+      if(en){
+        const ath=_starterAthletes.find(a=>a.id===en.athleteId);
+        label=ath?((ath.surname||'')+' '+(ath.name||'')).trim()||'Спортсмен':'Спортсмен';
+      }
+      return `<span style="background:#0077b6;color:#fff;border-radius:8px;padding:.12rem .5rem;font-weight:800;text-align:center;font-size:.78rem">Д.${l}</span>`+
+             `<span style="color:#023e8a;font-weight:600;align-self:center">${escapeHtml(label)}</span>`;
+    }).join('')+
+  '</div>';
+}
+
+function _starterRenderReady(heatIdx){
+  const el=document.getElementById('st-ready');if(!el)return;
+  if(!_starterComp){el.innerHTML='';return;}
+  const heat=_starterComp.heats?.[heatIdx];if(!heat){el.innerHTML='';return;}
+  const lanes=Object.keys(heat.lanes||{}).map(Number).filter(l=>heat.lanes[l]).sort((a,b)=>a-b);
+  const ready=_starterReadyLanes[heatIdx]||new Set();
+  if(!lanes.length){el.innerHTML='';return;}
+  el.innerHTML=lanes.map(l=>`<span style="display:inline-flex;align-items:center;gap:.2rem;background:${ready.has(l)?'rgba(6,214,160,.2)':'rgba(255,255,255,.55)'};border:1px solid ${ready.has(l)?'#06d6a0':'#b8dff0'};border-radius:12px;padding:.2rem .6rem;font-size:.82rem;font-weight:800;color:${ready.has(l)?'#003d2e':'#023e8a'}">Д.${l} ${ready.has(l)?'✅':'⏳'}</span>`).join('');
+  // If all ready — hint to start
+  if(ready.size>=lanes.length&&!_starterTimerRunning)
+    _starterSetStatus('✅ Всі судді готові — натисніть СТАРТ!');
+}
+
+async function starterDoStart(){
+  if(_starterHeatIdx<0){_starterSetStatus('⚠️ Немає активного запливу');return;}
+  if(_starterTimerRunning)return;
+  if(!_starterCtrlChannel){_starterSetStatus('⚠️ Немає зв\'язку — перезавантажте сторінку');return;}
+  const startTs=Date.now();
+  _starterTimerRunning=true;_starterTimerStartTs=startTs;
+  cancelAnimationFrame(_starterTimerRaf);
+  _starterTimerRaf=requestAnimationFrame(_tickStarterTimer);
+  const timerEl=document.getElementById('st-timer');if(timerEl)timerEl.classList.add('st-running');
+  const btn=document.getElementById('st-start-btn');
+  if(btn){btn.textContent='🟢 Іде...';btn.style.background='#1b4332';btn.style.color='#fff';btn.disabled=true;btn.classList.add('st-running');}
+  _starterSetStatus('🟢 Старт! Сигнал відправлено суддям');
+  try{
+    await _starterCtrlChannel.send({type:'broadcast',event:'hctrl',
+      payload:{type:'heat_start',heatIdx:_starterHeatIdx,startTs}});
+  }catch(e){_starterSetStatus('⚠️ Сигнал відправлено, але помилка каналу: '+e.message);}
+}
+
+async function starterDoReset(){
+  _starterStopTimer();
+  const timerEl=document.getElementById('st-timer');
+  if(timerEl){timerEl.textContent='00:00:00';timerEl.classList.remove('st-running');}
+  const btn=document.getElementById('st-start-btn');
+  if(btn){btn.textContent='▶▶ СТАРТ';btn.style.background='#06d6a0';btn.style.color='#003d2e';btn.disabled=false;btn.classList.remove('st-running');}
+  if(_starterHeatIdx>=0&&_starterCtrlChannel){
+    try{
+      await _starterCtrlChannel.send({type:'broadcast',event:'hctrl',
+        payload:{type:'heat_reset',heatIdx:_starterHeatIdx}});
+    }catch(_){}
+  }
+  _starterSetStatus('↺ Таймер скинуто');
+}
+
+function _starterStopTimer(){
+  _starterTimerRunning=false;
+  cancelAnimationFrame(_starterTimerRaf);_starterTimerRaf=null;
+}
+
+function _tickStarterTimer(){
+  if(!_starterTimerRunning)return;
+  const el=document.getElementById('st-timer');
+  if(el)el.textContent=fmtTime(Math.floor((Date.now()-_starterTimerStartTs)/10));
+  _starterTimerRaf=requestAnimationFrame(_tickStarterTimer);
+}
+
+function _starterSetStatus(msg){
+  const el=document.getElementById('st-status');if(el)el.textContent=msg;
+}
+
+let _judgeCtrlChannel=null,_judgeCtrlHeartbeat=null;
 function _judgeSubscribeCtrl(){
   if(!_judgeP.oid||!_judgeP.cid)return;
   _judgeCtrlChannel=_supa.channel('jctrl_'+_judgeP.oid+'_'+_judgeP.cid)
@@ -12884,6 +13225,16 @@ function _judgeSubscribeCtrl(){
       else if(payload.type==='heat_reset')_judgeOnSyncReset(payload.heatIdx);
       else if(payload.type==='heat_active')_judgeOnActiveHeat(payload.heatIdx,payload.globalNum);
     }).subscribe();
+  if(_judgeCtrlHeartbeat)clearInterval(_judgeCtrlHeartbeat);
+  _judgeCtrlHeartbeat=setInterval(()=>{
+    if(!_judgeCtrlChannel)return;
+    const st=_judgeCtrlChannel.state;
+    if(st==='closed'||st==='errored'||st==='timed_out'){
+      console.warn('[AquaMeet] jctrl channel lost ('+st+'), reconnecting…');
+      _judgeCtrlChannel.unsubscribe();_judgeCtrlChannel=null;
+      _judgeSubscribeCtrl();
+    }
+  },30000);
 }
 function _judgeOnSyncStart(heatIdx,startTs){
   if(!_judgeP.syn)return;
@@ -12898,7 +13249,8 @@ function _judgeOnSyncStart(heatIdx,startTs){
     }
     return;
   }
-  if(_swRunning)return; // already running — judge started manually
+  // If already running (judge started manually) — resync to server timestamp
+  if(_swRunning){_swStartTs=startTs;return;}
   cancelAnimationFrame(_swRaf);_swRaf=null;
   _swElapsedMs=0;
   _swStartTs=startTs; // server timestamp → elapsed = Date.now()-startTs
@@ -13012,6 +13364,13 @@ function _swTick(){
   document.getElementById('sw-disp').textContent=fmtTime(cs);
   _swRaf=requestAnimationFrame(_swTick);
 }
+// Restart RAF when tab returns to foreground (Safari/iOS pauses rAF in background)
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&_swRunning){
+    cancelAnimationFrame(_swRaf);_swRaf=null;
+    _swRaf=requestAnimationFrame(_swTick);
+  }
+});
 
 function swReset(force=false){
   if(!force&&(_swRunning||_swElapsedMs>0)&&!confirm('Скинути секундомір і очистити результат?'))return;
@@ -13133,7 +13492,11 @@ async function submitSpecial(status){
     },1200);
   }catch(e){
     _jqAdd(row);
-    _setJudgeStatus('📵 Немає зв\'язку — '+label+' збережено. Надішлеться при відновленні.','warn');
+    const errMsg=e?.message||String(e)||'';
+    const isNet=!navigator.onLine||errMsg.includes('fetch')||errMsg.includes('network')||errMsg.includes('Failed');
+    _setJudgeStatus(isNet?'📵 Немає зв\'язку — '+label+' збережено. Надішлеться при відновленні.'
+      :'⚠️ Помилка: '+errMsg,'warn');
+    setTimeout(_jqFlush,3000);
   }
 }
 
@@ -13213,9 +13576,14 @@ async function submitJudgeResult(){
     },1400);
   }catch(e){
     _jqAdd(row);
-    _setJudgeStatus('📵 Немає зв\'язку — збережено. Надішлеться автоматично при відновленні.','warn');
+    const errMsg=e?.message||String(e)||'';
+    const isNet=!navigator.onLine||errMsg.includes('fetch')||errMsg.includes('network')||errMsg.includes('Failed');
+    _setJudgeStatus(isNet?'📵 Немає зв\'язку — збережено. Надішлеться автоматично при відновленні.'
+      :'⚠️ Помилка: '+errMsg+'. Збережено в чергу.','warn');
     sb.disabled=false;sb.textContent='✓ Відправити результат';
     if(retry)retry.style.display='block';
+    // Retry flush after short delay (handles transient failures)
+    setTimeout(_jqFlush,3000);
   }
 }
 
@@ -13251,6 +13619,7 @@ function _ensureOrgCtrlChannel(){
       if(payload.type==='judge_ready')_orgHandleReady(payload.lane,payload.heatIdx);
       else if(payload.type==='judge_cancel_ready')_orgHandleCancelReady(payload.lane,payload.heatIdx);
       else if(payload.type==='heat_active')_orgHandleActiveHeat(payload.heatIdx);
+      else if(payload.type==='heat_start')_orgHandleStarterStart(payload.heatIdx,payload.startTs);
     }).subscribe();
   return _orgCtrlChannel;
 }
@@ -13286,36 +13655,14 @@ function _renderOrgReadiness(el,heatIdx){
   const ready=_orgReadyLanes[heatIdx]||new Set();
   el.innerHTML=lanes.map(l=>`<span style="display:inline-flex;align-items:center;gap:.2rem;background:${ready.has(l)?'rgba(6,214,160,.15)':'rgba(0,119,182,.07)'};border:1px solid ${ready.has(l)?'#06d6a0':'var(--border)'};border-radius:12px;padding:.1rem .5rem;font-size:.75rem;font-weight:700;color:${ready.has(l)?'#00522d':'var(--text-muted)'}">Д.${l} ${ready.has(l)?'✅':'⏳'}</span>`).join('');
 }
-// Results tab: heat control panel
+// Results tab: heat control panel — always hidden (controls moved inline into each heat row)
 function _updateHeatCtrlPanel(){
-  const comp=activeComp();
-  // Panel replaced by inline controls in each Results table row
+  // Top panel is hidden — controls are now inline in each heat row
   const panel=document.getElementById('heat-ctrl-panel');
   if(panel)panel.style.display='none';
-  if(!panel)return;
-  const show=comp&&(comp.syncTimerEnabled||comp.readinessEnabled)&&
-    ['organizer','secretary','admin'].includes(_currentRole)&&(comp.heats?.length>0);
-  panel.style.display=show?'':'none';
-  if(!show)return;
+  const comp=activeComp();
+  if(!comp||!['organizer','secretary','admin'].includes(_currentRole)||!(comp.heats?.length>0))return;
   _ensureOrgCtrlChannel();
-  _orgCurrentHeatIdx=Math.max(0,Math.min(_orgCurrentHeatIdx,(comp.heats.length||1)-1));
-  const heat=comp.heats[_orgCurrentHeatIdx];
-  const lbl=document.getElementById('hcp-label');
-  if(lbl)lbl.textContent='Заплив №'+(heat?.globalNum||(_orgCurrentHeatIdx+1));
-  const ev=document.getElementById('hcp-event');
-  if(ev&&heat)ev.textContent=evLabel(heat.dist,heat.style,heat.gender)||'';
-  // Reflect timer state
-  const isActive=heat&&heat.id===_orgTimerHeatId;
-  const sbtn=document.getElementById('hcp-start-btn');
-  if(sbtn){sbtn.disabled=isActive;sbtn.style.background=isActive?'var(--success)':'';sbtn.textContent=isActive?'🟢 Іде...':'▶ Старт';}
-  if(!isActive){const t=document.getElementById('hcp-timer');if(t)t.textContent='';}
-  // Readiness
-  const rdyEl=document.getElementById('hcp-ready');
-  if(rdyEl){
-    if(comp.readinessEnabled&&heat){
-      rdyEl.style.display='flex';_renderOrgReadiness(rdyEl,_orgCurrentHeatIdx);
-    }else{rdyEl.style.display='none';}
-  }
 }
 function hcpPrev(){
   if(_orgCurrentHeatIdx>0){_orgCurrentHeatIdx--;_updateHeatCtrlPanel();}
@@ -13357,6 +13704,25 @@ function _orgHandleActiveHeat(heatIdx){
   _orgActiveHeatIdx=heatIdx;
   _orgUpdateActiveButtons(heatIdx);
 }
+function _orgHandleStarterStart(heatIdx,startTs){
+  // Starter judge pressed START — sync organizer timer
+  const comp=activeComp();if(!comp)return;
+  const heat=comp.heats[heatIdx];if(!heat)return;
+  // If organizer already running this heat — just resync timestamp
+  if(_orgTimerHeatId===heat.id){_orgTimerStartTs=startTs;return;}
+  // If running a different heat — ignore (edge case)
+  if(_orgTimerHeatId)return;
+  // Start organizer timer synced to starter
+  if(_orgTimerRaf)cancelAnimationFrame(_orgTimerRaf);
+  _orgTimerHeatId=heat.id;_orgTimerStartTs=startTs;
+  _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
+  _orgReadyLanes[heatIdx]=new Set();
+  const rb=document.getElementById('rstart-'+heat.id);
+  if(rb){rb.disabled=true;rb.style.background='var(--success)';rb.textContent='🟢 Іде...';}
+  const jb=document.getElementById('jstart-'+heat.id);
+  if(jb){jb.disabled=true;jb.style.background='var(--success)';jb.textContent='🟢 Іде...';}
+  showToast('▶ Старт від стартера — Заплив №'+(heat.globalNum||heatIdx+1));
+}
 async function rHeatReset(heatIdx,heatId){
   if(!confirm('Скинути таймер для всіх суддів цього запливу?'))return;
   await broadcastHeatReset(heatIdx,heatId);
@@ -13372,6 +13738,7 @@ async function broadcastHeatStart(heatIdx,heatId){
   // Reset readiness displays
   const rdy=document.getElementById('jrdy-'+heatIdx);if(rdy)rdy.innerHTML='';
   if(heatIdx===_orgCurrentHeatIdx){const pr=document.getElementById('hcp-ready');if(pr)pr.innerHTML='';}
+  const rrdy=document.getElementById('rrdy-'+heatIdx);if(rrdy)rrdy.innerHTML='';
   // Update Heats tab button
   const btn=document.getElementById('jstart-'+heatId);
   if(btn){btn.disabled=true;btn.style.background='var(--success)';btn.textContent='🟢 Іде...';}
@@ -13433,7 +13800,7 @@ function _checkAutoStopTimer(heatIdx){
   const occupiedLanes=Object.values(heat.lanes||{}).filter(Boolean).length;
   if(!occupiedLanes)return;
   const submitted=(_judgeInputsCache||[]).filter(r=>
-    String(r.comp_id)===String(comp.id)&&r.heat_idx===heatIdx&&r.heat_type!=='relay'
+    String(r.comp_id)===String(comp.id)&&r.heat_idx===heatIdx&&r.heat_type!=='relay'&&r.status!=='rejected'
   ).length;
   if(submitted>=occupiedLanes){
     cancelAnimationFrame(_orgTimerRaf);_orgTimerRaf=null;_orgTimerHeatId=null;
@@ -13464,8 +13831,21 @@ function _checkManualResultsComplete(eid){
 }
 
 // ── Secretary/Organizer: subscribe to judge inputs ─────────────
+let _judgeChannelOwnerId=null,_judgeHeartbeatTimer=null;
+function _startJudgeHeartbeat(ownerId){
+  if(_judgeHeartbeatTimer)clearInterval(_judgeHeartbeatTimer);
+  _judgeHeartbeatTimer=setInterval(()=>{
+    if(!_judgeChannel)return;
+    const st=_judgeChannel.state;
+    if(st==='closed'||st==='errored'||st==='timed_out'){
+      console.warn('[AquaMeet] judgeInputs channel lost ('+st+'), reconnecting…');
+      subscribeJudgeInputs(ownerId);
+    }
+  },30000);
+}
 function subscribeJudgeInputs(ownerId){
   if(_judgeChannel){_judgeChannel.unsubscribe();_judgeChannel=null;}
+  _judgeChannelOwnerId=ownerId;
   _judgeInputsCache=[];
   renderJudgeInputsPanel();
   // Load existing pending
@@ -13489,6 +13869,7 @@ function subscribeJudgeInputs(ownerId){
       if(typeof payload.new.heat_idx==='number')_checkAutoStopTimer(payload.new.heat_idx);
     })
     .subscribe();
+  _startJudgeHeartbeat(ownerId);
 }
 
 function _showJudgeInputsBadge(n){
@@ -13660,7 +14041,7 @@ function openRelayJudgeLinks(){
   const comp=activeComp();if(!comp){showToast('Оберіть змагання',true);return;}
   const ownerId=_getTargetOwnerId();
   if(!ownerId){showToast('Немає даних організатора',true);return;}
-  const base=location.origin+location.pathname;
+  const base=location.href.split('?')[0].split('#')[0];
   const bodyEl=document.getElementById('modal-judge-links-body');
   if(!bodyEl)return;
 
@@ -13716,7 +14097,7 @@ function openRelayJudgeLinks(){
       if(!el)return;
       if(typeof QRCode!=='undefined'){
         el.innerHTML='';
-        new QRCode(el,{text:url,width:220,height:220,colorDark:'#2e7d32',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.L});
+        new QRCode(el,{text:url,width:280,height:280,colorDark:'#2e7d32',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
       }
     });
   });
@@ -13728,7 +14109,7 @@ function openJudgeLinks(regen){
   const comp=activeComp();if(!comp){showToast('Оберіть змагання',true);return;}
   const ownerId=_getTargetOwnerId();
   if(!ownerId){showToast('Немає даних організатора',true);return;}
-  const base=location.origin+location.pathname;
+  const base=location.href.split('?')[0].split('#')[0];
   const bodyEl=document.getElementById('modal-judge-links-body');
   if(!bodyEl)return;
 
@@ -13741,9 +14122,24 @@ function openJudgeLinks(regen){
   let maxLane=0;
   comp.heats.forEach(h=>Object.keys(h.lanes||{}).forEach(l=>{const n=Number(l);if(n>maxLane)maxLane=n;}));
 
-  let html='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Один QR-код на доріжку — для всього дня змагань. Суддя сканує один раз і бачить усі свої запливи по порядку.</div>';
+  // ── Starter QR (one per competition) ──────────────────────────
+  const starterUrl=base+'?starter=1&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id);
+  const starterUrlEsc=starterUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  let html=`<div style="background:linear-gradient(135deg,rgba(230,57,70,.08),rgba(230,57,70,.03));border:1px solid rgba(230,57,70,.25);border-radius:14px;padding:.9rem;margin-bottom:1rem">
+    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem">
+      <div style="background:#e63946;color:#fff;font-weight:800;border-radius:8px;padding:.25rem .8rem;font-size:.95rem">🚦 Суддя-стартер</div>
+      <div style="flex:1;font-size:.75rem;color:#5a9ab8">Один QR на всі змагання</div>
+      <button class="jlink-copy" onclick="navigator.clipboard.writeText('${starterUrlEsc}').then(()=>showToast('Скопійовано!'))">📋 Копіювати</button>
+      <a class="jlink-copy" href="${starterUrlEsc}" target="_blank" style="text-decoration:none">↗ Відкрити</a>
+    </div>
+    <div style="font-size:.73rem;color:#5a9ab8;margin-bottom:.5rem">Стартер бачить активний заплив, готовність суддів і надсилає сигнал СТАРТ всім суддям одночасно.</div>
+    <div id="qr-starter" style="display:inline-block;border-radius:8px;border:1px solid rgba(230,57,70,.3);overflow:hidden;line-height:0"></div>
+  </div>`;
+
+  html+='<div style="font-size:.8rem;color:#5a9ab8;margin-bottom:.8rem">Один QR-код на доріжку — для всього дня змагань. Суддя сканує один раз і бачить усі свої запливи по порядку.</div>';
   let anyLane=false;
   const _qrUrls={};  // lane → url, for client-side QR generation after DOM insert
+  _qrUrls['starter']=starterUrl;
 
   for(let lane=1;lane<=maxLane;lane++){
     const laneHeats=[];
@@ -13792,13 +14188,15 @@ function openJudgeLinks(regen){
   // Generate QR codes client-side via qrcodejs (cdnjs)
   requestAnimationFrame(()=>{
     Object.entries(_qrUrls).forEach(([lane,url])=>{
-      const el=document.getElementById('qr-lane-'+lane);
+      const isStarter=lane==='starter';
+      const elId=isStarter?'qr-starter':'qr-lane-'+lane;
+      const el=document.getElementById(elId);
       if(!el)return;
       if(typeof QRCode!=='undefined'){
-        el.innerHTML=''; // очистити на випадок повторного відкриття
-        new QRCode(el,{text:url,width:220,height:220,
-          colorDark:'#023e8a',colorLight:'#ffffff',
-          correctLevel:QRCode.CorrectLevel.L});
+        el.innerHTML='';
+        new QRCode(el,{text:url,width:280,height:280,
+          colorDark:isStarter?'#9b1c1c':'#023e8a',colorLight:'#ffffff',
+          correctLevel:QRCode.CorrectLevel.M});
       }else{
         el.innerHTML=`<div style="font-size:.68rem;color:#5a9ab8;word-break:break-all;max-width:200px;padding:.3rem">${escapeHtml(url)}</div>`;
       }
@@ -13863,6 +14261,8 @@ async function _bootApp(user){
 (async()=>{
   // Judge mode — no auth needed, bypass everything
   if(await _initJudgeMode())return;
+  // Starter judge mode — no auth needed, bypass everything
+  if(await _initStarterMode())return;
 
   // Check for public share link first (no auth needed)
   const isPublic=await checkPublicHash();
