@@ -1165,7 +1165,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <!-- ══ BOTTOM NAV (mobile) ══ -->
 <nav id="bottom-nav">
   <button class="bnav-btn active" data-bnav="home" onclick="switchTab('home')"><span class="bi">🏠</span>Головна</button>
-  <button class="bnav-btn" data-bnav="schedule" onclick="switchTab('schedule')"><span class="bi">📅</span>Розклад</button>
+  <button class="bnav-btn" data-bnav="athletes" onclick="switchTab('athletes')"><span class="bi">👥</span>Учасники</button>
   <button class="bnav-btn" data-bnav="heats" onclick="switchTab('heats')"><span class="bi">🏊</span>Запливи</button>
   <button class="bnav-btn" data-bnav="results" onclick="switchTab('results')"><span class="bi">🏁</span>Результати</button>
   <button class="bnav-btn" id="bnav-more-btn" onclick="toggleBnavDrawer()"><span class="bi">☰</span>Ще</button>
@@ -3468,10 +3468,11 @@ function renderHome(){
     ${db.news.length?`<div class="card" style="margin-top:1rem">
       <div style="font-weight:800;color:var(--accent);margin-bottom:.75rem">📰 Останні новини</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.7rem">
-        ${[...db.news].reverse().slice(0,4).map(n=>`<div class="news-card news-type-${escapeHtml(n.type)}" style="margin:0">
+        ${[...db.news].reverse().slice(0,4).map(n=>`<div class="news-card news-type-${escapeHtml(n.type)}" style="margin:0;cursor:pointer" onclick="openNewsItem(${n.id})" title="Відкрити новину">
           <div class="news-date">${escapeHtml(n.date||'')} · ${n.type==='anon'?'📣 Анонс':n.type==='result'?'🏆 Результати':'📰 Новина'}</div>
           <div class="news-title">${escapeHtml(n.title)}</div>
           ${n.body?`<div class="news-body" style="-webkit-line-clamp:2;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden">${escapeHtml(n.body)}</div>`:''}
+          <div style="font-size:.75rem;color:var(--accent);margin-top:.35rem;font-weight:600">Читати далі →</div>
         </div>`).join('')}
       </div>
     </div>`:''}
@@ -6157,13 +6158,25 @@ function renderNews(){
   if(!db.news.length){el.innerHTML='<div class="empty-state"><div class="icon">📰</div><p>Немає новин. Натисніть «＋ Новина / Анонс».</p></div>';return;}
   el.innerHTML=[...db.news].reverse().map(n=>{
     const safeLink=n.link&&/^https?:\/\//i.test(n.link.trim())?n.link.trim():'';
-    return`<div class="news-card news-type-${escapeHtml(n.type)}">
+    return`<div class="news-card news-type-${escapeHtml(n.type)}" id="news-item-${n.id}">
     <div class="news-date">${escapeHtml(n.date||'')} · ${n.type==='anon'?'📣 Анонс':n.type==='result'?'🏆 Результати':'📰 Новина'}</div>
     <div class="news-title">${escapeHtml(n.title)}</div>
     ${n.body?`<div class="news-body">${escapeHtml(n.body)}</div>`:''}
     ${safeLink?`<a href="${escapeHtml(safeLink)}" target="_blank" rel="noopener noreferrer" style="font-size:.82rem;margin-top:.5rem;display:inline-block">🔗 Детальніше</a>`:''}
     <div style="margin-top:.6rem;text-align:right"><button class="btn-icon btn-xs news-edit-btn" style="color:var(--danger)" onclick="delNews(${n.id})">✕ Видалити</button></div>
   </div>`;}).join('');
+}
+function openNewsItem(newsId){
+  switchTab('news');
+  // Wait for tab to render, then scroll to the item and highlight it
+  requestAnimationFrame(()=>{
+    const el=document.getElementById('news-item-'+newsId);
+    if(!el)return;
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    el.style.transition='box-shadow .15s';
+    el.style.boxShadow='0 0 0 3px var(--accent)';
+    setTimeout(()=>{el.style.boxShadow='';},1800);
+  });
 }
 function openAddNews(){
   document.getElementById('nn-title').value='';
