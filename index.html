@@ -5448,7 +5448,8 @@ function renderHeats(){
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         <span class="badge badge-heat">Підзаплив ${inEvent}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
-        ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
+        ${showTimer?`<div id="jrdy-${hIdx}" style="margin-left:auto;display:flex;gap:.25rem;flex-wrap:wrap;align-items:center"></div>
+        <span id="jtmr-${heat.id}" style="font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
       </div>
       <div class="lanes-grid print-hide">${cells}</div>
       <div class="heat-print-table" style="display:none">
