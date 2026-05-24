@@ -13632,8 +13632,27 @@ function _ensureOrgCtrlChannel(){
       else if(payload.type==='judge_cancel_ready')_orgHandleCancelReady(payload.lane,payload.heatIdx);
       else if(payload.type==='heat_active')_orgHandleActiveHeat(payload.heatIdx);
       else if(payload.type==='heat_start')_orgHandleStarterStart(payload.heatIdx,payload.startTs);
+      else if(payload.type==='heat_reset')_orgHandleStarterReset(payload.heatIdx);
     }).subscribe();
   return _orgCtrlChannel;
+}
+function _orgHandleStarterReset(heatIdx){
+  const comp=activeComp();if(!comp)return;
+  const heat=comp.heats[heatIdx];if(!heat)return;
+  if(_orgTimerHeatId===heat.id){cancelAnimationFrame(_orgTimerRaf);_orgTimerRaf=null;_orgTimerHeatId=null;}
+  const btn=document.getElementById('jstart-'+heat.id);
+  if(btn){btn.disabled=false;btn.style.background='';btn.textContent='▶ Старт';}
+  const timerEl=document.getElementById('jtmr-'+heat.id);if(timerEl)timerEl.textContent='';
+  if(heatIdx===_orgCurrentHeatIdx){
+    const pb=document.getElementById('hcp-start-btn');
+    if(pb){pb.disabled=false;pb.style.background='';pb.textContent='▶ Старт';}
+    const pt=document.getElementById('hcp-timer');if(pt)pt.textContent='';
+  }
+  const rb2=document.getElementById('rstart-'+heat.id);
+  if(rb2){rb2.disabled=false;rb2.style.background='';rb2.textContent='▶ Старт';}
+  const rtmr2=document.getElementById('rtmr-'+heat.id);
+  if(rtmr2)rtmr2.textContent='';
+  showToast('↺ Скидання таймера від стартера — Заплив №'+(heat.globalNum||heatIdx+1));
 }
 function _orgHandleCancelReady(lane,heatIdx){
   if(_orgReadyLanes[heatIdx])_orgReadyLanes[heatIdx].delete(lane);
