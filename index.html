@@ -5579,6 +5579,7 @@ function renderResults(){
     }).filter(Boolean).join('');
     const hIdxForCtrl=heatOrigIdx.get(heat)??-1;
     const ctrlHtml=isPriv&&hIdxForCtrl>=0?`<div style="margin-left:auto;display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">
+      <div id="rrdy-${hIdxForCtrl}" style="display:flex;flex-wrap:wrap;gap:.2rem;align-items:center"></div>
       <span id="rtmr-${heat.id}" style="font-family:monospace;font-size:.8rem;font-weight:700;color:#023e8a;min-width:52px;text-align:right"></span>
       <button id="ract-${heat.id}" class="btn-secondary btn-sm" onclick="broadcastSetActive(${hIdxForCtrl})" style="padding:.18rem .5rem;font-size:.76rem">📍 Активний</button>
       <button id="rstart-${heat.id}" class="btn-success btn-sm" onclick="broadcastHeatStart(${hIdxForCtrl},${heat.id})" style="padding:.18rem .55rem;font-size:.76rem">▶ Старт</button>
