@@ -3084,7 +3084,7 @@ function applyPermissions(){
   setBtn('btn-add-relay',      editOk,  'змагання завершено');
   setBtn('btn-add-athlete',    addOk,   regClosed?'реєстрацію закрито':'змагання завершено');
   setBtn('btn-import-excel',   addOk,   regClosed?'реєстрацію закрито':'змагання завершено');
-  setBtn('btn-del-test',       editOk,  'змагання завершено');
+
   document.querySelectorAll('.t-inp').forEach(inp=>{
     inp.disabled=!resultsOk;inp.style.background=resultsOk?'':'var(--hover)';
     inp.title=resultsOk?'':'Недоступно: статус «Планування» — спочатку розпочніть змагання';
@@ -4213,8 +4213,7 @@ function renderAthletes(){
   const sf=document.getElementById('af-style').value;
   const dayf=document.getElementById('af-day').value;
   const qf=document.getElementById('af-q').value.toLowerCase();
-  const hasTest=db.athletes.some(a=>a.isTest);
-  document.getElementById('btn-del-test').style.display=hasTest?'':'none';
+
   let n=1;
   const rows=[];
   for(const a of db.athletes){
