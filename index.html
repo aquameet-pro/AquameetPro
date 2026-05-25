@@ -474,7 +474,6 @@ body.role-trainer button[onclick^="openCreateComp"]{ display:none!important }
 body.role-trainer:not(.trainer-confirmed) button[onclick="openAddAthlete()"]{ display:none!important }
 body.role-trainer:not(.trainer-confirmed) button[onclick="openQuickGuest()"]{ display:none!important }
 body.role-trainer:not(.trainer-confirmed) button[onclick="openImportExcel()"]{ display:none!important }
-body.role-trainer:not(.trainer-confirmed) button[onclick="generateTestData()"]{ display:none!important }
 body.role-trainer:not(.trainer-confirmed) button[onclick="downloadTemplate()"]{ display:none!important }
 /* Розклад — тренери ніколи не редагують структуру змагань */
 body.role-trainer button[onclick^="openEditDay"]{ display:none!important }
@@ -483,8 +482,6 @@ body.role-trainer #btn-add-day{ display:none!important }
 /* Запливи — тренери не генерують */
 body.role-trainer #btn-gen-heats{ display:none!important }
 body.role-trainer #btn-gen-relay-heats{ display:none!important }
-/* Тестові дані — приховати для тренерів */
-body.role-trainer #btn-del-test{ display:none!important }
 /* Естафети — заборона без підтвердження */
 body.role-trainer:not(.trainer-confirmed) #btn-add-relay{ display:none!important }
 body.role-trainer:not(.trainer-confirmed) button[onclick="openAddRelayAg()"]{ display:none!important }
@@ -741,7 +738,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .filter-bar select{min-width:0;flex:1}
   .filter-bar input{width:100%!important}
   /*Ховаємо службові кнопки в Учасниках */
-  button[onclick="downloadTemplate()"],button[onclick="generateTestData()"]{display:none!important}
+  button[onclick="downloadTemplate()"]{display:none!important}
   /* Heats: vertical list layout */
   .lanes-grid{display:flex!important;flex-direction:column;gap:0}
   .lane-cell{
@@ -1197,11 +1194,9 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <div class="section-header">
     <div><div class="section-title">👥 Учасники та заявки</div><div class="section-sub" id="ath-sub"></div></div>
     <div style="display:flex;gap:.45rem;flex-wrap:wrap">
-      <button class="btn-danger btn-sm" id="btn-del-test" onclick="deleteTestData()" style="display:none">🗑 Видалити тестові</button>
       <button class="btn-secondary btn-sm" id="btn-refresh-trainer-ath" style="display:none" onclick="refreshTrainerAthletes()">🔄 Тренери</button>
       <button class="btn-secondary btn-sm" id="btn-import-excel" onclick="openImportExcel()">📊 Імпорт Excel</button>
       <button class="btn-secondary btn-sm" onclick="downloadTemplate()">📥 Шаблон Excel</button>
-      <button class="btn-secondary btn-sm" onclick="generateTestData()">🧪 500 тестових</button>
       <button class="btn-secondary btn-sm" onclick="openQuickGuest()">⚡ Гість</button>
       <button class="btn-primary" onclick="openAddAthlete()">＋ Учасник</button>
     </div>
@@ -3089,7 +3084,7 @@ function applyPermissions(){
   setBtn('btn-add-relay',      editOk,  'змагання завершено');
   setBtn('btn-add-athlete',    addOk,   regClosed?'реєстрацію закрито':'змагання завершено');
   setBtn('btn-import-excel',   addOk,   regClosed?'реєстрацію закрито':'змагання завершено');
-  setBtn('btn-del-test',       editOk,  'змагання завершено');
+
   document.querySelectorAll('.t-inp').forEach(inp=>{
     inp.disabled=!resultsOk;inp.style.background=resultsOk?'':'var(--hover)';
     inp.title=resultsOk?'':'Недоступно: статус «Планування» — спочатку розпочніть змагання';
@@ -4218,8 +4213,7 @@ function renderAthletes(){
   const sf=document.getElementById('af-style').value;
   const dayf=document.getElementById('af-day').value;
   const qf=document.getElementById('af-q').value.toLowerCase();
-  const hasTest=db.athletes.some(a=>a.isTest);
-  document.getElementById('btn-del-test').style.display=hasTest?'':'none';
+
   let n=1;
   const rows=[];
   for(const a of db.athletes){
@@ -4863,146 +4857,6 @@ async function delAthlete(id){
   if(_currentRole!=='trainer')saveDB();
   renderAthletes();
 }
-function generateTestData(){
-  if(!confirm('Згенерувати ~500 тестових учасників з заявками та частиною результатів?\nЇх можна буде видалити кнопкою «Видалити тестові».'))return;
-  const comp=activeComp();
-  const sM=["Петренко","Коваленко","Бондаренко","Ткаченко","Кравченко","Шевченко","Мороз","Лисенко","Гриценко","Захаренко","Остапенко","Павленко","Руденко","Яценко","Романенко","Федоренко","Дяченко","Власенко","Харченко","Тимченко","Зубченко","Нечипоренко","Олійник","Поліщук","Мельниченко","Гончаренко","Савченко","Кириленко","Бабенко","Даниленко"];
-  const sF=["Петренко","Коваль","Бондар","Ткач","Кравець","Шевченко","Мороз","Лисенко","Гриценко","Захаренко","Остапенко","Павленко","Руденко","Яценко","Романенко","Федоренко","Дяченко","Власенко","Харченко","Тимченко","Зубченко","Олійник","Поліщук","Мельниченко","Гончаренко","Кириленко","Бабенко","Даниленко","Семенченко","Лазаренко"];
-  const nM=["Олег","Дмитро","Максим","Іван","Андрій","Сергій","Михайло","Артем","Денис","Роман","Богдан","Владислав","Олексій","Тарас","Назар","Євген","Кирило","Ігор","Руслан","Ярослав","Степан","Василь","Микола","Остап","Святослав"];
-  const nF=["Марія","Олена","Наталія","Анна","Катерина","Оксана","Юлія","Дарія","Соломія","Аліна","Вікторія","Ганна","Діана","Злата","Кристина","Мирослава","Поліна","Уляна","Яна","Лариса","Тетяна","Світлана","Надія","Рита","Людмила"];
-  const cities=["Київ","Харків","Дніпро","Одеса","Львів","Запоріжжя","Вінниця","Полтава","Суми","Чернігів","Черкаси","Житомир","Луцьк","Рівне","Ужгород","Кривий Ріг","Миколаїв","Херсон"];
-  const clubs=["ДЮСШ-1","ДЮСШ-2","КДЮСШ","СДЮШОР","Акватик","Дельфін","Нептун","Хвиля","Торпедо","Спартак","Динамо","Олімп","Аквамарин","Ластівка","Посейдон","Тайфун"];
-  const coaches=["Коваленко В.В.","Іванова О.С.","Сидоренко П.П.","Петров М.І.","Мороз Т.О.","Романенко Г.Д.","Яценко В.Л.","Гриценко Р.К.","Савченко О.М.","Бондаренко С.Є.","Федоренко Л.В.","Ільченко М.Р."];
-  const rankPool=["II юн.","II юн.","I юн.","I юн.","III","III","II","I","КМС",null,null];
-
-  // Seed time base (centiseconds) by distance, gender, age group
-  const seedBase={
-    50:{M:{young:[4800,5800],mid:[3800,4800],old:[3000,3800]},F:{young:[5300,6500],mid:[4200,5300],old:[3400,4200]}},
-    100:{M:{young:[10500,13000],mid:[8500,10500],old:[6800,8500]},F:{young:[11500,14000],mid:[9500,11500],old:[7500,9500]}},
-    200:{M:{young:[23000,28000],mid:[19000,23000],old:[15000,19000]},F:{young:[25000,30000],mid:[21000,25000],old:[17000,21000]}},
-  };
-  const rnd=(min,max)=>min+Math.floor(Math.random()*(max-min));
-  const ageGroup=yr=>{const age=new Date().getFullYear()-yr;return age<=11?'young':age<=14?'mid':'old';};
-
-  let totalAdded=0,athleteCount=0;
-  const dayIds=(comp?.days||[]).map(d=>d.id);
-  const allStyles=STYLES.filter(s=>s!=='комплекс');
-  const allEvents=[...allStyles.map(s=>({d:50,s})),...allStyles.map(s=>({d:100,s})),{d:200,s:'вільний'}];
-
-  const rngSeed=(n)=>{let h=n^0xdeadbeef;h=Math.imul(h^(h>>>16),0x45d9f3b);h=Math.imul(h^(h>>>16),0x45d9f3b);return(h^(h>>>16))>>>0;};
-  let rngState=12345;
-  const seededRnd=()=>{rngState=rngSeed(rngState);return(rngState/0xffffffff);};
-
-  for(let i=0;i<500;i++){
-    const gen=i%3===0?'F':'M';
-    const sArr=gen==='M'?sM:sF;const nArr=gen==='M'?nM:nF;
-    const surname=sArr[i%sArr.length];
-    const name=nArr[i%nArr.length];
-    const year=2006+Math.floor(seededRnd()*13); // 2006–2018
-    const ag=ageGroup(year);
-    const city=cities[i%cities.length];
-    const club=clubs[Math.floor(seededRnd()*clubs.length)];
-    const coach=coaches[Math.floor(seededRnd()*coaches.length)];
-    const rank=rankPool[Math.floor(seededRnd()*rankPool.length)];
-    const id=db.nextId.ath++;
-    db.athletes.push({id,surname,name,gender:gen,birthYear:year,city,club,coach,currentRank:rank,isTest:true});
-    athleteCount++;
-
-    // 2–4 events per athlete
-    const nev=2+Math.floor(seededRnd()*3);
-    const usedKeys=new Set();
-    const shuffled=[...allEvents].sort(()=>seededRnd()-0.5);
-    for(const ev of shuffled){
-      if(usedKeys.size>=nev)break;
-      if(!isValidEvent(ev.d,ev.s))continue;
-      const k=`${ev.d}|${ev.s}`;if(usedKeys.has(k))continue;
-      usedKeys.add(k);
-      const rng=(seedBase[ev.d]||seedBase[50])[gen][ag];
-      const seedCs=rnd(rng[0],rng[1]);
-      const seedT=fmtTime(seedCs);
-      const dayId=dayIds.length?dayIds[Math.floor(seededRnd()*dayIds.length)]:null;
-      // 75% have results: 60% time, 10% Н/С, 5% Д/К, 25% no result
-      let result=null;
-      const rv=seededRnd();
-      if(rv<0.60){
-        const delta=Math.floor((seededRnd()-0.45)*400); // -200..+200
-        result=fmtTime(Math.max(1500,seedCs+delta));
-      } else if(rv<0.70){
-        result='Н/С';
-      } else if(rv<0.75){
-        result='Д/К';
-      }
-      if(comp)(comp.entries=comp.entries||[]).push({id:db.nextId.entry++,athleteId:id,dist:ev.d,style:ev.s,dayId,seedTime:seedT,result,exhibition:false});
-      totalAdded++;
-    }
-  }
-  if(comp)comp.heats=[];
-
-  // ── Generate relay teams ──────────────────────────────────────────────────
-  if(comp && db.athletes.filter(a=>a.isTest).length>0){
-    const testAth=db.athletes.filter(a=>a.isTest);
-    const pick=(gender,minYr,maxYr,n)=>{
-      const pool=testAth.filter(a=>a.gender===gender&&a.birthYear>=minYr&&a.birthYear<=maxYr);
-      const shuffled=[...pool].sort(()=>seededRnd()-0.5);
-      return shuffled.slice(0,n);
-    };
-    const relayTypes=['4x50free','4x50medley','4x50mixed'];
-    const relayAgs=comp.relayAgeGroups||[];
-    const relayConfigs=[
-      {type:'4x50free',gender:'F',minYr:2012,maxYr:2018,club:'ДЮСШ-1',city:'Київ'},
-      {type:'4x50free',gender:'F',minYr:2006,maxYr:2011,club:'Акватик',city:'Харків'},
-      {type:'4x50free',gender:'M',minYr:2012,maxYr:2018,club:'ДЮСШ-1',city:'Київ'},
-      {type:'4x50free',gender:'M',minYr:2006,maxYr:2011,club:'Динамо',city:'Дніпро'},
-      {type:'4x50medley',gender:'F',minYr:2006,maxYr:2018,club:'ДЮСШ-2',city:'Одеса'},
-      {type:'4x50medley',gender:'M',minYr:2006,maxYr:2018,club:'Нептун',city:'Львів'},
-      {type:'4x50mixed',gender:'X',minYr:2006,maxYr:2018,club:'ДЮСШ-1',city:'Київ'},
-      {type:'4x50mixed',gender:'X',minYr:2006,maxYr:2018,club:'Хвиля',city:'Запоріжжя'},
-    ];
-    comp.relays=comp.relays||[];
-    for(const cfg of relayConfigs){
-      let picks;
-      if(cfg.gender==='X'){
-        const m=pick('M',cfg.minYr,cfg.maxYr,2);
-        const f=pick('F',cfg.minYr,cfg.maxYr,2);
-        picks=[...m,...f];
-      } else {
-        picks=pick(cfg.gender,cfg.minYr,cfg.maxYr,4);
-      }
-      if(picks.length<4)continue;
-      const legs=picks.map(a=>({athleteId:a.id,guestName:null,legTime:null}));
-      // Seed time: sum of 50m free best estimates
-      const totalSeed=picks.reduce((s,a)=>{
-        const ag=ageGroup(a.birthYear);
-        const rng=seedBase[50][a.gender][ag];
-        return s+rnd(rng[0],rng[1]);
-      },0);
-      // 60% have a result
-      let result=null;
-      if(seededRnd()<0.6){result=fmtTime(totalSeed+Math.floor((seededRnd()-0.45)*800));}
-      // Find relay age group
-      const oldestYr=Math.min(...picks.map(a=>a.birthYear));
-      const rag=relayAgs.find(g=>g.yearFrom<=oldestYr&&oldestYr<=g.yearTo);
-      comp.relays.push({
-        id:String(db.nextId.relay++),
-        name:`${cfg.gender==='F'?'Дівчата':cfg.gender==='M'?'Юнаки':'Мікст'} — ${cfg.club}`,
-        type:cfg.type,gender:cfg.gender,club:cfg.club,city:cfg.city,
-        exhibition:false,ageGroupId:rag?rag.id:null,
-        seedTime:fmtTime(totalSeed),legs,result,
-      });
-    }
-  }
-
-  saveDB();renderAthletes();renderHome();showToast(`✅ Додано ${athleteCount} тестових учасників, ${totalAdded} заявок (з результатами ~75%), ${(comp?.relays||[]).length} естафетних команд`);
-}
-function deleteTestData(){
-  if(!confirm('Видалити всіх тестових учасників?'))return;
-  const ids=new Set(db.athletes.filter(a=>a.isTest).map(a=>a.id));
-  db.athletes=db.athletes.filter(a=>!a.isTest);
-  const comp=activeComp();
-  if(comp){comp.entries=(comp.entries||[]).filter(e=>!ids.has(e.athleteId));comp.heats=[];}
-  saveDB();renderAthletes();renderHome();showToast('🗑 Тестові дані видалено');
-}
-
 // ═══════════════════════════════════════════════════════════════
 // HEATS
 // ═══════════════════════════════════════════════════════════════
