@@ -1223,7 +1223,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <div class="tbl-wrap">
     <table><thead><tr>
       <th>#</th><th>ПІБ</th><th class="mob-hide">Стать</th><th class="mob-hide">Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Розряд</th>
-      <th>Дист.</th><th>Стиль</th><th class="mob-hide">День</th><th class="mob-hide">Заявл.</th><th>Дії</th>
+      <th>Дист.</th><th>Стиль</th><th class="mob-hide">День</th><th>Заявл.</th><th>Дії</th>
     </tr></thead><tbody id="ath-tbody"></tbody></table>
   </div>
 </div>
@@ -4293,7 +4293,7 @@ function renderAthletes(){
         <td><span class="badge badge-dist">${e.dist}м</span></td>
         <td><span class="badge badge-style">${e.style}</span></td>
         <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
-        <td class="mob-hide" style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
+        <td style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
         <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
       </tr>`;
     });
