@@ -10247,7 +10247,8 @@ function _renderAdminUsers(){
       </td>
       <td>${orgBind}</td>
       <td>${clubAppr}</td>
-      <td>
+      <td style="white-space:nowrap">
+        <button class="btn-secondary btn-xs" onclick="adminEditUser('${u.id}')" title="Редагувати">✏</button>
         <button class="btn-danger btn-xs" onclick="adminDeleteUser('${u.id}','${(u.full_name||u.email||'').replace(/'/g,'')}')">🗑</button>
       </td>
     </tr>`;
@@ -10383,6 +10384,38 @@ async function adminDeleteAccess(requestId){
   showToast('🗑 Запит видалено');
   await renderAdmin();
   _refreshOrgBanner();
+}
+
+function adminEditUser(userId){
+  const u=_adminUsers.find(x=>x.id===userId);
+  if(!u)return;
+  document.getElementById('eu-id').value=u.id;
+  document.getElementById('eu-name').value=u.full_name||'';
+  document.getElementById('eu-email').value=u.email||'';
+  document.getElementById('eu-city').value=u.city||'';
+  document.getElementById('eu-club').value=u.club||'';
+  document.getElementById('eu-category').value=u.category||'';
+  document.getElementById('eu-err').style.display='none';
+  openModal('modal-edit-user');
+}
+
+async function doAdminSaveUser(){
+  const userId=document.getElementById('eu-id').value;
+  const full_name=document.getElementById('eu-name').value.trim();
+  const email=document.getElementById('eu-email').value.trim();
+  const city=document.getElementById('eu-city').value.trim();
+  const club=document.getElementById('eu-club').value.trim();
+  const category=document.getElementById('eu-category').value;
+  const errEl=document.getElementById('eu-err');
+  if(!full_name){errEl.textContent="Ім'я обов'язкове";errEl.style.display='';return;}
+  const btn=document.getElementById('eu-btn');
+  btn.disabled=true;btn.textContent='Збереження…';
+  const{error}=await _supa.from('profiles').update({full_name,email,city,club,category}).eq('id',userId);
+  btn.disabled=false;btn.textContent='💾 Зберегти';
+  if(error){errEl.textContent='Помилка: '+error.message;errEl.style.display='';return;}
+  showToast('✅ Дані збережено');
+  closeModal('modal-edit-user');
+  await renderAdmin();
 }
 
 async function adminDeleteUser(userId,name){
@@ -14431,6 +14464,40 @@ async function _bootApp(user){
   <div class="modal-footer">
     <button class="btn-secondary" onclick="closeModal('modal-create-user')">Скасувати</button>
     <button class="btn-primary" id="cu-btn" onclick="doCreateUser()">👤 Створити</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-edit-user">
+<div class="modal" style="max-width:500px">
+  <div class="modal-header">
+    <div class="modal-title">✏ Редагувати користувача</div>
+    <button class="modal-close" onclick="closeModal('modal-edit-user')">✕</button>
+  </div>
+  <input type="hidden" id="eu-id">
+  <div id="eu-err" class="alert alert-danger" style="display:none;margin-bottom:.7rem"></div>
+  <div class="form-row cols-2">
+    <div><label>Повне ім'я *</label><input id="eu-name" placeholder="Іванченко Олег"></div>
+    <div><label>Email</label><input id="eu-email" type="email" placeholder="user@email.com"></div>
+  </div>
+  <div class="form-row cols-2">
+    <div><label>Місто</label><input id="eu-city" placeholder="Київ"></div>
+    <div><label>Клуб</label><input id="eu-club" placeholder="ДЮСШ №1"></div>
+  </div>
+  <div class="form-row">
+    <div><label>Категорія</label>
+      <select id="eu-category">
+        <option value="">— Категорія —</option>
+        <option value="Тренер вищої категорії">Тренер вищої категорії</option>
+        <option value="Тренер першої категорії">Тренер першої категорії</option>
+        <option value="Тренер другої категорії">Тренер другої категорії</option>
+        <option value="б/категорії">б/категорії</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-secondary" onclick="closeModal('modal-edit-user')">Скасувати</button>
+    <button class="btn-primary" id="eu-btn" onclick="doAdminSaveUser()">💾 Зберегти</button>
   </div>
 </div>
 </div>
