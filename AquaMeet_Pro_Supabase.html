@@ -1432,7 +1432,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
         <button class="btn-secondary btn-sm" onclick="openAddRelayAg()" style="margin-top:.5rem">＋ Додати групу</button>
       </div>
       <div class="card">
-        <div style="font-weight:800;color:var(--accent);margin-bottom:.8rem;font-size:.95rem">⏱ Тайминг змагання</div>
+        <div style="font-weight:800;color:var(--accent);margin-bottom:.8rem;font-size:.95rem">⏱ Таймінг змагання</div>
         <div class="alert alert-info" style="font-size:.78rem">Час між запливами — секунди на вихід з води і підготовку наступного заплиту. Один показник на кожну вікову групу. Час нагородження додається до загальної тривалості змагання один раз.</div>
         <div id="buffer-matrix"></div>
         <div style="display:flex;gap:.5rem;margin-top:.7rem;flex-wrap:wrap">
@@ -3222,11 +3222,7 @@ function createComp(){
     id:db.nextId.comp++,
     ...data,
     status:'planning',days:[],
-    ageGroups:[
-      {id:db.nextId.ag++,name:'2008–2010',yearFrom:2008,yearTo:2010,gender:'all'},
-      {id:db.nextId.ag++,name:'2011–2013',yearFrom:2011,yearTo:2013,gender:'all'},
-      {id:db.nextId.ag++,name:'2014–2016',yearFrom:2014,yearTo:2016,gender:'all'},
-    ],
+    ageGroups:[],
     entries:[],heats:[]
   };
   db.competitions.push(comp);db.activeCompId=comp.id;
