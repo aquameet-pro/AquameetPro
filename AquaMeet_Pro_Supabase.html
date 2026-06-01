@@ -1841,15 +1841,15 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <div class="modal" style="max-width:900px">
   <div class="modal-header"><div class="modal-title" id="ath-modal-title">Учасник</div><button class="modal-close" onclick="closeModal('modal-athlete')">✕</button></div>
   <div class="form-row cols-3">
-    <div style="position:relative"><label>Прізвище *</label><input id="pa-surname" placeholder="Петренко" autocomplete="nope" oninput="paAcInput(this.value)" onblur="setTimeout(()=>paAcHide(),180)"><div id="pa-ac-drop" style="display:none;position:absolute;z-index:9999;background:var(--card);border:1px solid var(--accent);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:220px;max-height:220px;overflow-y:auto;top:100%;left:0"></div></div>
-    <div><label>Ім'я *</label><input id="pa-name" placeholder="Олег" autocomplete="nope"></div>
+    <div style="position:relative"><label>Прізвище *</label><input id="pa-surname" placeholder="Петренко" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')" oninput="paAcInput(this.value)" onblur="setTimeout(()=>paAcHide(),180)"><div id="pa-ac-drop" style="display:none;position:absolute;z-index:9999;background:var(--card);border:1px solid var(--accent);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:220px;max-height:220px;overflow-y:auto;top:100%;left:0"></div></div>
+    <div><label>Ім'я *</label><input id="pa-name" placeholder="Олег" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
     <div><label>Стать *</label><select id="pa-gender"><option value="M">Чоловік (Ч)</option><option value="F">Жінка (Ж)</option></select></div>
   </div>
   <div class="form-row cols-4">
-    <div><label>Рік нар. *</label><input id="pa-year" type="number" min="1990" max="2022" placeholder="2011" autocomplete="nope"></div>
-    <div><label>Місто</label><input id="pa-city" placeholder="Київ" list="dl-cities" autocomplete="nope"></div>
-    <div><label>Клуб / Школа</label><input id="pa-club" placeholder="ДЮСШ-1" list="dl-clubs" autocomplete="nope"></div>
-    <div><label>Тренер</label><input id="pa-coach" placeholder="Коваленко В.В." list="dl-coaches" autocomplete="nope"></div>
+    <div><label>Рік нар. *</label><input id="pa-year" type="number" min="1990" max="2022" placeholder="2011" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
+    <div><label>Місто</label><input id="pa-city" placeholder="Київ" list="dl-cities" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
+    <div><label>Клуб / Школа</label><input id="pa-club" placeholder="ДЮСШ-1" list="dl-clubs" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
+    <div><label>Тренер</label><input id="pa-coach" placeholder="Коваленко В.В." list="dl-coaches" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
   </div>
   <div class="form-row cols-2">
     <div><label>Поточний розряд</label>
@@ -4372,7 +4372,11 @@ function openAddAthlete(){
   editingAthId=null;
   entryModalEntries=[];
   document.getElementById('ath-modal-title').textContent='➕ Новий учасник';
-  ['pa-surname','pa-name','pa-city','pa-club','pa-coach'].forEach(id=>document.getElementById(id).value='');
+  ['pa-surname','pa-name','pa-city','pa-club','pa-coach'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.value='';
+    el.setAttribute('readonly',''); // reset readonly so Safari won't show contacts on next open
+  });
   document.getElementById('pa-gender').value='M';
   document.getElementById('pa-year').value='';
   document.getElementById('pa-rank').value='';
