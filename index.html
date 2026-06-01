@@ -9473,6 +9473,8 @@ function saveAgeGroup(){
     saveDB();closeModal('modal-ag');
     _renderEventAgConfigList(key);renderEventAgSection();
     renderProtocol();renderStandings();showToast('✅ Групу збережено');
+    // Reopen the event config modal so user can continue adding groups
+    openModal('modal-event-ag-config');
     return;
   }
 
@@ -9563,6 +9565,7 @@ function openAddEventAg(){
   _editingEventAgId=null;
   ['ag-name','ag-from','ag-to'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ag-gender').value='all';
+  closeModal('modal-event-ag-config');
   openModal('modal-ag');
 }
 
@@ -9576,6 +9579,7 @@ function openEditEventAg(key,id){
   document.getElementById('ag-from').value=ag.yearFrom;
   document.getElementById('ag-to').value=ag.yearTo;
   document.getElementById('ag-gender').value=ag.gender||'all';
+  closeModal('modal-event-ag-config');
   openModal('modal-ag');
 }
 
