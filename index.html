@@ -4321,29 +4321,43 @@ function saveQuickGuest(){
 }
 
 // ── Trainer autocomplete for athlete modal ──
+function _paAcSource(){
+  // Trainer: use their personal Спортсмени database
+  if(_currentRole==='trainer') return _taLoad();
+  // Organizer/admin/secretary: use all athletes across competitions (deduped by surname+name+year)
+  const seen=new Set();
+  const out=[];
+  for(const comp of (db.competitions||[])){
+    for(const a of (db.athletes||[])){
+      const key=`${a.surname}|${a.name}|${a.birthYear}`;
+      if(!seen.has(key)){seen.add(key);out.push(a);}
+    }
+  }
+  return out;
+}
 function paAcInput(val){
   const drop=document.getElementById('pa-ac-drop');
   if(!drop)return;
-  if(_currentRole!=='trainer'){drop.style.display='none';return;}
   const q=val.trim().toLowerCase();
-  if(!q){drop.style.display='none';return;}
-  const list=_taLoad().filter(a=>{
-    const full=(a.surname+' '+a.name).toLowerCase();
-    return a.surname.toLowerCase().startsWith(q)||full.startsWith(q);
+  if(q.length<1){drop.style.display='none';return;}
+  const source=_paAcSource();
+  const list=source.filter(a=>{
+    const full=((a.surname||'')+' '+(a.name||'')).toLowerCase();
+    return (a.surname||'').toLowerCase().startsWith(q)||full.startsWith(q);
   }).slice(0,10);
   if(!list.length){drop.style.display='none';return;}
-  drop.innerHTML=list.map(a=>`<div data-tid="${a.id}" style="padding:.45rem .75rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid var(--border)" onmousedown="paAcSelect('${a.id}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><b>${escapeHtml(a.surname)}</b> ${escapeHtml(a.name)} <span style="color:var(--text-muted);font-size:.75rem">${a.birthYear||''} ${a.gender==='F'?'Ж':'Ч'} ${a.currentRank||''}</span></div>`).join('');
+  drop.innerHTML=list.map(a=>`<div data-tid="${a.id}" style="padding:.45rem .75rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid var(--border)" onmousedown="paAcSelect('${a.id}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><b>${escapeHtml(a.surname||'')}</b> ${escapeHtml(a.name||'')} <span style="color:var(--text-muted);font-size:.75rem">${a.birthYear||''} ${a.gender==='F'?'Ж':'Ч'} ${a.currentRank||''}</span></div>`).join('');
   drop.style.display='block';
 }
 function paAcHide(){
   const drop=document.getElementById('pa-ac-drop');
   if(drop)drop.style.display='none';
 }
-function paAcSelect(tid){
-  const a=_taLoad().find(x=>x.id===tid);
+function paAcSelect(id){
+  const a=_paAcSource().find(x=>String(x.id)===String(id));
   if(!a)return;
-  document.getElementById('pa-surname').value=a.surname;
-  document.getElementById('pa-name').value=a.name;
+  document.getElementById('pa-surname').value=a.surname||'';
+  document.getElementById('pa-name').value=a.name||'';
   document.getElementById('pa-gender').value=a.gender||'M';
   document.getElementById('pa-year').value=a.birthYear||'';
   document.getElementById('pa-city').value=a.city||'';
