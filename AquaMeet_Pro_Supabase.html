@@ -1426,6 +1426,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
         <button class="btn-secondary btn-sm" onclick="openAddAg()" style="margin-top:.5rem">＋ Додати групу</button>
       </div>
       <div class="card">
+        <div style="font-weight:800;color:var(--accent);margin-bottom:.8rem;font-size:.95rem">⚙️ Групи по подіях</div>
+        <div class="alert alert-info" style="font-size:.78rem">За замовчуванням — всі події використовують глобальні групи. Тут можна задати <strong>окремі групи для конкретних дистанцій/стилів</strong>. Наприклад: 50м брас — об'єднана група 2015–2016, а всі інші події — стандартні групи.</div>
+        <div id="event-ag-list"></div>
+      </div>
+      <div class="card">
         <div style="font-weight:800;color:var(--accent);margin-bottom:.8rem;font-size:.95rem">🤝 Вікові групи естафет</div>
         <div class="alert alert-info" style="font-size:.78rem">Окремі вікові групи для естафет. Вікова група команди визначається за найстаршим членом (правило FINA). Якщо жодних груп не задано — команди змагаються без розбивки по групах.</div>
         <div id="relay-ag-list"></div>
@@ -2644,20 +2649,41 @@ function initJudgePanelInModal(comp){
 }
 function activeComp(){return db.competitions.find(c=>c.id===db.activeCompId)||null}
 function getComp(id){return db.competitions.find(c=>c.id===id)||null}
-function getAg(id){return activeComp()?.ageGroups?.find(g=>g.id===id)||null}
+// ── Event-group-set key helper ─────────────────────────────────
+function _egsKey(dist,style){return`${dist}|${style}`;}
+
+// getAg searches global ageGroups AND all eventGroupSets so protoEvLabel/sorting work
+// for groups defined either at global or event level.
+function getAg(id,comp){
+  if(id===undefined||id===null)return null;
+  const c=comp||activeComp();
+  const global=(c?.ageGroups||[]).find(g=>g.id===id);
+  if(global)return global;
+  for(const groups of Object.values(c?.eventGroupSets||{})){
+    const found=groups.find(g=>g.id===id);
+    if(found)return found;
+  }
+  return null;
+}
+
 // Returns the best-matching age group for an athlete in a given competition.
-// Priority: 1) group with explicit gender match (M/F) for the athlete's birth year,
-//          2) group with gender='all' (or unset, for legacy data) for the year.
-// Returns null if no group covers the athlete's year.
-function ageGroup(a,comp){
-  const groups=(comp||activeComp())?.ageGroups||[];
+// When dist+style provided: checks event-specific groups first, then falls back to global.
+// Priority within any group set: 1) gender-specific match, 2) shared (gender='all').
+function ageGroup(a,comp,dist,style){
+  const c=comp||activeComp();
   const inYear=g=>a.birthYear>=g.yearFrom&&a.birthYear<=g.yearTo;
-  // Gender-specific match wins
-  const specific=groups.find(g=>inYear(g)&&g.gender===a.gender);
-  if(specific)return specific;
-  // Fallback: shared / legacy (no gender field)
-  const shared=groups.find(g=>inYear(g)&&(g.gender==='all'||!g.gender));
-  return shared||null;
+  const bestMatch=groups=>{
+    const specific=groups.find(g=>inYear(g)&&g.gender===a.gender);
+    if(specific)return specific;
+    return groups.find(g=>inYear(g)&&(g.gender==='all'||!g.gender))||null;
+  };
+  // Event-specific override takes priority
+  if(dist!==undefined&&style!==undefined){
+    const eventGroups=(c?.eventGroupSets||{})[_egsKey(dist,style)];
+    if(eventGroups?.length)return bestMatch(eventGroups);
+  }
+  // Global fallback
+  return bestMatch(c?.ageGroups||[]);
 }
 
 // ── Inter-heat buffer (час між запливами) ──────────────────────────────
@@ -2693,7 +2719,7 @@ function heatSlowestAgId(heat,comp){
     if(cs===null)continue;
     if(slowestCs===null||cs>slowestCs){
       slowestCs=cs;
-      const ag=ageGroup(a,comp);
+      const ag=ageGroup(a,comp,e.dist,e.style);
       slowestAgId=ag?ag.id:0;
     }
   }
@@ -3482,7 +3508,7 @@ function buildMedalCalcHtml(comp){
   const indivEvents=new Set();
   for(const entry of (comp.entries||[])){
     const a=db.athletes.find(x=>x.id===entry.athleteId);if(!a)continue;
-    const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+    const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
     indivEvents.add(`${entry.dist}|${entry.style}|${a.gender}|${agId}`);
   }
   const indivCount=indivEvents.size; // each event awards 3 medals
@@ -4940,7 +4966,7 @@ function syncEventFilters(){
   const protoSeen=new Set();
   for(const entry of (comp?.entries||[])){
     const a=db.athletes.find(x=>x.id===entry.athleteId);if(!a)continue;
-    const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+    const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
     const k=protoEvKey(entry.dist,entry.style,a.gender,agId);
     if(protoSeen.has(k))continue;
     protoSeen.add(k);
@@ -5672,7 +5698,7 @@ function renderProtocol(){
     else if(dayFilt){if(entry.dayId!=parseInt(dayFilt))continue;}
     if(exhFilt==='no'&&entry.exhibition)continue;
     if(exhFilt==='only'&&!entry.exhibition)continue;
-    const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+    const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
     const key=protoEvKey(entry.dist,entry.style,a.gender,agId);
     if(eventFilt&&key!==eventFilt)continue;
     if(!groups[key])groups[key]={dist:entry.dist,style:entry.style,gender:a.gender,agId,items:[]};
@@ -5826,7 +5852,7 @@ function renderPreProtocol(){
     else if(dayFilt){if(entry.dayId!=parseInt(dayFilt))continue;}
     if(exhFilt==='no'&&entry.exhibition)continue;
     if(exhFilt==='only'&&!entry.exhibition)continue;
-    const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+    const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
     const key=protoEvKey(entry.dist,entry.style,a.gender,agId);
     if(eventFilt&&key!==eventFilt)continue;
     if(!groups[key])groups[key]={dist:entry.dist,style:entry.style,gender:a.gender,agId,items:[]};
@@ -5939,7 +5965,7 @@ function renderStandings(){
     if(entry.exhibition)continue; // Exhibition entries do not compete for medals
     if(parseTime(entry.result)===null)continue; // skip Н/С, Д/К and any non-time result
     const a=db.athletes.find(x=>x.id===entry.athleteId);if(!a)continue;
-    const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+    const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
     const key=protoEvKey(entry.dist,entry.style,a.gender,agId);
     if(filt&&key!==filt)continue;
     if(!groups[key])groups[key]={dist:entry.dist,style:entry.style,gender:a.gender,agId,items:[]};
@@ -6116,7 +6142,7 @@ function _computeArchiveData(){
       if(entry.exhibition)continue;
       if(parseTime(entry.result)===null)continue;
       const a=db.athletes.find(x=>x.id===entry.athleteId);if(!a)continue;
-      const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+      const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
       const key=`${entry.dist}|${entry.style}|${a.gender}|${agId}`;
       if(!groups[key])groups[key]=[];
       groups[key].push({entry,a});
@@ -6742,7 +6768,7 @@ function getPrintCards(){
       const a=db.athletes.find(x=>x.id===entry.athleteId);if(!a)continue;
       // Filter by athlete's actual gender (heat may be MIX)
       if(!sg.includes(a.gender))continue;
-      const ag=ageGroup(a,comp);
+      const ag=ageGroup(a,comp,entry.dist,entry.style);
       const agId=ag?ag.id:0;
       if(sag.length&&!sag.includes(agId)&&agId!==0)continue;
       cards.push({heat,ln,entry,a,ag,ct});
@@ -9248,6 +9274,7 @@ function renderSettings(){
       <button class="btn-icon btn-sm" onclick="openEditAg(${g.id})">✏</button>
       <button class="btn-icon btn-sm" style="color:var(--danger)" onclick="delAg(${g.id})">✕</button>
     </div>`;}).join(''):'<p style="color:var(--text-muted);font-size:.85rem">Немає груп</p>';
+  renderEventAgSection();
   renderRankStd();
   renderBufferMatrix();
   renderRelayAgList();
@@ -9399,13 +9426,14 @@ function moveAg(id,delta){
   saveDB();renderSettings();
 }
 function openAddAg(){
-  editingAgId=null;
+  editingAgId=null;_editingAgEventKey=null;_editingEventAgId=null;
   ['ag-name','ag-from','ag-to'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('ag-gender').value='all';
   openModal('modal-ag');
 }
 function openEditAg(id){
-  editingAgId=id;const ag=getAg(id);if(!ag)return;
+  editingAgId=id;_editingAgEventKey=null;_editingEventAgId=null;
+  const ag=getAg(id);if(!ag)return;
   document.getElementById('ag-name').value=ag.name;
   document.getElementById('ag-from').value=ag.yearFrom;
   document.getElementById('ag-to').value=ag.yearTo;
@@ -9421,23 +9449,46 @@ function saveAgeGroup(){
   if(!name||!from||!to){alert('Заповніть всі поля');return;}
   if(from>to){alert('Рік «від» не може бути більшим за рік «до»');return;}
 
-  // Check for overlaps with existing groups of the same or compatible gender
+  // ── Event-specific save ──────────────────────────────────────
+  if(_editingAgEventKey){
+    const key=_editingAgEventKey;
+    if(!comp.eventGroupSets)comp.eventGroupSets={};
+    if(!comp.eventGroupSets[key])comp.eventGroupSets[key]=[];
+    const arr=comp.eventGroupSets[key];
+    const editId=_editingEventAgId;
+    // Overlap check within event group set
+    const others=arr.filter(g=>g.id!==editId);
+    const overlaps=others.filter(g=>{
+      const yearsOverlap=from<=g.yearTo&&to>=g.yearFrom;
+      if(!yearsOverlap)return false;
+      return gender==='all'||g.gender==='all'||gender===g.gender||!g.gender;
+    });
+    if(overlaps.length){
+      const names=overlaps.map(g=>`«${g.name}» (${g.yearFrom}–${g.yearTo})`).join(', ');
+      alert(`Роки перетинаються: ${names}. Змініть діапазон.`);return;
+    }
+    if(editId){const ag=arr.find(g=>g.id===editId);if(ag){ag.name=name;ag.yearFrom=from;ag.yearTo=to;ag.gender=gender;}}
+    else arr.push({id:db.nextId.ag++,name,yearFrom:from,yearTo:to,gender});
+    _editingEventAgId=null;
+    saveDB();closeModal('modal-ag');
+    _renderEventAgConfigList(key);renderEventAgSection();
+    renderProtocol();renderStandings();showToast('✅ Групу збережено');
+    return;
+  }
+
+  // ── Global save ──────────────────────────────────────────────
   const others=comp.ageGroups.filter(g=>g.id!==editingAgId);
   const overlaps=others.filter(g=>{
-    // Two groups conflict if their year ranges overlap AND their genders are compatible
-    // (same gender, or at least one of them is 'all')
     const yearsOverlap=from<=g.yearTo&&to>=g.yearFrom;
     if(!yearsOverlap)return false;
     const genderConflict=gender==='all'||g.gender==='all'||gender===g.gender||!g.gender;
     return genderConflict;
   });
-
   if(overlaps.length){
     const names=overlaps.map(g=>`«${g.name}» (${g.yearFrom}–${g.yearTo}${g.gender&&g.gender!=='all'?', '+(g.gender==='M'?'Ч':'Ж'):''})`).join(', ');
-    alert(`Роки перетинаються з існуючою групою: ${names}.\n\nСпортсмени з перетинаючих діапазонів потраплять в непередбачену групу. Змініть роки щоб уникнути перетину.`);
-    return; // block save
+    alert(`Роки перетинаються з існуючою групою: ${names}.\n\nЗмініть роки щоб уникнути перетину.`);
+    return;
   }
-
   if(editingAgId){const ag=comp.ageGroups.find(g=>g.id===editingAgId);if(ag){ag.name=name;ag.yearFrom=from;ag.yearTo=to;ag.gender=gender;}}
   else comp.ageGroups.push({id:db.nextId.ag++,name,yearFrom:from,yearTo:to,gender});
   editingAgId=null;saveDB();closeModal('modal-ag');renderSettings();renderProtocol();renderStandings();showToast('✅ Вікову групу збережено');
@@ -9446,6 +9497,103 @@ function delAg(id){
   const comp=activeComp();if(!comp)return;
   comp.ageGroups=comp.ageGroups.filter(g=>g.id!==id);saveDB();renderSettings();
 }
+// ── Event-specific age group section ──────────────────────────
+let _editingAgEventKey=null; // null=global, "50|брас"=event context
+let _editingEventAgId=null;  // which group inside event set is being edited
+
+function renderEventAgSection(){
+  const comp=activeComp();
+  const el=document.getElementById('event-ag-list');
+  if(!el)return;
+  const egs=comp?.eventGroupSets||{};
+  // Collect all unique events from schedule
+  const allEvents=[];
+  const seen=new Set();
+  for(const day of (comp?.days||[])){
+    for(const ev of (day.events||[])){
+      const k=_egsKey(ev.dist,ev.style);
+      if(!seen.has(k)){seen.add(k);allEvents.push({dist:ev.dist,style:ev.style,key:k});}
+    }
+  }
+  if(!allEvents.length){
+    el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem">Спочатку додайте події в Розкладі</p>';
+    return;
+  }
+  el.innerHTML=allEvents.map(ev=>{
+    const groups=egs[ev.key]||[];
+    const hasCustom=groups.length>0;
+    const gBadges=hasCustom?groups.map(g=>`<span class="badge badge-heat" style="font-size:.7rem">${g.name}${g.gender==='M'?' <span style="color:#0055a0">Ч</span>':g.gender==='F'?' <span style="color:#7700b8">Ж</span>':''}</span>`).join(' '):'';
+    return`<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span style="font-size:.85rem;font-weight:600;min-width:100px">${ev.dist}м ${ev.style}</span>
+      <span style="flex:1;font-size:.78rem">${hasCustom?gBadges:'<span style="color:var(--text-muted)">дефолт (глобальні групи)</span>'}</span>
+      <button class="btn-secondary btn-xs" onclick="openEventAgConfig('${ev.key}','${ev.dist}','${ev.style}')">⚙ Налаштувати</button>
+      ${hasCustom?`<button class="btn-icon btn-xs" style="color:var(--danger)" title="Скинути до дефолту" onclick="resetEventAg('${ev.key}')">✕</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function openEventAgConfig(key,dist,style){
+  _editingAgEventKey=key;
+  document.getElementById('eac-title').textContent=`⚙️ Групи для ${dist}м ${style}`;
+  _renderEventAgConfigList(key);
+  openModal('modal-event-ag-config');
+}
+
+function _renderEventAgConfigList(key){
+  const comp=activeComp();
+  const el=document.getElementById('eac-list');if(!el)return;
+  const groups=(comp?.eventGroupSets||{})[key]||[];
+  if(!groups.length){
+    el.innerHTML='<p style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">Немає груп — використовуються глобальні. Додайте групи нижче.</p>';
+    return;
+  }
+  el.innerHTML=groups.map((g,idx)=>`<div class="ag-item">
+    <div style="flex:1;font-weight:700">${g.name}
+      ${g.gender==='M'?`<span class="badge badge-m" style="margin-left:.4rem;font-size:.7rem">Ч</span>`:
+        g.gender==='F'?`<span class="badge badge-f" style="margin-left:.4rem;font-size:.7rem">Ж</span>`:
+        `<span class="badge badge-heat" style="margin-left:.4rem;font-size:.7rem">Спільна</span>`}
+    </div>
+    <div style="font-size:.8rem;color:var(--text-muted)">${g.yearFrom}–${g.yearTo}</div>
+    <button class="btn-icon btn-sm" onclick="openEditEventAg('${key}',${g.id})">✏</button>
+    <button class="btn-icon btn-sm" style="color:var(--danger)" onclick="delEventAg('${key}',${g.id})">✕</button>
+  </div>`).join('');
+}
+
+function openAddEventAg(){
+  _editingEventAgId=null;
+  ['ag-name','ag-from','ag-to'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('ag-gender').value='all';
+  openModal('modal-ag');
+}
+
+function openEditEventAg(key,id){
+  _editingAgEventKey=key;
+  _editingEventAgId=id;
+  const comp=activeComp();
+  const groups=(comp?.eventGroupSets||{})[key]||[];
+  const ag=groups.find(g=>g.id===id);if(!ag)return;
+  document.getElementById('ag-name').value=ag.name;
+  document.getElementById('ag-from').value=ag.yearFrom;
+  document.getElementById('ag-to').value=ag.yearTo;
+  document.getElementById('ag-gender').value=ag.gender||'all';
+  openModal('modal-ag');
+}
+
+function delEventAg(key,id){
+  const comp=activeComp();if(!comp)return;
+  if(!comp.eventGroupSets)comp.eventGroupSets={};
+  comp.eventGroupSets[key]=(comp.eventGroupSets[key]||[]).filter(g=>g.id!==id);
+  if(!comp.eventGroupSets[key].length)delete comp.eventGroupSets[key];
+  saveDB();_renderEventAgConfigList(key);renderEventAgSection();renderProtocol();renderStandings();
+}
+
+function resetEventAg(key){
+  if(!confirm('Скинути конфігурацію груп для цієї події? Буде використано глобальні групи.'))return;
+  const comp=activeComp();if(!comp)return;
+  if(comp.eventGroupSets)delete comp.eventGroupSets[key];
+  saveDB();renderSettings();renderProtocol();renderStandings();showToast('↺ Скинуто до глобальних груп');
+}
+
 function renderRankStd(){
   const style=document.getElementById('rs-style')?.value||'вільний';
   const gen=document.getElementById('rs-gen')?.value||'M';
@@ -9689,7 +9837,7 @@ async function exportResultsExcel(){
     const groups={};
     for(const e of (comp.entries||[])){
       const a=db.athletes.find(x=>x.id===e.athleteId);if(!a)continue;
-      const ag=ageGroup(a,comp);const agId=ag?ag.id:0;
+      const ag=ageGroup(a,comp,e.dist,e.style);const agId=ag?ag.id:0;
       const k=`${e.dist}|${e.style}|${a.gender}|${agId}`;
       if(!groups[k])groups[k]=[];groups[k].push({e,a});
     }
@@ -14506,6 +14654,23 @@ async function _bootApp(user){
   <div class="modal-footer">
     <button class="btn-secondary" onclick="closeModal('modal-create-user')">Скасувати</button>
     <button class="btn-primary" id="cu-btn" onclick="doCreateUser()">👤 Створити</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-event-ag-config">
+<div class="modal" style="max-width:520px">
+  <div class="modal-header">
+    <div class="modal-title" id="eac-title">⚙️ Групи для події</div>
+    <button class="modal-close" onclick="closeModal('modal-event-ag-config')">✕</button>
+  </div>
+  <div class="alert alert-info" style="font-size:.78rem;margin-bottom:.75rem">
+    Ці групи замінюють глобальні <strong>тільки для цієї події</strong>. Якщо груп немає — використовуються глобальні.
+  </div>
+  <div id="eac-list" style="margin-bottom:.75rem"></div>
+  <button class="btn-secondary btn-sm" onclick="openAddEventAg()">＋ Додати групу</button>
+  <div class="modal-footer">
+    <button class="btn-primary" onclick="closeModal('modal-event-ag-config')">Готово</button>
   </div>
 </div>
 </div>
