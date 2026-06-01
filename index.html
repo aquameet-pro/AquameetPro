@@ -10154,6 +10154,7 @@ function pubSwitchTab(v,btn){
 }
 let _adminUsers=[];
 let _adminAccess=[];
+let _adminAppState={}; // orgId → competitions[]
 
 async function renderAdmin(){
   if(_currentRole!=='admin')return;
@@ -10184,12 +10185,15 @@ async function renderAdmin(){
     </div>`;
   }
   // Load users and access requests in parallel
-  const[usersRes,accessRes]=await Promise.all([
+  const[usersRes,accessRes,stateRes]=await Promise.all([
     _supa.from('profiles').select('*').order('created_at',{ascending:true}),
-    _supa.from('comp_access').select('*').order('created_at',{ascending:false})
+    _supa.from('comp_access').select('*').order('created_at',{ascending:false}),
+    _supa.from('app_state').select('id,data')
   ]);
   _adminUsers=usersRes.data||[];
   _adminAccess=accessRes.data||[];
+  _adminAppState={};
+  (stateRes.data||[]).forEach(r=>{_adminAppState[r.id]=(r.data?.competitions||[]).sort((a,b)=>(b.dateFrom||'').localeCompare(a.dateFrom||''));});
   _renderAdminStats();
   _renderAdminUsers();
   _renderAdminAccess();
@@ -10226,10 +10230,12 @@ function _renderAdminUsers(){
         ${orgOptions}
       </select>`:'—';
     // Pre-select current organizer for secretary
+    const regDate=u.created_at?new Date(u.created_at).toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
     const row=`<tr id="urow-${u.id}">
       <td><strong>${u.full_name||'—'}</strong><br><span style="font-size:.73rem;color:var(--text-muted)">${u.email||''}</span></td>
       <td>${u.city||'—'}</td>
       <td>${u.club||'—'}</td>
+      <td style="font-size:.75rem;color:var(--text-muted);white-space:nowrap">${regDate}</td>
       <td>${roleBadge}</td>
       <td>
         <select style="font-size:.75rem;padding:.2rem .4rem" onchange="adminChangeRole('${u.id}',this.value)">
@@ -10252,7 +10258,7 @@ function _renderAdminUsers(){
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th>Ім'я / Email</th><th>Місто</th><th>Клуб</th><th>Роль</th>
+          <th>Ім'я / Email</th><th>Місто</th><th>Клуб</th><th>Реєстрація</th><th>Роль</th>
           <th>Змінити роль</th><th>Прив'язка орг.</th><th>Клуб ✓</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -10282,9 +10288,22 @@ function _renderAdminAccess(){
     s==='rejected'?`<span class="access-rejected">❌ Відхилено</span>`:
     `<span class="access-pending">⏳ На розгляді</span>`;
 
-  const rows=_adminAccess.map(r=>`<tr>
+  const rows=_adminAccess.map(r=>{
+    const orgComps=_adminAppState[r.organizer_id]||[];
+    const comp=orgComps.find(c=>c.status==='active')||orgComps.find(c=>c.status==='planned')||orgComps[0];
+    const compName=comp?.name||'—';
+    const compCity=comp?.location||'—';
+    const compDate=comp?.dateFrom||'—';
+    const compCount=orgComps.length;
+    const compCell=comp
+      ?`<td style="font-size:.78rem"><strong>${compName}</strong>${compCount>1?`<span style="font-size:.68rem;color:var(--text-muted);margin-left:.25rem">(+${compCount-1})</span>`:''}</td>
+       <td style="font-size:.78rem;color:var(--text-muted)">${compCity}</td>
+       <td style="font-size:.75rem;color:var(--text-muted);white-space:nowrap">${compDate}</td>`
+      :`<td style="color:var(--text-muted);font-size:.75rem">—</td><td>—</td><td>—</td>`;
+    return`<tr>
     <td><strong>${getUserName(r.trainer_id)}</strong></td>
     <td>${getUserName(r.organizer_id)}</td>
+    ${compCell}
     <td>${statusBadge(r.status)}</td>
     <td style="font-size:.75rem;color:var(--text-muted)">${r.created_at?new Date(r.created_at).toLocaleDateString('uk-UA'):''}</td>
     <td>
@@ -10295,13 +10314,13 @@ function _renderAdminAccess(){
       </select>
     </td>
     <td><button class="btn-danger btn-xs" onclick="adminDeleteAccess('${r.id}')">🗑</button></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 
   wrap.innerHTML=`
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th>Тренер</th><th>Організатор</th><th>Статус</th><th>Дата запиту</th><th>Змінити статус</th><th></th>
+          <th>Тренер</th><th>Організатор</th><th>Змагання</th><th>Місто</th><th>Дата</th><th>Статус</th><th>Дата запиту</th><th>Змінити статус</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
