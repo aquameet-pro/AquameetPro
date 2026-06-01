@@ -8435,7 +8435,7 @@ function buildClassicPreview(comp){
     ['1. МЕТА ТА ЗАВДАННЯ', comp.goals||'— Популяризація плавання як виду спорту<br>— Визначення рівня підготовки спортсменів<br>— Відбір спортсменів до подальших занять'],
     ['2. МІСЦЕ ТА ЧАС ПРОВЕДЕННЯ', `Змагання проводяться <b>${dateRange}</b> за адресою: <b>${venue}</b>, початок змагань <b>${start}</b>`],
     ['3. КЕРІВНИЦТВО', `Головний суддя: <b>${comp.mainJudge||'__________'}</b> (${comp.mainJudgeCat||'___'})<br>Секретар: <b>${comp.secretary||'__________'}</b> (${comp.secretaryCat||'___'})`],
-    ['4. УЧАСНИКИ ТА ПРОГРАМА', (comp.ageGroups||[]).map(g=>g.name).join(', ')||'__________'],
+    ['4. УЧАСНИКИ ТА ПРОГРАМА', (comp.ageGroups||[]).map(g=>_agLabel(g)).join(', ')||'__________'],
     ['5. УМОВИ / ХАРАКТЕР', `Змагання — ${comp.compType||'особисті'}. Хронометраж ${comp.timing||'ручний'}. Найсильніші запливи проводяться останніми.`],
     ['6. БЕЗПЕКА', comp.shelterAddress?`Укриття: ${comp.shelterAddress}`:'<i>шаблонний текст воєнного стану</i>'],
     ['7. МЕДИЧНЕ ЗАБЕЗПЕЧЕННЯ', '<i>Шаблонний текст — наказ 603/1608 від 15.07.2020</i>'],
@@ -8506,9 +8506,10 @@ async function applyCustomTemplate(){
   }catch(e){console.error(e);alert('Помилка: '+e.message);}
 }
 
+function _agLabel(g){return g.name+(g.gender==='M'?' (\u044e\u043d\u0430\u043a\u0438)':g.gender==='F'?' (\u0434\u0456\u0432\u0447\u0430\u0442\u0430)':'');}
 function applyPlaceholders(text,comp){
   const dateRange=comp.dateFrom?(fmtUkrDate(comp.dateFrom)+(comp.dateTo&&comp.dateTo!==comp.dateFrom?' \u2013 '+fmtUkrDate(comp.dateTo):'')):'';
-  const ags=(comp.ageGroups||[]).map(g=>g.name).join(', ');
+  const ags=(comp.ageGroups||[]).map(g=>_agLabel(g)).join(', ');
   const map={
     '{{назва}}':comp.name||'',
     '{{дата}}':dateRange,
@@ -8573,7 +8574,7 @@ function renderReglamentPreview(comp){
   // ── Block: Учасники ──
   const ags=[...(comp.ageGroups||[])].sort((a,b)=>b.yearFrom-a.yearFrom);
   const agBlock=ags.length
-    ? ags.map(g=>`<span class="badge badge-heat" style="margin:0 .3rem .3rem 0">${g.name}</span>`).join('')
+    ? ags.map(g=>`<span class="badge badge-heat" style="margin:0 .3rem .3rem 0">${g.name}${g.gender==='M'?' <span style="color:#0055a0;font-size:.72em">Ч</span>':g.gender==='F'?' <span style="color:#7700b8;font-size:.72em">Ж</span>':''}</span>`).join('')
     : '<em style="color:var(--text-muted)">Не вказано</em>';
 
   // ── Block: Програма ──
@@ -8709,7 +8710,7 @@ function buildReglamentPrintHtml(comp){
   if(comp.maxPerSession)charLines.push(`Кожен спортсмен може приймати участь не більш ніж у <strong>${comp.maxPerSession}-х</strong> номерах програми на сесію`);
 
   const ags=[...(comp.ageGroups||[])].sort((a,b)=>b.yearFrom-a.yearFrom);
-  const agText=ags.length?ags.map(g=>g.name).join(' &nbsp;•&nbsp; '):'—';
+  const agText=ags.length?ags.map(g=>_agLabel(g)).join(' &nbsp;•&nbsp; '):'—';
 
   // Programme as a grid of days
   let progHtml='';
