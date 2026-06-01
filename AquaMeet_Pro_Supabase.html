@@ -10333,6 +10333,13 @@ async function adminChangeRole(userId,newRole){
   const{error}=await _supa.from('profiles').update({role:newRole}).eq('id',userId);
   if(error){showToast('❌ Помилка зміни ролі: '+error.message,true);return;}
   showToast('✅ Роль змінено');
+  // Notify the user about their role change
+  const roleLabels={admin:'Адміністратор',organizer:'Організатор',secretary:'Секретар',trainer:'Тренер'};
+  const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
+  await _insertNotification(userId,'role_changed','🔄 Вашу роль змінено',
+    `${adminName} змінив вашу роль на «${roleLabels[newRole]||newRole}». Сторінка перезавантажиться автоматично.`,
+    {new_role:newRole}
+  ).catch(()=>{});
   await renderAdmin();
 }
 
@@ -10797,6 +10804,25 @@ async function startApp(){
       if(rjlBtn)rjlBtn.style.display='';
     }
   },150);
+
+  // Subscribe to own profile changes — detect role change by admin
+  _subscribeOwnProfile();
+}
+
+let _ownProfileChannel=null;
+function _subscribeOwnProfile(){
+  if(!_currentUser?.id||_ownProfileChannel)return;
+  _ownProfileChannel=_supa.channel('own-profile-'+_currentUser.id)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles',filter:`id=eq.${_currentUser.id}`},
+      payload=>{
+        const newRole=payload.new?.role;
+        if(newRole&&newRole!==_currentRole){
+          // Role changed — reload app so permissions are re-applied correctly
+          showToast('🔄 Вашу роль змінено. Перезавантаження…');
+          setTimeout(()=>location.reload(),2000);
+        }
+      })
+    .subscribe();
 }
 
 // ── Update header user display ───────────────────────────────
