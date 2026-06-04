@@ -4329,6 +4329,65 @@ function openByTrainerModal(){
   openModal('modal-by-trainer');
 }
 
+let _assignTrainerAthId=null;
+async function openAssignTrainer(athleteId){
+  _assignTrainerAthId=athleteId;
+  const a=db.athletes.find(x=>x.id===athleteId);
+  if(!a)return;
+  const el=document.getElementById('at-ath-name');
+  if(el)el.textContent=`${a.surname} ${a.name}${a.coach?' (тренер: '+a.coach+')':''}`;
+  // Load trainers from system
+  const sel=document.getElementById('at-trainer-sel');
+  sel.innerHTML='<option value="">— оберіть тренера —</option>';
+  try{
+    const{data}=await _supa.from('profiles').select('id,full_name,email,club,city').eq('role','trainer').order('full_name');
+    (data||[]).forEach(t=>{
+      const opt=document.createElement('option');
+      opt.value=t.id;
+      opt.textContent=`${t.full_name||t.email}${t.club?' · '+t.club:''}${t.city?' · '+t.city:''}`;
+      // Pre-select if coach name matches
+      if(a.coach&&(t.full_name||'').toLowerCase().includes(a.coach.toLowerCase().split(' ')[0]))opt.selected=true;
+      sel.appendChild(opt);
+    });
+  }catch(e){showToast('❌ Не вдалось завантажити тренерів',true);return;}
+  document.getElementById('at-err').style.display='none';
+  openModal('modal-assign-trainer');
+}
+
+async function doAssignTrainer(){
+  const comp=activeComp();
+  const a=db.athletes.find(x=>x.id===_assignTrainerAthId);
+  const trainerId=document.getElementById('at-trainer-sel').value;
+  const errEl=document.getElementById('at-err');
+  if(!trainerId){errEl.textContent='Оберіть тренера';errEl.style.display='';return;}
+  if(!a||!comp){errEl.textContent='Помилка — немає учасника або змагання';errEl.style.display='';return;}
+  const btn=document.getElementById('at-btn');
+  btn.disabled=true;btn.textContent='Збереження…';
+  const entries=(comp.entries||[]).filter(e=>e.athleteId===a.id)
+    .map(e=>({dist:e.dist,style:e.style,seedTime:e.seedTime||'',dayId:e.dayId||null,exhibition:!!e.exhibition}));
+  const orgId=_getEffectiveOrgId()||_currentUser?.id;
+  const row={
+    trainer_id:trainerId,
+    organizer_id:orgId,
+    comp_id:comp.id,
+    local_id:a.id,
+    athlete_data:{...a,_compName:comp.name||null},
+    entries_data:entries,
+    updated_at:new Date().toISOString()
+  };
+  const{error}=await _supa.from('trainer_athletes')
+    .upsert(row,{onConflict:'trainer_id,organizer_id,comp_id,local_id'});
+  btn.disabled=false;btn.textContent='📤 Передати';
+  if(error){errEl.textContent='Помилка: '+error.message;errEl.style.display='';return;}
+  // Notify trainer
+  const adminName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
+  await _insertNotification(trainerId,'athlete_assigned','📤 Учасника передано',
+    `${adminName} додав учасника ${a.surname} ${a.name} до ваших даних на змагання «${comp.name||''}».`,
+    {comp_id:comp.id,organizer_id:orgId}).catch(()=>{});
+  showToast(`✅ ${a.surname} ${a.name} передано тренеру`);
+  closeModal('modal-assign-trainer');
+}
+
 function renderAthletes(){
   // Show/hide trainer refresh button for organizer roles
   const rBtn=document.getElementById('btn-refresh-trainer-ath');
@@ -4409,7 +4468,7 @@ function renderAthletes(){
       <td class="mob-hide">${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
       <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
       <td colspan="4" style="color:var(--text-muted);font-style:italic">немає заявок</td>
-      <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
+      <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
     }
     const _gStrE=a.gender==='M'?'Ч':'Ж';
     return ent.map((e,idx)=>{
@@ -4424,7 +4483,7 @@ function renderAthletes(){
         <td><span class="badge badge-style">${e.style}</span></td>
         <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
         <td style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
-        <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
+        <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
       </tr>`;
     });
   });
@@ -14819,6 +14878,26 @@ async function _bootApp(user){
   <div class="modal-footer">
     <button class="btn-secondary" onclick="closeModal('modal-create-user')">Скасувати</button>
     <button class="btn-primary" id="cu-btn" onclick="doCreateUser()">👤 Створити</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-assign-trainer">
+<div class="modal" style="max-width:460px">
+  <div class="modal-header">
+    <div class="modal-title">📤 Передати тренеру</div>
+    <button class="modal-close" onclick="closeModal('modal-assign-trainer')">✕</button>
+  </div>
+  <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:.9rem" id="at-ath-name"></div>
+  <div class="alert alert-info" style="font-size:.78rem;margin-bottom:.85rem">
+    Учасника буде видно тренеру у вкладці «Мої змагання». Тренер отримає сповіщення.
+  </div>
+  <div id="at-err" class="alert alert-danger" style="display:none;margin-bottom:.6rem"></div>
+  <label style="font-size:.8rem;font-weight:700;color:var(--accent);display:block;margin-bottom:.35rem">Тренер</label>
+  <select id="at-trainer-sel" style="width:100%;padding:.4rem .6rem;font-size:.85rem;border:1px solid var(--border);border-radius:8px;margin-bottom:.9rem"></select>
+  <div class="modal-footer">
+    <button class="btn-secondary" onclick="closeModal('modal-assign-trainer')">Скасувати</button>
+    <button class="btn-primary" id="at-btn" onclick="doAssignTrainer()">📤 Передати</button>
   </div>
 </div>
 </div>
