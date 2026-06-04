@@ -10589,12 +10589,16 @@ function _renderAdminAccess(){
     ${compCell}
     <td>${statusBadge(r.status)}</td>
     <td style="font-size:.75rem;color:var(--text-muted)">${r.created_at?new Date(r.created_at).toLocaleDateString('uk-UA'):''}</td>
-    <td>
-      <select style="font-size:.75rem;padding:.2rem .4rem" onchange="adminChangeAccessStatus('${r.id}',this.value)">
-        <option value="pending"  ${r.status==='pending' ?'selected':''}>⏳ На розгляді</option>
-        <option value="approved" ${r.status==='approved'?'selected':''}>✅ Підтвердити</option>
-        <option value="rejected" ${r.status==='rejected'?'selected':''}>❌ Відхилити</option>
-      </select>
+    <td style="white-space:nowrap">
+      ${r.status==='pending'
+        ?`<button class="btn-primary btn-sm" onclick="adminChangeAccessStatus('${r.id}','approved')">✅ Підтвердити</button>
+           <button class="btn-danger btn-xs" style="margin-left:.3rem" onclick="adminChangeAccessStatus('${r.id}','rejected')">❌</button>`
+        :r.status==='approved'
+          ?`<span style="color:#0a6640;font-size:.8rem">✅ Підтверджено</span>
+            <button class="btn-secondary btn-xs" style="margin-left:.3rem" onclick="adminChangeAccessStatus('${r.id}','rejected')" title="Відхилити">↩</button>`
+          :`<span style="color:#c0001a;font-size:.8rem">❌ Відхилено</span>
+            <button class="btn-secondary btn-xs" style="margin-left:.3rem" onclick="adminChangeAccessStatus('${r.id}','approved')" title="Підтвердити">↩</button>`
+      }
     </td>
     <td><button class="btn-danger btn-xs" onclick="adminDeleteAccess('${r.id}')">🗑</button></td>
   </tr>`;}).join('');
@@ -10603,7 +10607,7 @@ function _renderAdminAccess(){
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th>Тренер</th><th>Організатор</th><th>Змагання</th><th>Місто</th><th>Дата</th><th>Статус</th><th>Дата запиту</th><th>Змінити статус</th><th></th>
+          <th>Тренер</th><th>Організатор</th><th>Змагання</th><th>Місто</th><th>Дата</th><th>Статус</th><th>Дата запиту</th><th>Дія</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
