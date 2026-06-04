@@ -10722,43 +10722,38 @@ async function adminToggleClubApproved(userId,approved){
 }
 
 async function adminChangeAccessStatus(requestId,status){
-  const{error}=await _supa.from('comp_access').update({status}).eq('id',requestId);
-  if(error){showToast('❌ Помилка: '+error.message,true);return;}
+  // Fetch fresh request data from Supabase (don't rely on stale _adminAccess)
+  const{data:req,error:fetchErr}=await _supa.from('comp_access')
+    .select('id,trainer_id,organizer_id,status').eq('id',requestId).maybeSingle();
+  if(fetchErr||!req){showToast('❌ Запит не знайдено: '+(fetchErr?.message||''),true);return;}
 
-  // On approval — run full workflow same as orgApproveRequest:
-  // create comp_invitations and notify trainer
+  const{error}=await _supa.from('comp_access').update({status}).eq('id',requestId);
+  if(error){showToast('❌ Помилка оновлення: '+error.message,true);return;}
+
+  const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
+
   if(status==='approved'){
-    const req=_adminAccess.find(r=>String(r.id)===String(requestId));
-    if(req){
-      const trainerId=req.trainer_id;
-      const orgId=req.organizer_id;
-      // Use already-loaded organizer competitions from _adminAppState
-      const orgComps=(_adminAppState[orgId]||[]).filter(c=>c.status!=='done');
-      if(trainerId&&orgId&&orgComps.length){
-        const invRows=orgComps.map(comp=>({
-          trainer_id:trainerId,
-          organizer_id:orgId,
-          comp_id:comp.id,
-          comp_name:comp.name||'',
-          comp_snapshot:_buildCompSnapshot(comp),
-          trainer_response:'pending'
-        }));
-        await _supa.from('comp_invitations').upsert(invRows,{onConflict:'comp_id,organizer_id,trainer_id'})
-          .catch(e=>console.warn('[AquaMeet] admin invite upsert:',e.message));
-      }
-      // Notify trainer
-      if(trainerId){
-        const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
-        await _insertNotification(trainerId,'access_approved','✅ Доступ підтверджено',
-          `${adminName} підтвердив ваш запит. Відкрийте вкладку «Запрошення» для перегляду змагань.`,
-          {organizer_id:orgId}).catch(()=>{});
-      }
-      showToast('✅ Доступ підтверджено — тренера запрошено до змагань');
+    const{trainerId,orgId}={trainerId:req.trainer_id,orgId:req.organizer_id};
+    // Load organizer's competitions fresh from app_state
+    const{data:stateRow}=await _supa.from('app_state').select('data').eq('id',orgId).maybeSingle()
+      .catch(()=>({data:null}));
+    const orgComps=((stateRow?.data?.competitions)||[]).filter(c=>c.status!=='done');
+    if(trainerId&&orgId&&orgComps.length){
+      const invRows=orgComps.map(comp=>({
+        trainer_id:trainerId,organizer_id:orgId,comp_id:comp.id,
+        comp_name:comp.name||'',comp_snapshot:_buildCompSnapshot(comp),trainer_response:'pending'
+      }));
+      await _supa.from('comp_invitations').upsert(invRows,{onConflict:'comp_id,organizer_id,trainer_id'})
+        .catch(e=>console.warn('[AquaMeet] admin invite upsert:',e.message));
     }
+    if(trainerId){
+      await _insertNotification(trainerId,'access_approved','✅ Доступ підтверджено',
+        `${adminName} підтвердив ваш запит. Відкрийте вкладку «Запрошення» для перегляду змагань.`,
+        {organizer_id:orgId}).catch(()=>{});
+    }
+    showToast('✅ Доступ підтверджено — тренера запрошено до змагань');
   } else if(status==='rejected'){
-    const req=_adminAccess.find(r=>String(r.id)===String(requestId));
-    if(req?.trainer_id){
-      const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
+    if(req.trainer_id){
       await _insertNotification(req.trainer_id,'access_rejected','❌ Запит відхилено',
         `${adminName} відхилив ваш запит на доступ.`,
         {organizer_id:req.organizer_id}).catch(()=>{});
