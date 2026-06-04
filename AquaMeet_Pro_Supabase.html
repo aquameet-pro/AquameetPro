@@ -1202,6 +1202,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     <div><div class="section-title">👥 Учасники та заявки</div><div class="section-sub" id="ath-sub"></div></div>
     <div style="display:flex;gap:.45rem;flex-wrap:wrap">
       <button class="btn-secondary btn-sm" id="btn-refresh-trainer-ath" style="display:none" onclick="refreshTrainerAthletes()">🔄 Тренери</button>
+      <button class="btn-secondary btn-sm" id="btn-by-trainer" onclick="openByTrainerModal()" style="display:none">👥 По тренерах</button>
       <button class="btn-secondary btn-sm" id="btn-import-excel" onclick="openImportExcel()">📊 Імпорт Excel</button>
       <button class="btn-secondary btn-sm" onclick="downloadTemplate()">📥 Шаблон Excel</button>
       <button class="btn-secondary btn-sm" onclick="openQuickGuest()">⚡ Гість</button>
@@ -4272,10 +4273,68 @@ async function refreshTrainerAthletes(){
   }
   if(btn){btn.disabled=false;btn.textContent='🔄 Тренери';}
 }
+function openByTrainerModal(){
+  const comp=activeComp();
+  const el=document.getElementById('by-trainer-content');
+  if(!el)return;
+  // Collect athletes with entries in this competition
+  const entryAthIds=new Set((comp?.entries||[]).map(e=>e.athleteId));
+  const athletes=db.athletes.filter(a=>entryAthIds.has(a.id));
+  if(!athletes.length){
+    el.innerHTML='<div class="empty-state"><div class="icon">👥</div>Учасників ще немає</div>';
+    openModal('modal-by-trainer');return;
+  }
+  // Group by coach name (primary) + club (secondary)
+  const groups={};
+  for(const a of athletes){
+    const coach=(a.coach||'').trim()||'— без тренера —';
+    const club=(a.club||'').trim()||'—';
+    const key=coach+'||'+club;
+    if(!groups[key])groups[key]={coach,club,city:a.city||'',athletes:[]};
+    const aths=groups[key].athletes;
+    const entries=(comp?.entries||[]).filter(e=>e.athleteId===a.id);
+    aths.push({a,entries});
+  }
+  const sorted=Object.values(groups).sort((a,b)=>b.athletes.length-a.athletes.length||(a.coach>b.coach?1:-1));
+  const total=athletes.length;
+  el.innerHTML=`
+    <div style="margin-bottom:.75rem;font-size:.83rem;color:var(--text-muted)">
+      Всього учасників: <strong style="color:var(--text)">${total}</strong> ·
+      Тренерів / команд: <strong style="color:var(--text)">${sorted.length}</strong>
+    </div>
+    ${sorted.map(g=>{
+      const rows=g.athletes.map(({a,entries})=>`
+        <tr>
+          <td><strong>${a.surname}</strong> ${a.name}</td>
+          <td style="text-align:center">${a.birthYear||'—'}</td>
+          <td><span class="badge badge-${(a.gender||'m').toLowerCase()}">${a.gender==='F'?'Ж':'Ч'}</span></td>
+          <td style="font-size:.78rem;color:var(--text-muted)">${entries.map(e=>`${e.dist}м ${e.style}`).join(', ')}</td>
+          <td style="font-size:.75rem;color:var(--text-muted)">${entries.map(e=>e.seedTime||'—').join(', ')}</td>
+        </tr>`).join('');
+      return`<div style="margin-bottom:1rem;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <div style="background:rgba(0,119,182,.07);padding:.55rem 1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:.9rem">${escapeHtml(g.coach)}</span>
+          ${g.club&&g.club!=='—'?`<span class="badge badge-heat" style="font-size:.75rem">${escapeHtml(g.club)}</span>`:''}
+          ${g.city?`<span style="font-size:.78rem;color:var(--text-muted)">📍 ${escapeHtml(g.city)}</span>`:''}
+          <span style="margin-left:auto;font-weight:700;font-size:.95rem;color:var(--accent)">${g.athletes.length} уч.</span>
+        </div>
+        <div class="tbl-wrap" style="margin:0">
+          <table style="margin:0">
+            <thead><tr><th>ПІБ</th><th>Рік</th><th>Стать</th><th>Заявки</th><th>Заявл. час</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('')}`;
+  openModal('modal-by-trainer');
+}
+
 function renderAthletes(){
   // Show/hide trainer refresh button for organizer roles
   const rBtn=document.getElementById('btn-refresh-trainer-ath');
   if(rBtn)rBtn.style.display=['organizer','secretary','admin'].includes(_currentRole)&&!_supaOffline?'':'none';
+  const btBtn=document.getElementById('btn-by-trainer');
+  if(btBtn)btBtn.style.display=['organizer','secretary','admin'].includes(_currentRole)?'':'none';
   updateAthFilters();
   const comp=activeComp();
   const gf=document.getElementById('af-gen').value;
@@ -14713,6 +14772,19 @@ async function _bootApp(user){
   <div class="modal-footer">
     <button class="btn-secondary" onclick="closeModal('modal-create-user')">Скасувати</button>
     <button class="btn-primary" id="cu-btn" onclick="doCreateUser()">👤 Створити</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-by-trainer">
+<div class="modal" style="max-width:700px">
+  <div class="modal-header">
+    <div class="modal-title">👥 Учасники по тренерах</div>
+    <button class="modal-close" onclick="closeModal('modal-by-trainer')">✕</button>
+  </div>
+  <div id="by-trainer-content" style="max-height:70vh;overflow-y:auto;padding-right:.25rem"></div>
+  <div class="modal-footer">
+    <button class="btn-primary" onclick="closeModal('modal-by-trainer')">Закрити</button>
   </div>
 </div>
 </div>
