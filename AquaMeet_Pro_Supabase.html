@@ -10661,7 +10661,50 @@ async function adminToggleClubApproved(userId,approved){
 async function adminChangeAccessStatus(requestId,status){
   const{error}=await _supa.from('comp_access').update({status}).eq('id',requestId);
   if(error){showToast('❌ Помилка: '+error.message,true);return;}
-  showToast('✅ Статус змінено');
+
+  // On approval — run full workflow same as orgApproveRequest:
+  // create comp_invitations and notify trainer
+  if(status==='approved'){
+    const req=_adminAccess.find(r=>r.id===requestId);
+    if(req){
+      const trainerId=req.trainer_id;
+      const orgId=req.organizer_id;
+      // Use already-loaded organizer competitions from _adminAppState
+      const orgComps=(_adminAppState[orgId]||[]).filter(c=>c.status!=='done');
+      if(trainerId&&orgId&&orgComps.length){
+        const invRows=orgComps.map(comp=>({
+          trainer_id:trainerId,
+          organizer_id:orgId,
+          comp_id:comp.id,
+          comp_name:comp.name||'',
+          comp_snapshot:_buildCompSnapshot(comp),
+          trainer_response:'pending'
+        }));
+        await _supa.from('comp_invitations').upsert(invRows,{onConflict:'comp_id,organizer_id,trainer_id'})
+          .catch(e=>console.warn('[AquaMeet] admin invite upsert:',e.message));
+      }
+      // Notify trainer
+      if(trainerId){
+        const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
+        await _insertNotification(trainerId,'access_approved','✅ Доступ підтверджено',
+          `${adminName} підтвердив ваш запит. Відкрийте вкладку «Запрошення» для перегляду змагань.`,
+          {organizer_id:orgId}).catch(()=>{});
+      }
+      showToast('✅ Доступ підтверджено — тренера запрошено до змагань');
+    }
+  } else if(status==='rejected'){
+    const req=_adminAccess.find(r=>r.id===requestId);
+    if(req?.trainer_id){
+      const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
+      await _insertNotification(req.trainer_id,'access_rejected','❌ Запит відхилено',
+        `${adminName} відхилив ваш запит на доступ.`,
+        {organizer_id:req.organizer_id}).catch(()=>{});
+    }
+    showToast('Доступ відхилено');
+  } else {
+    showToast('✅ Статус змінено');
+  }
+
   await renderAdmin();
   _refreshOrgBanner();
 }
