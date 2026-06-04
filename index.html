@@ -469,6 +469,7 @@ body.role-secretary button[onclick="clearAll()"]{ display:none!important }
 body.role-secretary .danger-zone{ display:none!important }
 /* Елементи приховані для тренера */
 body.role-trainer [data-tab="settings"]{ display:none!important }
+body.role-trainer [data-tab="print"]{ display:none!important }
 body.role-trainer #hdr-btn-new-comp,
 body.role-trainer #hdr-btn-backup,
 body.role-trainer #hdr-btn-restore { display:none!important }
@@ -1159,6 +1160,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <button class="tab-btn" data-tab="news">📰 Новини</button>
   <button class="tab-btn" data-tab="archive">📚 Архів і Рейтинг</button>
   <button class="tab-btn" data-tab="reglament">📜 Регламент</button>
+  <button class="tab-btn" data-tab="print">📇 Картки А6</button>
   <button class="tab-btn" data-tab="settings">⚙️ Налаштування</button>
   <button class="tab-btn" data-tab="admin" id="nav-admin-btn" style="display:none">👑 Адмін</button>
   <button class="tab-btn" data-tab="orgpanel" id="nav-org-btn" style="display:none">🗂 Мої змагання</button>
@@ -1420,6 +1422,48 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <input type="file" id="reglament-template-file" accept=".docx" style="display:none" onchange="loadCustomTemplate(this)">
 </div>
 
+
+<!-- PRINT A6 CARDS -->
+<div class="tab-panel" id="tab-print">
+  <div class="section-header">
+    <div><div class="section-title">📇 Картки А6</div><div class="section-sub">4 картки на аркуш А4 · по запливах у правильній послідовності</div></div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+      <span id="pr-preview" style="font-size:.83rem;color:var(--text-muted)"></span>
+      <button class="btn-primary" onclick="doPrint()">🖨 Друк</button>
+    </div>
+  </div>
+  <div style="max-width:900px;display:flex;flex-direction:column;gap:1rem;padding:1rem 0">
+    <div class="card" style="padding:1rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--accent);margin-bottom:.6rem">Тип карток</div>
+      <select id="pr-type" onchange="updatePrintPreview()" style="font-size:.85rem;padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border)">
+        <option value="entry">Заявочні (порожнє поле результату)</option>
+        <option value="result">З результатами (якщо вже введені)</option>
+      </select>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--accent);margin-bottom:.6rem">День змагань</div>
+      <select id="pr-day" onchange="updatePrintPreview()" style="font-size:.85rem;padding:.3rem .6rem;border-radius:6px;border:1px solid var(--border);min-width:180px">
+        <option value="">Всі дні</option>
+      </select>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--accent);margin-bottom:.5rem">Дистанції</div>
+      <div id="pr-dist" style="display:flex;flex-wrap:wrap;gap:.4rem"></div>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--accent);margin-bottom:.5rem">Стилі</div>
+      <div id="pr-style" style="display:flex;flex-wrap:wrap;gap:.4rem"></div>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--accent);margin-bottom:.5rem">Стать</div>
+      <div id="pr-gen" style="display:flex;flex-wrap:wrap;gap:.4rem"></div>
+    </div>
+    <div class="card" style="padding:1rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--accent);margin-bottom:.5rem">Вікові групи</div>
+      <div id="pr-ag" style="display:flex;flex-wrap:wrap;gap:.4rem"></div>
+    </div>
+  </div>
+</div>
 
 <!-- SETTINGS -->
 <div class="tab-panel" id="tab-settings">
@@ -2994,7 +3038,7 @@ const tabRenderers={
   heats:renderHeats,results:renderResults,protocol:renderProtocol,
   standings:renderStandings,'athletes-dir':renderAthletesDir,
   relays:renderRelays,news:renderNews,archive:renderArchive,reglament:renderReglament,
-  settings:renderSettings
+  print:renderPrint,settings:renderSettings
 };
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
