@@ -10669,7 +10669,7 @@ async function adminChangeAccessStatus(requestId,status){
   // On approval — run full workflow same as orgApproveRequest:
   // create comp_invitations and notify trainer
   if(status==='approved'){
-    const req=_adminAccess.find(r=>r.id===requestId);
+    const req=_adminAccess.find(r=>String(r.id)===String(requestId));
     if(req){
       const trainerId=req.trainer_id;
       const orgId=req.organizer_id;
@@ -10697,7 +10697,7 @@ async function adminChangeAccessStatus(requestId,status){
       showToast('✅ Доступ підтверджено — тренера запрошено до змагань');
     }
   } else if(status==='rejected'){
-    const req=_adminAccess.find(r=>r.id===requestId);
+    const req=_adminAccess.find(r=>String(r.id)===String(requestId));
     if(req?.trainer_id){
       const adminName=_currentProfile?.full_name||_currentProfile?.email||'Адміністратор';
       await _insertNotification(req.trainer_id,'access_rejected','❌ Запит відхилено',
