@@ -390,8 +390,9 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
   /* Heats tab: swap tile grid for print-only vertical table */
   body.printing-tab .heat-print-table{display:block!important}
   body.printing-tab .lanes-grid{display:none!important}
-  body.printing-tab #heats-content{display:block!important;columns:2;column-gap:6mm}
-  body.printing-tab .heat-card{break-inside:avoid;page-break-inside:avoid;display:inline-block;width:100%;margin-bottom:3mm!important;box-shadow:none!important;border:1px solid #ccc!important}
+  body.printing-tab #heats-content{display:block!important}
+  body.printing-tab .heat-row{display:flex!important;gap:5mm;margin-bottom:3mm;break-inside:avoid;page-break-inside:avoid}
+  body.printing-tab .heat-row .heat-card{flex:1!important;break-inside:avoid;page-break-inside:avoid;margin-bottom:0!important;box-shadow:none!important;border:1px solid #ccc!important}
   body.printing-tab .heat-header{background:#f0f5fa!important;padding:.3rem .5rem!important}
   /* Results / Protocol / Archive: hide action buttons and similar controls */
   body.printing-tab .btn-success, body.printing-tab .btn-icon, body.printing-tab .btn-secondary, body.printing-tab .btn-primary, body.printing-tab .btn-danger, body.printing-tab .btn-warn{display:none!important}
@@ -7084,11 +7085,29 @@ function printTab(tabId,scopeLabel){
   `;
   tab.insertBefore(title,tab.firstChild);
   document.body.classList.add('printing-tab');
+  // For heats tab: wrap cards in pairs so they never split across pages
+  let _heatRows=[];
+  if(tabName==='heats'){
+    const cont=document.getElementById('heats-content');
+    const cards=cont?[...cont.querySelectorAll(':scope>.heat-card')]:[];
+    for(let i=0;i<cards.length;i+=2){
+      const row=document.createElement('div');row.className='heat-row';
+      cards[i].before(row);row.appendChild(cards[i]);
+      if(cards[i+1])row.appendChild(cards[i+1]);
+      _heatRows.push(row);
+    }
+  }
   // Longer delay so any DOM updates from the tab switch finish before print dialog opens
   setTimeout(()=>{
     window.print();
     setTimeout(()=>{
       document.body.classList.remove('printing-tab');
+      // Unwrap heat rows
+      _heatRows.forEach(row=>{
+        while(row.firstChild)row.before(row.firstChild);
+        row.remove();
+      });
+      _heatRows=[];
       title.remove();
     },100);
   },300);
