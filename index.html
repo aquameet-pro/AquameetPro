@@ -124,7 +124,18 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
 .stat-box.warn .stat-num{color:var(--warning)}
 .stat-box.danger .stat-num{color:var(--danger)}
 /* TABLE */
+:root{--sticky-offset:92px}
 .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);box-shadow:var(--shadow);position:relative}
+/* Sticky table headers in Athletes, Heats, Results, Protocol, Prizes, Athletes-dir, Relays */
+#tab-athletes .tbl-wrap thead th,
+#tab-results .tbl-wrap thead th,
+#tab-protocol .tbl-wrap thead th,
+#tab-standings .tbl-wrap thead th,
+#tab-athletes-dir .tbl-wrap thead th,
+#tab-relays .tbl-wrap thead th{
+  position:sticky;top:var(--sticky-offset);z-index:5;
+  background:var(--card);box-shadow:0 1px 0 var(--border);
+}
 .mob-sub{display:none}
 .mob-only{display:none}
 .tbl-wrap.scrollable::after{content:'';pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right,transparent,rgba(0,119,182,.10));border-radius:0 var(--radius) var(--radius) 0}
@@ -3053,6 +3064,14 @@ const tabRenderers={
   relays:renderRelays,news:renderNews,archive:renderArchive,reglament:renderReglament,
   print:renderPrint,settings:renderSettings
 };
+// ── Sticky table headers — offset = height of fixed header+nav ─
+function _updateStickyOffset(){
+  const el=document.getElementById('sticky-top');
+  if(el)document.documentElement.style.setProperty('--sticky-offset',el.offsetHeight+'px');
+}
+window.addEventListener('resize',_updateStickyOffset);
+setTimeout(_updateStickyOffset,400);
+
 // ── Nav scroll arrows ──────────────────────────────────────────
 function _updateNavArrows(){
   const nav=document.getElementById('app-nav-el');if(!nav)return;
