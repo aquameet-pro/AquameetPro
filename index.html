@@ -79,15 +79,23 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
 .status-planning{background:rgba(0,180,216,.14);color:#005f7a;border:1px solid rgba(0,180,216,.3)}
 .status-done{background:rgba(100,120,140,.12);color:#455a64;border:1px solid rgba(100,120,140,.28)}
 /* NAV */
+.nav-wrap{position:relative}
+.nav-arrow{position:absolute;top:0;bottom:0;width:28px;display:none;align-items:center;justify-content:center;
+  background:linear-gradient(to right,rgba(255,255,255,.95),rgba(255,255,255,0));
+  z-index:10;cursor:pointer;border:none;font-size:.9rem;color:var(--accent);padding:0}
+.nav-arrow.left{left:0;background:linear-gradient(to right,rgba(255,255,255,.95),rgba(255,255,255,0))}
+.nav-arrow.right{right:0;background:linear-gradient(to left,rgba(255,255,255,.95),rgba(255,255,255,0))}
+.nav-arrow.visible{display:flex}
 .app-nav{
   background:rgba(255,255,255,0.96);backdrop-filter:blur(8px);
   border-bottom:1px solid var(--border);
-  padding:0 1.5rem;display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
+  padding:0 .75rem;display:flex;gap:0;overflow-x:auto;scrollbar-width:none;
+  scroll-behavior:smooth;
 }
 .app-nav::-webkit-scrollbar{display:none}
 .tab-btn{
   background:none;color:var(--text-muted);border:none;border-bottom:2.5px solid transparent;
-  padding:.65rem .95rem;font-size:.82rem;font-weight:600;letter-spacing:.2px;cursor:pointer;
+  padding:.6rem .7rem;font-size:.78rem;font-weight:600;letter-spacing:.1px;cursor:pointer;
   white-space:nowrap;border-radius:0;transition:all .15s;
 }
 .tab-btn:hover{color:var(--text-dim)}
@@ -1147,7 +1155,10 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
 </header>
 <!-- ══ NAV ══ -->
-<nav class="app-nav">
+<div class="nav-wrap">
+<button class="nav-arrow left" id="nav-arr-l" onclick="document.querySelector('.app-nav').scrollBy({left:-200,behavior:'smooth'})">‹</button>
+<button class="nav-arrow right" id="nav-arr-r" onclick="document.querySelector('.app-nav').scrollBy({left:200,behavior:'smooth'})">›</button>
+<nav class="app-nav" id="app-nav-el">
   <button class="tab-btn active" data-tab="home">🏠 Головна</button>
   <button class="tab-btn" data-tab="schedule">📅 Розклад</button>
   <button class="tab-btn" data-tab="athletes">👥 Учасники</button>
@@ -1166,6 +1177,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   <button class="tab-btn" data-tab="orgpanel" id="nav-org-btn" style="display:none">🗂 Мої змагання</button>
   <button class="tab-btn" data-tab="invitations" id="nav-inv-btn" style="display:none">📬 Запрошення<span class="notif-badge" id="inv-badge" style="display:none">0</span></button>
 </nav>
+</div>
 <!-- ══ BOTTOM NAV (mobile) ══ -->
 <nav id="bottom-nav">
   <button class="bnav-btn active" data-bnav="home" onclick="switchTab('home')"><span class="bi">🏠</span>Головна</button>
@@ -3041,6 +3053,23 @@ const tabRenderers={
   relays:renderRelays,news:renderNews,archive:renderArchive,reglament:renderReglament,
   print:renderPrint,settings:renderSettings
 };
+// ── Nav scroll arrows ──────────────────────────────────────────
+function _updateNavArrows(){
+  const nav=document.getElementById('app-nav-el');if(!nav)return;
+  const l=document.getElementById('nav-arr-l'),r=document.getElementById('nav-arr-r');
+  if(!l||!r)return;
+  const canScrollLeft=nav.scrollLeft>4;
+  const canScrollRight=nav.scrollLeft+nav.clientWidth<nav.scrollWidth-4;
+  l.classList.toggle('visible',canScrollLeft);
+  r.classList.toggle('visible',canScrollRight);
+}
+(()=>{
+  const nav=document.getElementById('app-nav-el');
+  if(nav){nav.addEventListener('scroll',_updateNavArrows,{passive:true});}
+  window.addEventListener('resize',_updateNavArrows);
+  setTimeout(_updateNavArrows,300);
+})();
+
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
