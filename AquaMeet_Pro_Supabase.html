@@ -4427,8 +4427,9 @@ async function doAssignTrainer(){
   await _insertNotification(trainerId,'athlete_assigned','📤 Учасника передано',
     `${adminName} додав учасника ${a.surname} ${a.name} до ваших даних на змагання «${comp.name||''}».`,
     {comp_id:comp.id,organizer_id:orgId}).catch(()=>{});
-  // Mark locally so 📤 button disappears without full reload
+  // Mark persistently so 📤 button stays hidden even after page reload
   a._assignedToTrainer=true;
+  saveDB();
   showToast(`✅ ${a.surname} ${a.name} передано тренеру`);
   closeModal('modal-assign-trainer');
   renderAthletes();
