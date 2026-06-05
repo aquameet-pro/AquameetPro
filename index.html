@@ -379,8 +379,8 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
   /* Heats tab: swap tile grid for print-only vertical table */
   body.printing-tab .heat-print-table{display:block!important}
   body.printing-tab .lanes-grid{display:none!important}
-  body.printing-tab #heats-content{display:grid!important;grid-template-columns:1fr 1fr;gap:3mm 5mm;align-items:start}
-  body.printing-tab .heat-card{page-break-inside:avoid;break-inside:avoid;margin-bottom:0!important;box-shadow:none!important;border:none!important}
+  body.printing-tab #heats-content{display:block!important;columns:2;column-gap:6mm}
+  body.printing-tab .heat-card{break-inside:avoid;page-break-inside:avoid;display:inline-block;width:100%;margin-bottom:3mm!important;box-shadow:none!important;border:1px solid #ccc!important}
   body.printing-tab .heat-header{background:#f0f5fa!important;padding:.3rem .5rem!important}
   /* Results / Protocol / Archive: hide action buttons and similar controls */
   body.printing-tab .btn-success, body.printing-tab .btn-icon, body.printing-tab .btn-secondary, body.printing-tab .btn-primary, body.printing-tab .btn-danger, body.printing-tab .btn-warn{display:none!important}
