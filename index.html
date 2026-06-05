@@ -4332,6 +4332,10 @@ function openByTrainerModal(){
       Тренерів / команд: <strong style="color:var(--text)">${sorted.length}</strong>
     </div>
     ${sorted.map(g=>{
+      g.athletes.sort((x,y)=>{
+        if(x.a.gender!==y.a.gender)return x.a.gender==='F'?-1:1;
+        return(x.a.surname||'').localeCompare(y.a.surname||'','uk')||(x.a.name||'').localeCompare(y.a.name||'','uk');
+      });
       const rows=g.athletes.map(({a,entries})=>`
         <tr>
           <td><strong>${a.surname}</strong> ${a.name}</td>
