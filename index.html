@@ -1228,6 +1228,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
     <div style="display:flex;gap:.45rem;flex-wrap:wrap">
       <button class="btn-secondary btn-sm" id="btn-refresh-trainer-ath" style="display:none" onclick="refreshTrainerAthletes()">🔄 Тренери</button>
       <button class="btn-secondary btn-sm" id="btn-by-trainer" onclick="openByTrainerModal()" style="display:none">👥 По тренерах</button>
+      <button class="btn-secondary btn-sm" id="btn-bulk-assign" onclick="openBulkAssignModal()" style="display:none">📤 Передати по тренерах</button>
       <button class="btn-secondary btn-sm" id="btn-import-excel" onclick="openImportExcel()">📊 Імпорт Excel</button>
       <button class="btn-secondary btn-sm" onclick="downloadTemplate()">📥 Шаблон Excel</button>
       <button class="btn-secondary btn-sm" onclick="openQuickGuest()">⚡ Гість</button>
@@ -4383,6 +4384,97 @@ function openByTrainerModal(){
   openModal('modal-by-trainer');
 }
 
+let _bulkTrainerProfiles=[];
+async function openBulkAssignModal(){
+  const comp=activeComp();
+  const el=document.getElementById('bulk-assign-content');
+  if(!el)return;
+  el.innerHTML='<div style="padding:1rem;text-align:center;color:var(--text-muted)">⏳ Завантаження…</div>';
+  openModal('modal-bulk-assign');
+  // Load system trainers
+  const{data:trainers}=await _supa.from('profiles').select('id,full_name,email,club,city').eq('role','trainer').order('full_name');
+  _bulkTrainerProfiles=trainers||[];
+  const trainerOpts='<option value="">— не передавати —</option>'
+    +_bulkTrainerProfiles.map(t=>`<option value="${t.id}">${escapeHtml(t.full_name||t.email)}${t.club?' · '+escapeHtml(t.club):''}</option>`).join('');
+  // Group non-assigned athletes by coach name
+  const entryAthIds=new Set((comp?.entries||[]).map(e=>e.athleteId));
+  const athletes=db.athletes.filter(a=>entryAthIds.has(a.id)&&!a._trainerOwned&&!a._assignedToTrainer);
+  const groups={};
+  for(const a of athletes){
+    const coach=(a.coach||'').trim()||'— без тренера —';
+    if(!groups[coach])groups[coach]=[];
+    groups[coach].push(a);
+  }
+  const keys=Object.keys(groups).sort();
+  if(!keys.length){
+    el.innerHTML='<div class="empty-state"><div class="icon">✅</div>Всіх учасників вже передано або немає для передачі</div>';
+    return;
+  }
+  el.innerHTML=keys.map((coach,i)=>{
+    const athl=groups[coach];
+    // Try auto-match by first word of coach name
+    const firstWord=(coach.split(' ')[0]||'').toLowerCase();
+    const autoMatch=_bulkTrainerProfiles.find(t=>(t.full_name||'').toLowerCase().includes(firstWord));
+    return`<div style="padding:.65rem 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;margin-bottom:.4rem">
+        <span style="font-weight:700;font-size:.9rem">${escapeHtml(coach)}</span>
+        <span class="badge badge-heat">${athl.length} уч.</span>
+        <select id="ba-sel-${i}" style="font-size:.8rem;padding:.25rem .4rem;border:1px solid var(--border);border-radius:6px;flex:1;min-width:200px">
+          ${trainerOpts}
+        </select>
+      </div>
+      <div style="font-size:.76rem;color:var(--text-muted)">${athl.map(a=>`${a.surname} ${a.name} (${a.birthYear||'?'})`).join(' · ')}</div>
+    </div>`;
+  }).join('');
+  // Auto-select matched trainers
+  keys.forEach((coach,i)=>{
+    const firstWord=(coach.split(' ')[0]||'').toLowerCase();
+    const autoMatch=_bulkTrainerProfiles.find(t=>(t.full_name||'').toLowerCase().includes(firstWord));
+    if(autoMatch)document.getElementById(`ba-sel-${i}`).value=autoMatch.id;
+  });
+  // Store keys for save
+  el.dataset.keys=JSON.stringify(keys);
+  el.dataset.groups=JSON.stringify(Object.fromEntries(keys.map(k=>[k,groups[k].map(a=>a.id)])));
+}
+
+async function doBulkAssign(){
+  const comp=activeComp();
+  const el=document.getElementById('bulk-assign-content');
+  const keys=JSON.parse(el.dataset.keys||'[]');
+  const groups=JSON.parse(el.dataset.groups||'{}');
+  const orgId=_getEffectiveOrgId()||_currentUser?.id;
+  const btn=document.getElementById('ba-btn');
+  btn.disabled=true;btn.textContent='⏳ Передача…';
+  let total=0,errors=0;
+  for(let i=0;i<keys.length;i++){
+    const coach=keys[i];
+    const trainerId=document.getElementById(`ba-sel-${i}`)?.value;
+    if(!trainerId)continue;
+    const athIds=groups[coach]||[];
+    for(const athId of athIds){
+      const a=db.athletes.find(x=>x.id===athId);if(!a)continue;
+      const entries=(comp.entries||[]).filter(e=>e.athleteId===a.id)
+        .map(e=>({dist:e.dist,style:e.style,seedTime:e.seedTime||'',dayId:e.dayId||null,exhibition:!!e.exhibition}));
+      const row={trainer_id:trainerId,organizer_id:orgId,comp_id:comp.id,local_id:a.id,
+        athlete_data:{...a,_compName:comp.name||null},entries_data:entries,
+        updated_at:new Date().toISOString()};
+      const{data:ex}=await _supa.from('trainer_athletes').select('id')
+        .eq('trainer_id',trainerId).eq('organizer_id',orgId).eq('comp_id',comp.id).eq('local_id',a.id).maybeSingle();
+      let err;
+      if(ex?.id)({error:err}=await _supa.from('trainer_athletes')
+        .update({athlete_data:row.athlete_data,entries_data:row.entries_data,updated_at:row.updated_at}).eq('id',ex.id));
+      else({error:err}=await _supa.from('trainer_athletes').insert(row));
+      if(err){errors++;continue;}
+      a._assignedToTrainer=true;total++;
+    }
+  }
+  if(total>0)saveDB();
+  btn.disabled=false;btn.textContent='📤 Передати всіх';
+  showToast(errors?`✅ Передано ${total} · Помилок: ${errors}`:`✅ Передано ${total} учасників`);
+  closeModal('modal-bulk-assign');
+  renderAthletes();
+}
+
 let _assignTrainerAthId=null;
 async function openAssignTrainer(athleteId){
   _assignTrainerAthId=athleteId;
@@ -4462,6 +4554,8 @@ function renderAthletes(){
   if(rBtn)rBtn.style.display=['organizer','secretary','admin'].includes(_currentRole)&&!_supaOffline?'':'none';
   const btBtn=document.getElementById('btn-by-trainer');
   if(btBtn)btBtn.style.display=['organizer','secretary','admin'].includes(_currentRole)?'':'none';
+  const baBtn=document.getElementById('btn-bulk-assign');
+  if(baBtn)baBtn.style.display=['organizer','secretary','admin'].includes(_currentRole)?'':'none';
   updateAthFilters();
   const comp=activeComp();
   const gf=document.getElementById('af-gen').value;
@@ -14961,6 +15055,23 @@ async function _bootApp(user){
   <div class="modal-footer">
     <button class="btn-secondary" onclick="closeModal('modal-create-user')">Скасувати</button>
     <button class="btn-primary" id="cu-btn" onclick="doCreateUser()">👤 Створити</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-bulk-assign">
+<div class="modal" style="max-width:640px">
+  <div class="modal-header">
+    <div class="modal-title">📤 Передати по тренерах</div>
+    <button class="modal-close" onclick="closeModal('modal-bulk-assign')">✕</button>
+  </div>
+  <div class="alert alert-info" style="font-size:.78rem;margin-bottom:.75rem">
+    Для кожного тренера-прізвища оберіть відповідний акаунт у системі. Учасники будуть передані масово.
+  </div>
+  <div id="bulk-assign-content" style="max-height:55vh;overflow-y:auto;padding-right:.25rem"></div>
+  <div class="modal-footer">
+    <button class="btn-secondary" onclick="closeModal('modal-bulk-assign')">Скасувати</button>
+    <button class="btn-primary" id="ba-btn" onclick="doBulkAssign()">📤 Передати всіх</button>
   </div>
 </div>
 </div>
