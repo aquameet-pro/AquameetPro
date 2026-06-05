@@ -366,7 +366,8 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   body,body::before{background:white!important}
-  .app-header,.app-nav,.offline-banner{display:none!important}
+  body::before{display:none!important}
+  .app-header,.app-nav,.offline-banner,.nav-wrap,.nav-arrow{display:none!important}
 
   /* Default: hide all content — each print mode re-enables what it needs */
   #app>.app-main{display:none!important}
