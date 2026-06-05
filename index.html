@@ -4427,8 +4427,11 @@ async function doAssignTrainer(){
   await _insertNotification(trainerId,'athlete_assigned','📤 Учасника передано',
     `${adminName} додав учасника ${a.surname} ${a.name} до ваших даних на змагання «${comp.name||''}».`,
     {comp_id:comp.id,organizer_id:orgId}).catch(()=>{});
+  // Mark locally so 📤 button disappears without full reload
+  a._assignedToTrainer=true;
   showToast(`✅ ${a.surname} ${a.name} передано тренеру`);
   closeModal('modal-assign-trainer');
+  renderAthletes();
 }
 
 function renderAthletes(){
@@ -4511,7 +4514,7 @@ function renderAthletes(){
       <td class="mob-hide">${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
       <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
       <td colspan="4" style="color:var(--text-muted);font-style:italic">немає заявок</td>
-      <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
+      <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
     }
     const _gStrE=a.gender==='M'?'Ч':'Ж';
     return ent.map((e,idx)=>{
@@ -4526,7 +4529,7 @@ function renderAthletes(){
         <td><span class="badge badge-style">${e.style}</span></td>
         <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
         <td style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
-        <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
+        <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
       </tr>`;
     });
   });
