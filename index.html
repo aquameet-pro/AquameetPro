@@ -5261,8 +5261,8 @@ function generateHeats(){
     const F=items.filter(x=>x.a.gender==='F');
     const eventGroups=[];
     if(M.length>=SPLIT_THRESHOLD&&F.length>=SPLIT_THRESHOLD){
-      eventGroups.push({gender:'M',items:M,key:evKey(dist,style,'M')});
       eventGroups.push({gender:'F',items:F,key:evKey(dist,style,'F')});
+      eventGroups.push({gender:'M',items:M,key:evKey(dist,style,'M')});
     }else if(M.length+F.length>0){
       const all=[...M,...F];
       const mixed=M.length>0&&F.length>0;
