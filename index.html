@@ -5316,13 +5316,29 @@ async function _loadOrgTrainerAthletes(){
 
 async function delAthlete(id){
   if(!confirm('Видалити учасника та всі його заявки?'))return;
+  const ath=db.athletes.find(a=>a.id===id);
   if(_currentRole==='trainer'){
-    const ath=db.athletes.find(a=>a.id===id);
+    // Trainer deletes their own trainer_athletes record
     if(ath?._supaId){
       const{error}=await _supa.from('trainer_athletes').delete()
         .eq('id',ath._supaId).eq('trainer_id',_currentUser.id);
       if(error){showToast('❌ '+error.message,true);return;}
     }
+  } else if(['organizer','secretary','admin'].includes(_currentRole)){
+    // Org/Admin: also delete from trainer_athletes (by supaId or by local_id)
+    // to prevent athlete reappearing on next _loadOrgTrainerAthletes
+    if(ath?._supaId){
+      _supa.from('trainer_athletes').delete().eq('id',ath._supaId)
+        .then(({error:e})=>{if(e)console.warn('[AquaMeet] del trainer_athletes:',e.message);});
+    } else {
+      // Fallback: delete by local_id for all comps of this organizer
+      const orgId=_getEffectiveOrgId()||_currentUser?.id;
+      if(orgId){
+        _supa.from('trainer_athletes').delete().eq('local_id',id).eq('organizer_id',orgId)
+          .then(({error:e})=>{if(e)console.warn('[AquaMeet] del trainer_athletes by local_id:',e.message);});
+      }
+    }
+    _orgTransferredLocalIds.delete(id);
   }
   db.athletes=db.athletes.filter(a=>a.id!==id);
   const comp=activeComp();
