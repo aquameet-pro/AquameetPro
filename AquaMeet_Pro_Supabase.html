@@ -5206,6 +5206,22 @@ async function _loadOrgTrainerAthletes(){
 
     if(!data?.length) return;
 
+    // ── Deduplicate rows by trainer+comp+name+year (keep newest updated_at) ─
+    // Multiple rows for same athlete can exist from previous bugs; pick one per athlete.
+    const rowKey=r=>{
+      const ad=typeof r.athlete_data==='string'?JSON.parse(r.athlete_data||'{}'):r.athlete_data||{};
+      return`${r.trainer_id}|${r.comp_id}|${(ad.surname||'').toLowerCase()}|${(ad.name||'').toLowerCase()}|${ad.birthYear||''}`;
+    };
+    const bestRow=new Map();
+    data.forEach(r=>{
+      try{
+        const k=rowKey(r);
+        const existing=bestRow.get(k);
+        if(!existing||(r.updated_at||'')>(existing.updated_at||''))bestRow.set(k,r);
+      }catch(_){}
+    });
+    data=[...bestRow.values()];
+
     // Track which local_ids are already transferred so 📤 button hides correctly
     data.forEach(r=>{if(r.local_id!=null)_orgTransferredLocalIds.add(Number(r.local_id));});
 
