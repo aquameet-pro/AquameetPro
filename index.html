@@ -411,32 +411,32 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 
   /* PRINTING A6 CARDS — legacy */
   body.printing-cards .print-area{display:block!important}
-  /* 12 карток на аркуш A4: 2 колонки × 6 рядків */
-  .a4-page{width:210mm;min-height:297mm;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(6,1fr);page-break-after:always;gap:0}
+  /* 16 карток на аркуш A4: 2 колонки × 8 рядків */
+  .a4-page{width:210mm;min-height:297mm;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(8,1fr);page-break-after:always;gap:0}
   .a4-page:last-child{page-break-after:avoid}
-  .a6-card{width:105mm;height:49.5mm;border:1px solid #ccc;padding:1.2mm 2.5mm;display:flex;flex-direction:column;font-family:'Times New Roman',serif;font-size:8pt;color:#000;overflow:hidden;box-sizing:border-box;gap:.5mm}
+  .a6-card{width:105mm;height:37mm;border:1px solid #ccc;padding:1mm 2.5mm;display:flex;flex-direction:column;font-family:'Times New Roman',serif;font-size:8pt;color:#000;overflow:hidden;box-sizing:border-box;gap:.3mm}
   /* Шапка: назва змагання дрібно */
-  .a6-card .ch{text-align:center;border-bottom:.5pt solid #aaa;padding-bottom:.3mm}
-  .a6-card .ch .cn{font-size:6pt;color:#666;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .a6-card .ch{text-align:center;border-bottom:.5pt solid #aaa;padding-bottom:.2mm}
+  .a6-card .ch .cn{font-size:5.5pt;color:#666;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* Заплив + доріжка */
-  .a6-card .hi{display:flex;gap:2mm}
-  .a6-card .hb{flex:1;border:1pt solid #000;padding:.5mm 1mm;text-align:center}
-  .a6-card .hb .hl{font-size:5.5pt;color:#777;text-transform:uppercase;line-height:1}
-  .a6-card .hb .hv{font-size:12pt;font-weight:bold;line-height:1.1}
+  .a6-card .hi{display:flex;gap:1.5mm}
+  .a6-card .hb{flex:1;border:1pt solid #000;padding:.3mm .8mm;text-align:center}
+  .a6-card .hb .hl{font-size:5pt;color:#777;text-transform:uppercase;line-height:1}
+  .a6-card .hb .hv{font-size:11pt;font-weight:bold;line-height:1.1}
   /* Дистанція */
-  .a6-card .ev{background:#f0f0f0;padding:.4mm 2mm;text-align:center;border:1pt solid #aaa}
-  .a6-card .ev .em{font-size:9.5pt;font-weight:bold;line-height:1.1}
-  .a6-card .ev .es{font-size:6pt;color:#555;line-height:1}
+  .a6-card .ev{background:#f0f0f0;padding:.3mm 2mm;text-align:center;border:1pt solid #aaa}
+  .a6-card .ev .em{font-size:9pt;font-weight:bold;line-height:1.1}
+  .a6-card .ev .es{font-size:5.5pt;color:#555;line-height:1}
   /* ПІБ — головне */
-  .a6-card .pib{font-size:10.5pt;font-weight:bold;text-align:center;line-height:1.15}
+  .a6-card .pib{font-size:10pt;font-weight:bold;text-align:center;line-height:1.1}
   /* Деталі: рік, клуб, тренер — одним рядком дрібно */
-  .a6-card .det{font-size:6pt;color:#555;text-align:center;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  /* Часи — без margin-top:auto (усуває порожній простір) */
-  .a6-card .ct{display:flex;gap:2mm}
-  .a6-card .tb{flex:1;border:1.5pt solid #000;padding:.6mm 1.5mm}
-  .a6-card .tb .tl{font-size:5.5pt;text-transform:uppercase;color:#666;margin-bottom:.2mm}
-  .a6-card .tb .tv{font-size:9.5pt;font-weight:bold;letter-spacing:.5px;min-height:4.5mm;border-bottom:1pt solid #000}
-  .a6-card.empty-card{background:#fafafa;align-items:center;justify-content:center;color:#ccc;font-size:12pt;border:1px dashed #ddd}
+  .a6-card .det{font-size:5.5pt;color:#555;text-align:center;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* Часи — щільно, без зайвого простору */
+  .a6-card .ct{display:flex;gap:1.5mm}
+  .a6-card .tb{flex:1;border:1.5pt solid #000;padding:.4mm 1.5mm}
+  .a6-card .tb .tl{font-size:5pt;text-transform:uppercase;color:#666;margin-bottom:.1mm;line-height:1}
+  .a6-card .tb .tv{font-size:9pt;font-weight:bold;letter-spacing:.3px;border-bottom:1pt solid #000;padding-bottom:.5mm}
+  .a6-card.empty-card{background:#fafafa;align-items:center;justify-content:center;color:#ccc;font-size:10pt;border:1px dashed #ddd}
 }
 /* ATHLETES DIRECTORY */
 .schedule-section-head{background:rgba(0,119,182,.1);border:1px solid rgba(0,119,182,.25);color:var(--accent);font-weight:800;padding:.55rem 1rem;border-radius:8px;margin:1rem 0 .75rem;font-size:.95rem}
@@ -7139,9 +7139,9 @@ function doPrint(){
   if(!activeComp()?.heats?.length){alert('Спочатку згенеруйте запливи');return;}
   const cards=getPrintCards();if(!cards.length){alert('Немає карток за обраними фільтрами');return;}
   let html='';
-  for(let i=0;i<cards.length;i+=12){
-    const s=cards.slice(i,i+12);
-    while(s.length<12)s.push(null);
+  for(let i=0;i<cards.length;i+=16){
+    const s=cards.slice(i,i+16);
+    while(s.length<16)s.push(null);
     html+=`<div class="a4-page">${s.map(c=>c?buildA6Card(c):'<div class="a6-card empty-card">—</div>').join('')}</div>`;
   }
   document.getElementById('print-area').innerHTML=html;
