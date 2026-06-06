@@ -4807,7 +4807,14 @@ let entryModalEntries=[];
 function renderEntryMatrix(){
   const matrix=document.getElementById('pa-matrix');
   if(!matrix)return;
+  const comp=activeComp();
   const selSet=new Set(entryModalEntries.map(e=>`${e.dist}|${e.style}`));
+
+  // Build set of scheduled events; if no schedule — treat all valid events as scheduled
+  const scheduledEvents=new Set();
+  (comp?.days||[]).forEach(d=>(d.events||[]).forEach(ev=>scheduledEvents.add(`${ev.dist}|${ev.style}`)));
+  const hasSchedule=scheduledEvents.size>0;
+
   let html='<table style="width:100%;font-size:.78rem;border-collapse:collapse">';
   html+='<tr><th style="text-align:left;padding:.3rem;color:var(--text-muted);font-weight:700">Стиль \\ Дист.</th>'+
     DIST.map(d=>`<th style="text-align:center;padding:.3rem;color:var(--text-muted);font-weight:700">${d}м</th>`).join('')+'</tr>';
@@ -4815,13 +4822,22 @@ function renderEntryMatrix(){
     html+=`<tr><td style="padding:.3rem;font-weight:600">${s}</td>`;
     for(const d of DIST){
       if(!isValidEvent(d,s)){html+=`<td style="text-align:center;padding:.2rem;color:#ccc">—</td>`;continue;}
-      const checked=selSet.has(`${d}|${s}`)?'checked':'';
+      const key=`${d}|${s}`;
+      const inSchedule=!hasSchedule||scheduledEvents.has(key);
+      const checked=selSet.has(key)?'checked':'';
       const hasNorms=NORMS[s]&&NORMS[s][d];
       let cellStyle='text-align:center;padding:.2rem;';
       let tooltip='';
+      if(!inSchedule){
+        // Not in schedule — show dimmed, disabled
+        cellStyle+='opacity:.3;';
+        tooltip=` title="Цієї дистанції немає в розкладі змагань"`;
+        html+=`<td style="${cellStyle}"${tooltip}><input type="checkbox" disabled style="width:auto;margin:0;padding:0;transform:scale(1.15);cursor:not-allowed"></td>`;
+        continue;
+      }
       if(!hasNorms){
         cellStyle+='background:rgba(130,140,155,.18);border-radius:3px;';
-        tooltip=` title="Розряд за результатом не нараховуватиметься (цієї дистанції немає в офіційній класифікаційній таблиці)."`;
+        tooltip=` title="Розряд за результатом не нараховуватиметься."`;
       }
       html+=`<td style="${cellStyle}"${tooltip}><input type="checkbox" ${checked} onchange="toggleAthleteEntry(${d},'${s}',this.checked)" style="width:auto;margin:0;padding:0;transform:scale(1.15)"></td>`;
     }
@@ -4830,6 +4846,7 @@ function renderEntryMatrix(){
   html+='</table>';
   const swatch='display:inline-block;width:12px;height:12px;border-radius:2px;border:1px solid rgba(0,0,0,.18);box-sizing:border-box;vertical-align:middle;margin-right:.3rem';
   const legend=`<div style="display:flex;gap:.8rem;font-size:.72rem;color:var(--text-muted);margin-top:.5rem;flex-wrap:wrap;align-items:center">
+    ${hasSchedule?`<span style="opacity:.4">☐ · не в розкладі</span>`:''}
     <span><span style="${swatch};background:rgba(130,140,155,.18)"></span>розряд не нараховується</span>
     <span>— · нема такої дисципліни</span>
   </div>`;
