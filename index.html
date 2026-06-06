@@ -5213,7 +5213,14 @@ async function _loadOrgTrainerAthletes(){
       }else{
         // Check if organizer already added this athlete (by local_id) — avoid duplicate
         const localId=row.local_id!=null&&Number(row.local_id)>0?Number(row.local_id):null;
-        const orgAddedAth=localId?db.athletes.find(a=>a.id===localId&&!a._trainerOwned):null;
+        const _matchOrg=a=>!a._trainerOwned&&(
+          (localId&&a.id===localId)||
+          ((athData.surname&&athData.name&&athData.birthYear)&&
+            (a.surname||'').toLowerCase()===(athData.surname||'').toLowerCase()&&
+            (a.name||'').toLowerCase()===(athData.name||'').toLowerCase()&&
+            String(a.birthYear)===String(athData.birthYear))
+        );
+        const orgAddedAth=db.athletes.find(_matchOrg);
         if(orgAddedAth){
           // Link to trainer_athletes record; mark as assigned — DO NOT duplicate
           orgAddedAth._supaId=row.id;orgAddedAth._assignedToTrainer=true;
@@ -5273,7 +5280,14 @@ async function _loadOrgTrainerAthletes(){
       const localId=preservedId||rawLocalId||null;
 
       // If organizer already has this athlete (by local_id) — don't duplicate, just link
-      const orgExisting=localId?db.athletes.find(a=>a.id===localId&&!a._trainerOwned):null;
+      const _matchOrgFree=a=>!a._trainerOwned&&(
+        (localId&&a.id===localId)||
+        ((athData.surname&&athData.name&&athData.birthYear)&&
+          (a.surname||'').toLowerCase()===(athData.surname||'').toLowerCase()&&
+          (a.name||'').toLowerCase()===(athData.name||'').toLowerCase()&&
+          String(a.birthYear)===String(athData.birthYear))
+      );
+      const orgExisting=db.athletes.find(_matchOrgFree);
       if(orgExisting){
         orgExisting._supaId=row.id;orgExisting._assignedToTrainer=true;
         _orgTransferredLocalIds.add(localId);
