@@ -4633,7 +4633,7 @@ function renderAthletes(){
       <td class="mob-hide">${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
       <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
       <td colspan="4" style="color:var(--text-muted);font-style:italic">немає заявок</td>
-      <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
+      <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer&&!_orgTransferredLocalIds.has(a.id)?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
     }
     const _gStrE=a.gender==='M'?'Ч':'Ж';
     return ent.map((e,idx)=>{
@@ -4648,7 +4648,7 @@ function renderAthletes(){
         <td><span class="badge badge-style">${e.style}</span></td>
         <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
         <td style="font-family:monospace;font-size:.82rem">${e.seedTime||'–'}</td>
-        <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
+        <td>${idx===0?`<button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${(()=>{const hu=comp&&comp.heats?.length&&getUnassignedEntries(a.id,comp).length>0&&['organizer','secretary','admin'].includes(_currentRole);return hu?`<button class="btn-secondary btn-xs" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)" title="Додати до запливів">📋 В заплив</button>`:'';})()}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer&&!_orgTransferredLocalIds.has(a.id)?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button>`:''}</td>
       </tr>`;
     });
   });
@@ -5076,6 +5076,7 @@ async function _loadTrainerAthletes(){
   }catch(e){console.warn('[AquaMeet] _loadTrainerAthletes:',e.message);}
 }
 
+const _orgTransferredLocalIds=new Set(); // local_ids already in trainer_athletes
 async function _loadOrgTrainerAthletes(){
   if(_supaOffline||_loggingOut)return;
   const orgId=_currentRole==='secretary'?_currentProfile?.organizer_id:_currentUser?.id;
@@ -5108,6 +5109,9 @@ async function _loadOrgTrainerAthletes(){
     }
 
     if(!data?.length) return;
+
+    // Track which local_ids are already transferred so 📤 button hides correctly
+    data.forEach(r=>{if(r.local_id!=null)_orgTransferredLocalIds.add(Number(r.local_id));});
 
     // ── Helper: parse row and find competition ──────────────────
     const resolveRow=(row)=>{
