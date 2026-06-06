@@ -5104,6 +5104,21 @@ async function _loadOrgTrainerAthletes(){
   if(_supaOffline||_loggingOut)return;
   const orgId=_currentRole==='secretary'?_currentProfile?.organizer_id:_currentUser?.id;
   if(!orgId)return;
+
+  // ── Cleanup: remove _trainerOwned duplicates of organizer-added athletes ────────
+  // If org added athlete A and then transferred → trainer_athletes got local_id=A.id.
+  // Old code created a NEW duplicate with a different id. Remove those duplicates now.
+  const orgKeys=new Set(db.athletes.filter(a=>!a._trainerOwned)
+    .map(a=>`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`));
+  const dupIds=new Set(db.athletes.filter(a=>a._trainerOwned
+    &&orgKeys.has(`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`))
+    .map(a=>a.id));
+  if(dupIds.size){
+    db.athletes=db.athletes.filter(a=>!dupIds.has(a.id));
+    for(const comp of (db.competitions||[]))
+      if(comp.entries)comp.entries=comp.entries.filter(e=>!dupIds.has(e.athleteId));
+    console.log('[AquaMeet] Cleaned',dupIds.size,'duplicate trainer-owned athletes');
+  }
   try{
     const mkTimeout=(ms)=>new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms));
 
