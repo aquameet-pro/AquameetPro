@@ -15225,12 +15225,24 @@ if('serviceWorker' in navigator){
     // updateViaCache:'none' — browser always fetches sw.js fresh (bypasses HTTP cache)
     navigator.serviceWorker.register('sw.js',{updateViaCache:'none'})
       .then(reg=>{
-        // Check for update every time user returns to the app
+        // Check for update every time user returns to the app (works on iOS/Android)
         document.addEventListener('visibilitychange',()=>{
           if(document.visibilityState==='visible') reg.update();
         });
-        // Also check every hour while app is open
-        setInterval(()=>reg.update(), 60*60*1000);
+        // Also check every 10 minutes while app is open
+        setInterval(()=>reg.update(), 10*60*1000);
+
+        // When a new SW is found installing — notify user
+        reg.addEventListener('updatefound',()=>{
+          const nw=reg.installing;
+          if(!nw)return;
+          nw.addEventListener('statechange',()=>{
+            if(nw.state==='installed'&&navigator.serviceWorker.controller){
+              // New version ready — will auto-reload via controllerchange
+              try{showToast('🔄 Виявлено оновлення. Оновлення застосовується…');}catch(_){}
+            }
+          });
+        });
       }).catch(()=>{});
 
     // When new SW takes control → reload the page automatically
@@ -15238,8 +15250,9 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
       if(_swRefreshing)return;
       _swRefreshing=true;
+      try{showToast('✅ Застосовано нову версію. Перезавантаження…');}catch(_){}
       // Small delay so any in-flight saves complete
-      setTimeout(()=>window.location.reload(),800);
+      setTimeout(()=>window.location.reload(),1200);
     });
   });
 }
