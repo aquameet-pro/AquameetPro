@@ -4630,25 +4630,23 @@ function renderAthletes(){
   const dayf=document.getElementById('af-day').value;
   const qf=document.getElementById('af-q').value.toLowerCase();
 
-  // Dedup: for org/admin, if both org-added AND _trainerOwned exist for same athlete → show org-added only
-  const _seenAthKeys=new Set();
+  // Dedup: for org/admin, hide _trainerOwned copy ONLY when the org-added version was explicitly
+  // transferred (has _assignedToTrainer=true). Trainer's own athletes are always shown.
+  const _transferredOrgIds=new Set(
+    ['organizer','secretary','admin'].includes(_currentRole)
+      ?db.athletes.filter(a=>!a._trainerOwned&&a._assignedToTrainer).map(a=>a._supaId).filter(Boolean)
+      :[]
+  );
 
   let n=1;
   const rows=[];
-  // Process org-added athletes first so they "claim" the key
-  const _sortedAthletes=[
-    ...db.athletes.filter(a=>!a._trainerOwned),
-    ...db.athletes.filter(a=>a._trainerOwned)
-  ];
-  for(const a of _sortedAthletes){
+  for(const a of db.athletes){
     // Trainer: only show their own athletes (_loadTrainerAthletes loads only current comp)
     if(_currentRole==='trainer'&&!a._trainerOwned)continue;
     if(_currentRole==='trainer'&&a._trainerId&&a._trainerId!==_currentUser?.id)continue;
-    // Org/Admin: dedup by name+year — first seen (org-added) wins; skip _trainerOwned copy
-    if(['organizer','secretary','admin'].includes(_currentRole)){
-      const k=`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`;
-      if(_seenAthKeys.has(k))continue;
-      _seenAthKeys.add(k);
+    // Org/Admin: hide _trainerOwned copy only if it was created from an org-transferred athlete
+    if(['organizer','secretary','admin'].includes(_currentRole)&&a._trainerOwned&&a._supaId){
+      if(_transferredOrgIds.has(a._supaId))continue;
     }
     // Organizer: trainer-owned athletes — show if they have entries in this competition
     // OR if they have no entries in ANY competition (unassigned/pending)
