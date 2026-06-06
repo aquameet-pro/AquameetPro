@@ -5117,6 +5117,7 @@ async function _loadOrgTrainerAthletes(){
     db.athletes=db.athletes.filter(a=>!dupIds.has(a.id));
     for(const comp of (db.competitions||[]))
       if(comp.entries)comp.entries=comp.entries.filter(e=>!dupIds.has(e.athleteId));
+    saveDB(); // persist cleanup so duplicates don't come back on next load
     console.log('[AquaMeet] Cleaned',dupIds.size,'duplicate trainer-owned athletes');
   }
   try{
@@ -5186,7 +5187,7 @@ async function _loadOrgTrainerAthletes(){
         Object.assign(existing,athData,keep);
       }else{
         // Check if organizer already added this athlete (by local_id) — avoid duplicate
-        const localId=typeof row.local_id==='number'&&row.local_id>0?row.local_id:null;
+        const localId=row.local_id!=null&&Number(row.local_id)>0?Number(row.local_id):null;
         const orgAddedAth=localId?db.athletes.find(a=>a.id===localId&&!a._trainerOwned):null;
         if(orgAddedAth){
           // Link to trainer_athletes record; mark as assigned — DO NOT duplicate
@@ -5243,7 +5244,7 @@ async function _loadOrgTrainerAthletes(){
     for(const row of freeRows){
       const{athData,entriesData,matchedComp}=resolveRow(row);
       const preservedId=savedLocalIds.get(row.id)||null;
-      const rawLocalId=typeof row.local_id==='number'&&row.local_id>0?row.local_id:null;
+      const rawLocalId=row.local_id!=null&&Number(row.local_id)>0?Number(row.local_id):null;
       const localId=preservedId||rawLocalId||null;
 
       // If organizer already has this athlete (by local_id) — don't duplicate, just link
