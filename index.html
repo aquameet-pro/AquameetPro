@@ -5215,10 +5215,10 @@ async function _loadOrgTrainerAthletes(){
         const localId=row.local_id!=null&&Number(row.local_id)>0?Number(row.local_id):null;
         const _matchOrg=a=>!a._trainerOwned&&(
           (localId&&a.id===localId)||
-          ((athData.surname&&athData.name&&athData.birthYear)&&
+          (athData.surname&&athData.name&&
             (a.surname||'').toLowerCase()===(athData.surname||'').toLowerCase()&&
             (a.name||'').toLowerCase()===(athData.name||'').toLowerCase()&&
-            String(a.birthYear)===String(athData.birthYear))
+            (!athData.birthYear||!a.birthYear||String(a.birthYear)===String(athData.birthYear)))
         );
         const orgAddedAth=db.athletes.find(_matchOrg);
         if(orgAddedAth){
