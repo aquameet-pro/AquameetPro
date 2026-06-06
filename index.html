@@ -4501,11 +4501,41 @@ async function doBulkAssign(){
       a._assignedToTrainer=true;total++;
     }
   }
-  if(total>0)saveDB();
+  if(total>0){
+    saveDB();
+    // Ensure each assigned trainer has access to this organizer's competitions
+    const assignedTrainerIds=new Set();
+    for(let i=0;i<keys.length;i++){
+      const tid=document.getElementById(`ba-sel-${i}`)?.value;
+      if(tid)assignedTrainerIds.add(tid);
+    }
+    for(const tid of assignedTrainerIds){
+      await _ensureTrainerOrgAccess(tid,orgId,comp);
+    }
+  }
   btn.disabled=false;btn.textContent='📤 Передати всіх';
   showToast(errors?`✅ Передано ${total} · Помилок: ${errors}`:`✅ Передано ${total} учасників`);
   closeModal('modal-bulk-assign');
   renderAthletes();
+}
+
+// Ensure trainer can see organizer's competitions after receiving transferred athletes
+async function _ensureTrainerOrgAccess(trainerId,orgId,comp){
+  if(!trainerId||!orgId)return;
+  try{
+    // 1. comp_access: trainer → organizer (approved)
+    await _supa.from('comp_access')
+      .upsert({trainer_id:trainerId,organizer_id:orgId,status:'approved'},
+              {onConflict:'trainer_id,organizer_id'});
+    // 2. comp_invitations: so trainer sees this competition in Запрошення tab
+    if(comp){
+      const snapshot=_buildCompSnapshot(comp);
+      await _supa.from('comp_invitations')
+        .upsert({trainer_id:trainerId,organizer_id:orgId,comp_id:comp.id,
+                 comp_name:comp.name||'',comp_snapshot:snapshot,trainer_response:'pending'},
+                {onConflict:'comp_id,organizer_id,trainer_id'});
+    }
+  }catch(e){console.warn('[AquaMeet] _ensureTrainerOrgAccess:',e.message);}
 }
 
 let _assignTrainerAthId=null;
@@ -4568,10 +4598,12 @@ async function doAssignTrainer(){
   }
   btn.disabled=false;btn.textContent='📤 Передати';
   if(error){errEl.textContent='Помилка: '+error.message;errEl.style.display='';return;}
+  // Ensure trainer has access to this organizer's competitions
+  await _ensureTrainerOrgAccess(trainerId,orgId,comp);
   // Notify trainer
   const adminName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
   await _insertNotification(trainerId,'athlete_assigned','📤 Учасника передано',
-    `${adminName} додав учасника ${a.surname} ${a.name} до ваших даних на змагання «${comp.name||''}».`,
+    `${adminName} додав учасника ${a.surname} ${a.name} до ваших даних на змагання «${comp.name||''}». Відкрийте «Запрошення».`,
     {comp_id:comp.id,organizer_id:orgId}).catch(()=>{});
   // Mark persistently so 📤 button stays hidden even after page reload
   a._assignedToTrainer=true;
