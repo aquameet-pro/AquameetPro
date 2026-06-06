@@ -148,7 +148,15 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
   position:sticky;top:var(--filter-offset);z-index:14;
   background:var(--bg);padding-bottom:.35rem;margin-bottom:.3rem;
 }
-/* thead sticky removed — Safari breaks sticky inside overflow-x:auto */
+/* Athletes table: own scroll container so thead sticks at top:0 (works in Safari) */
+#tab-athletes .tbl-wrap{
+  max-height:calc(100vh - var(--filter-offset) - 3.5rem);
+  overflow-y:auto;overflow-x:auto;
+}
+#tab-athletes .tbl-wrap thead th{
+  position:sticky;top:0;z-index:5;
+  background:var(--card);box-shadow:0 1px 0 var(--border);
+}
 .mob-sub{display:none}
 .mob-only{display:none}
 .tbl-wrap.scrollable::after{content:'';pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right,transparent,rgba(0,119,182,.10));border-radius:0 var(--radius) var(--radius) 0}
