@@ -4630,21 +4630,25 @@ function renderAthletes(){
   const dayf=document.getElementById('af-day').value;
   const qf=document.getElementById('af-q').value.toLowerCase();
 
-  // Dedup set: for org/admin roles, skip _trainerOwned copy if an org-added copy exists (same name+year)
-  const _orgAthKeys=(['organizer','secretary','admin'].includes(_currentRole))
-    ?new Set(db.athletes.filter(a=>!a._trainerOwned).map(a=>`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`))
-    :null;
+  // Dedup: for org/admin, if both org-added AND _trainerOwned exist for same athlete → show org-added only
+  const _seenAthKeys=new Set();
 
   let n=1;
   const rows=[];
-  for(const a of db.athletes){
+  // Process org-added athletes first so they "claim" the key
+  const _sortedAthletes=[
+    ...db.athletes.filter(a=>!a._trainerOwned),
+    ...db.athletes.filter(a=>a._trainerOwned)
+  ];
+  for(const a of _sortedAthletes){
     // Trainer: only show their own athletes (_loadTrainerAthletes loads only current comp)
     if(_currentRole==='trainer'&&!a._trainerOwned)continue;
     if(_currentRole==='trainer'&&a._trainerId&&a._trainerId!==_currentUser?.id)continue;
-    // Org/Admin: skip _trainerOwned copy if an org-added copy with same name+year exists (avoid duplicates)
-    if(_orgAthKeys&&a._trainerOwned){
+    // Org/Admin: dedup by name+year — first seen (org-added) wins; skip _trainerOwned copy
+    if(['organizer','secretary','admin'].includes(_currentRole)){
       const k=`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`;
-      if(_orgAthKeys.has(k))continue;
+      if(_seenAthKeys.has(k))continue;
+      _seenAthKeys.add(k);
     }
     // Organizer: trainer-owned athletes — show if they have entries in this competition
     // OR if they have no entries in ANY competition (unassigned/pending)
@@ -5092,17 +5096,23 @@ async function _saveTrainerAthlete(data,entries,comp){
 async function _loadTrainerAthletes(){
   if(_currentRole!=='trainer'||!_currentUser)return;
   const compId=db.activeCompId;
-  if(!compId)return;
+  const orgId=_viewingOwnerId;
 
   try{
     if(_supaOffline)return;
     const timeout=new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000));
-    const{data,error}=await Promise.race([
-      _supa.from('trainer_athletes').select('*')
-        .eq('trainer_id',_currentUser.id)
-        .eq('comp_id',compId),
+    // Try by comp_id first; if no results and we have an orgId, try by organizer_id
+    let{data,error}=compId?await Promise.race([
+      _supa.from('trainer_athletes').select('*').eq('trainer_id',_currentUser.id).eq('comp_id',compId),
       timeout
-    ]);
+    ]):{data:null,error:null};
+    if((!data?.length)&&orgId){
+      const r2=await Promise.race([
+        _supa.from('trainer_athletes').select('*').eq('trainer_id',_currentUser.id).eq('organizer_id',orgId),
+        new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),4000))
+      ]);
+      if(!r2.error&&r2.data?.length){data=r2.data;error=null;}
+    }
     if(error||!data?.length)return;
 
     // ── If heats already exist: update athlete data in-place, never change IDs ──
