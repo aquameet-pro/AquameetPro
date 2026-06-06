@@ -5228,9 +5228,19 @@ async function _loadOrgTrainerAthletes(){
     for(const row of freeRows){
       const{athData,entriesData,matchedComp}=resolveRow(row);
       const preservedId=savedLocalIds.get(row.id)||null;
-      const localId=preservedId||(typeof row.local_id==='number'&&row.local_id>0?row.local_id:db.nextId.ath++);
-      db.nextId.ath=Math.max(db.nextId.ath,localId+1);
-      const athId=(preservedId||!db.athletes.find(a=>a.id===localId))?localId:db.nextId.ath++;
+      const rawLocalId=typeof row.local_id==='number'&&row.local_id>0?row.local_id:null;
+      const localId=preservedId||rawLocalId||null;
+
+      // If organizer already has this athlete (by local_id) — don't duplicate, just link
+      const orgExisting=localId?db.athletes.find(a=>a.id===localId&&!a._trainerOwned):null;
+      if(orgExisting){
+        orgExisting._supaId=row.id;orgExisting._assignedToTrainer=true;
+        _orgTransferredLocalIds.add(localId);
+        continue;
+      }
+
+      const athId=localId&&!db.athletes.find(a=>a.id===localId)?localId:db.nextId.ath++;
+      db.nextId.ath=Math.max(db.nextId.ath,athId+1);
       if(!row.local_id&&!preservedId){
         _supa.from('trainer_athletes').update({local_id:athId}).eq('id',row.id)
           .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] local_id sync:',ue.message);});
