@@ -148,16 +148,7 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
   position:sticky;top:var(--filter-offset);z-index:14;
   background:var(--bg);padding-bottom:.35rem;margin-bottom:.3rem;
 }
-/* Sticky table headers */
-#tab-athletes .tbl-wrap thead th,
-#tab-results .tbl-wrap thead th,
-#tab-protocol .tbl-wrap thead th,
-#tab-standings .tbl-wrap thead th,
-#tab-athletes-dir .tbl-wrap thead th,
-#tab-relays .tbl-wrap thead th{
-  position:sticky;top:var(--thead-offset);z-index:5;
-  background:var(--card);box-shadow:0 1px 0 var(--border);
-}
+/* thead sticky removed — Safari breaks sticky inside overflow-x:auto */
 .mob-sub{display:none}
 .mob-only{display:none}
 .tbl-wrap.scrollable::after{content:'';pointer-events:none;position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right,transparent,rgba(0,119,182,.10));border-radius:0 var(--radius) var(--radius) 0}
@@ -4621,7 +4612,8 @@ function renderAthletes(){
     if(gf&&a.gender!==gf)continue;
     if(agf&&(!ag||ag.id!=agf))continue;
     if(qf&&!`${a.surname} ${a.name}`.toLowerCase().includes(qf)&&!(a.club||'').toLowerCase().includes(qf)&&!(a.city||'').toLowerCase().includes(qf))continue;
-    let ent=(comp?.entries||[]).filter(e=>e.athleteId===a.id);
+    let ent=(comp?.entries||[]).filter(e=>e.athleteId===a.id)
+      .sort((a,b)=>a.dist-b.dist||STYLES.indexOf(a.style)-STYLES.indexOf(b.style));
     if(df&&!ent.find(e=>e.dist==df))continue;
     if(sf&&!ent.find(e=>e.style===sf))continue;
     if(dayf&&!ent.find(e=>e.dayId==dayf))continue;
@@ -5178,8 +5170,17 @@ async function _loadOrgTrainerAthletes(){
           _compId:existing._compId,_trainerId:existing._trainerId,_orgId:existing._orgId};
         Object.assign(existing,athData,keep);
       }else{
+        // Check if organizer already added this athlete (by local_id) — avoid duplicate
+        const localId=typeof row.local_id==='number'&&row.local_id>0?row.local_id:null;
+        const orgAddedAth=localId?db.athletes.find(a=>a.id===localId&&!a._trainerOwned):null;
+        if(orgAddedAth){
+          // Link to trainer_athletes record; mark as assigned — DO NOT duplicate
+          orgAddedAth._supaId=row.id;orgAddedAth._assignedToTrainer=true;
+          _orgTransferredLocalIds.add(localId);
+          continue;
+        }
         // Brand-new athlete added after heats — add normally (warning banner will flag them)
-        const preservedId=(typeof row.local_id==='number'&&row.local_id>0?row.local_id:null)||db.nextId.ath++;
+        const preservedId=localId||db.nextId.ath++;
         db.nextId.ath=Math.max(db.nextId.ath,preservedId+1);
         const athId=!db.athletes.find(a=>a.id===preservedId)?preservedId:db.nextId.ath++;
         const ath={id:athId,...athData,isTest:false,_trainerOwned:true,
