@@ -5675,7 +5675,8 @@ function renderHeats(){
       return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}${isSwapSrc?' swap-source':isSwapTgt?' swap-target':''}" id="lc-${heat.id}-${ln}">
         <div class="lane-num">Д.${ln}</div>
         <div class="lane-name">${a?a.surname+' '+a.name:'?'}</div>
-        <div class="lane-club">${a?(a.city&&a.club?a.city+' · '+a.club:a.city||a.club||''):''}</div>
+        <div class="lane-club">${a?[a.birthYear,a.coach].filter(Boolean).join(' · '):''}</div>
+        <div class="lane-club" style="font-size:.68rem">${a?(a.city&&a.club?a.city+' · '+a.club:a.city||a.club||''):''}</div>
         <div class="lane-time">${entry?.seedTime||'–'}</div>
         ${entry?.result?(parseTime(entry.result)!==null?`<div class="lane-result">✓ ${entry.result}</div>`:`<div class="lane-result" style="color:${entry.result==='Д/К'?'var(--danger)':'var(--text-muted)'}">${entry.result}</div>`):''}
         <button class="btn-icon btn-xs swap-btn" title="Поміняти доріжку" onclick="startSwap(${heat.id},${ln})">⇄</button>
