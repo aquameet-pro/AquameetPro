@@ -4630,12 +4630,22 @@ function renderAthletes(){
   const dayf=document.getElementById('af-day').value;
   const qf=document.getElementById('af-q').value.toLowerCase();
 
+  // Dedup set: for org/admin roles, skip _trainerOwned copy if an org-added copy exists (same name+year)
+  const _orgAthKeys=(['organizer','secretary','admin'].includes(_currentRole))
+    ?new Set(db.athletes.filter(a=>!a._trainerOwned).map(a=>`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`))
+    :null;
+
   let n=1;
   const rows=[];
   for(const a of db.athletes){
     // Trainer: only show their own athletes (_loadTrainerAthletes loads only current comp)
     if(_currentRole==='trainer'&&!a._trainerOwned)continue;
     if(_currentRole==='trainer'&&a._trainerId&&a._trainerId!==_currentUser?.id)continue;
+    // Org/Admin: skip _trainerOwned copy if an org-added copy with same name+year exists (avoid duplicates)
+    if(_orgAthKeys&&a._trainerOwned){
+      const k=`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`;
+      if(_orgAthKeys.has(k))continue;
+    }
     // Organizer: trainer-owned athletes — show if they have entries in this competition
     // OR if they have no entries in ANY competition (unassigned/pending)
     // Hide only if they have entries exclusively in other competitions
@@ -5162,21 +5172,8 @@ async function _loadOrgTrainerAthletes(){
   const orgId=_currentRole==='secretary'?_currentProfile?.organizer_id:_currentUser?.id;
   if(!orgId)return;
 
-  // ── Cleanup: remove _trainerOwned duplicates of organizer-added athletes ────────
-  // If org added athlete A and then transferred → trainer_athletes got local_id=A.id.
-  // Old code created a NEW duplicate with a different id. Remove those duplicates now.
-  const orgKeys=new Set(db.athletes.filter(a=>!a._trainerOwned)
-    .map(a=>`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`));
-  const dupIds=new Set(db.athletes.filter(a=>a._trainerOwned
-    &&orgKeys.has(`${(a.surname||'').toLowerCase()}|${(a.name||'').toLowerCase()}|${a.birthYear||''}`))
-    .map(a=>a.id));
-  if(dupIds.size){
-    db.athletes=db.athletes.filter(a=>!dupIds.has(a.id));
-    for(const comp of (db.competitions||[]))
-      if(comp.entries)comp.entries=comp.entries.filter(e=>!dupIds.has(e.athleteId));
-    saveDB(); // persist cleanup so duplicates don't come back on next load
-    console.log('[AquaMeet] Cleaned',dupIds.size,'duplicate trainer-owned athletes');
-  }
+  // Note: duplicate prevention is handled at render time in renderAthletes()
+  // (prefer org-added version when both exist) rather than modifying db here.
   try{
     const mkTimeout=(ms)=>new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms));
 
@@ -5261,6 +5258,7 @@ async function _loadOrgTrainerAthletes(){
       }else{
         // Check if organizer already added this athlete (by local_id) — avoid duplicate
         const localId=row.local_id!=null&&Number(row.local_id)>0?Number(row.local_id):null;
+        // Mark org-added athlete as assigned (for 📤 button tracking) without blocking _trainerOwned copy
         const _matchOrg=a=>!a._trainerOwned&&(
           (localId&&a.id===localId)||
           (athData.surname&&athData.name&&
@@ -5269,12 +5267,7 @@ async function _loadOrgTrainerAthletes(){
             (!athData.birthYear||!a.birthYear||String(a.birthYear)===String(athData.birthYear)))
         );
         const orgAddedAth=db.athletes.find(_matchOrg);
-        if(orgAddedAth){
-          // Link to trainer_athletes record; mark as assigned — DO NOT duplicate
-          orgAddedAth._supaId=row.id;orgAddedAth._assignedToTrainer=true;
-          _orgTransferredLocalIds.add(localId);
-          continue;
-        }
+        if(orgAddedAth){orgAddedAth._supaId=row.id;orgAddedAth._assignedToTrainer=true;if(localId)_orgTransferredLocalIds.add(localId);}
         // Brand-new athlete added after heats — add normally (warning banner will flag them)
         const preservedId=localId||db.nextId.ath++;
         db.nextId.ath=Math.max(db.nextId.ath,preservedId+1);
@@ -5328,19 +5321,16 @@ async function _loadOrgTrainerAthletes(){
       const localId=preservedId||rawLocalId||null;
 
       // If organizer already has this athlete (by local_id) — don't duplicate, just link
+      // Mark org-added athlete as assigned (for 📤 button tracking)
       const _matchOrgFree=a=>!a._trainerOwned&&(
         (localId&&a.id===localId)||
-        ((athData.surname&&athData.name&&athData.birthYear)&&
+        (athData.surname&&athData.name&&
           (a.surname||'').toLowerCase()===(athData.surname||'').toLowerCase()&&
           (a.name||'').toLowerCase()===(athData.name||'').toLowerCase()&&
-          String(a.birthYear)===String(athData.birthYear))
+          (!athData.birthYear||!a.birthYear||String(a.birthYear)===String(athData.birthYear)))
       );
       const orgExisting=db.athletes.find(_matchOrgFree);
-      if(orgExisting){
-        orgExisting._supaId=row.id;orgExisting._assignedToTrainer=true;
-        _orgTransferredLocalIds.add(localId);
-        continue;
-      }
+      if(orgExisting){orgExisting._supaId=row.id;orgExisting._assignedToTrainer=true;if(localId)_orgTransferredLocalIds.add(localId);}
 
       const athId=localId&&!db.athletes.find(a=>a.id===localId)?localId:db.nextId.ath++;
       db.nextId.ath=Math.max(db.nextId.ath,athId+1);
