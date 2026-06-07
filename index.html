@@ -4357,6 +4357,7 @@ async function refreshTrainerAthletes(){
   }
   if(btn){btn.disabled=false;btn.textContent='🔄 Тренери';}
 }
+let _byTrainerGroups=[];
 function openByTrainerModal(){
   const comp=activeComp();
   const el=document.getElementById('by-trainer-content');
@@ -4368,25 +4369,30 @@ function openByTrainerModal(){
     el.innerHTML='<div class="empty-state"><div class="icon">👥</div>Учасників ще немає</div>';
     openModal('modal-by-trainer');return;
   }
-  // Group by coach name (primary) + club (secondary)
+  // Group by trainerId (when available) or coach+club text
   const groups={};
   for(const a of athletes){
     const coach=(a.coach||'').trim()||'— без тренера —';
     const club=(a.club||'').trim()||'—';
-    const key=coach+'||'+club;
-    if(!groups[key])groups[key]={coach,club,city:a.city||'',athletes:[]};
-    const aths=groups[key].athletes;
+    // Prefer trainerId as stable key so name variants group together
+    const key=a._trainerId?`tid:${a._trainerId}`:`txt:${coach}||${club}`;
+    if(!groups[key])groups[key]={coach,club,city:a.city||'',athletes:[],trainerId:a._trainerId||null};
+    else if(a._trainerId&&groups[key].coach==='— без тренера —'&&coach!=='— без тренера —'){
+      // Update display name from a named athlete
+      groups[key].coach=coach;groups[key].club=club;groups[key].city=a.city||groups[key].city;
+    }
     const entries=(comp?.entries||[]).filter(e=>e.athleteId===a.id);
-    aths.push({a,entries});
+    groups[key].athletes.push({a,entries});
   }
-  const sorted=Object.values(groups).sort((a,b)=>b.athletes.length-a.athletes.length||(a.coach>b.coach?1:-1));
+  _byTrainerGroups=Object.values(groups).sort((a,b)=>b.athletes.length-a.athletes.length||(a.coach>b.coach?1:-1));
   const total=athletes.length;
+  const canEdit=['organizer','secretary','admin'].includes(_currentRole);
   el.innerHTML=`
     <div style="margin-bottom:.75rem;font-size:.83rem;color:var(--text-muted)">
       Всього учасників: <strong style="color:var(--text)">${total}</strong> ·
-      Тренерів / команд: <strong style="color:var(--text)">${sorted.length}</strong>
+      Тренерів / команд: <strong style="color:var(--text)">${_byTrainerGroups.length}</strong>
     </div>
-    ${sorted.map(g=>{
+    ${_byTrainerGroups.map((g,gi)=>{
       g.athletes.sort((x,y)=>{
         if(x.a.gender!==y.a.gender)return x.a.gender==='F'?-1:1;
         return(x.a.surname||'').localeCompare(y.a.surname||'','uk')||(x.a.name||'').localeCompare(y.a.name||'','uk');
@@ -4404,6 +4410,7 @@ function openByTrainerModal(){
           <span style="font-weight:700;font-size:.9rem">${escapeHtml(g.coach)}</span>
           ${g.club&&g.club!=='—'?`<span class="badge badge-heat" style="font-size:.75rem">${escapeHtml(g.club)}</span>`:''}
           ${g.city?`<span style="font-size:.78rem;color:var(--text-muted)">📍 ${escapeHtml(g.city)}</span>`:''}
+          ${canEdit?`<button onclick="renameCoachGroup(${gi})" title="Перейменувати тренера в усіх учасників" style="background:none;border:none;cursor:pointer;padding:.1rem .3rem;font-size:.85rem;color:var(--text-muted);opacity:.55;border-radius:4px" onmouseover="this.style.opacity=1;this.style.background='var(--hover)'" onmouseout="this.style.opacity=.55;this.style.background='none'">✏️</button>`:''}
           <span style="margin-left:auto;font-weight:700;font-size:.95rem;color:var(--accent)">${g.athletes.length} уч.</span>
         </div>
         <div class="tbl-wrap" style="margin:0">
@@ -4415,6 +4422,44 @@ function openByTrainerModal(){
       </div>`;
     }).join('')}`;
   openModal('modal-by-trainer');
+}
+
+async function renameCoachGroup(gi){
+  const g=_byTrainerGroups[gi];
+  if(!g)return;
+  const newName=prompt(`Перейменувати тренера для ${g.athletes.length} учасників:\n\nПоточна назва: "${g.coach}"\nНова назва:`,g.coach);
+  if(!newName||newName.trim()===g.coach)return;
+  await applyCoachRename(g,newName.trim());
+}
+
+async function applyCoachRename(g,newName){
+  const oldCoach=g.coach;
+  const isNoTrainer=oldCoach==='— без тренера —';
+  // Collect IDs to update
+  const toUpdate=g.athletes.map(x=>x.a);
+  const supaUpdates=[];
+  for(const a of toUpdate){
+    a.coach=isNoTrainer?'':newName;
+    // For trainerOwned: queue Supabase athlete_data patch
+    if(a._trainerOwned&&a._supaId)supaUpdates.push({supaId:a._supaId,coach:a.coach});
+  }
+  await saveDB();
+  // Patch Supabase athlete_data for trainerOwned athletes
+  if(supaUpdates.length&&!_supaOffline){
+    for(const{supaId,coach}of supaUpdates){
+      _supa.from('trainer_athletes').select('athlete_data').eq('id',supaId).single()
+        .then(({data:row})=>{
+          if(!row)return;
+          let ad=row.athlete_data||{};
+          if(typeof ad==='string'){try{ad=JSON.parse(ad);}catch(_){ad={};}}
+          ad.coach=coach;
+          _supa.from('trainer_athletes').update({athlete_data:ad}).eq('id',supaId)
+            .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] applyCoachRename:',ue.message);});
+        });
+    }
+  }
+  showToast(`✅ Перейменовано: ${toUpdate.length} учасників → "${newName}"`);
+  openByTrainerModal(); // refresh modal
 }
 
 let _bulkTrainerProfiles=[];
