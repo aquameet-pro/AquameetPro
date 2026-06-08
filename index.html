@@ -5280,6 +5280,11 @@ async function _loadOrgTrainerAthletes(){
 
     if(!data.length) return;
 
+    // ── Filter rows already deleted by organizer (persisted block-list) ───────
+    const _deletedSet=new Set(db._orgDeletedSupaIds||[]);
+    if(_deletedSet.size) data=data.filter(r=>!_deletedSet.has(r.id));
+    if(!data.length) return;
+
     // ── Deduplicate rows by trainer+comp+name+year (keep newest updated_at) ─
     // Multiple rows for same athlete can exist from previous bugs; pick one per athlete.
     const rowKey=r=>{
@@ -5344,7 +5349,7 @@ async function _loadOrgTrainerAthletes(){
             (!athData.birthYear||!a.birthYear||String(a.birthYear)===String(athData.birthYear)))
         );
         const orgAddedAth=db.athletes.find(_matchOrg);
-        if(orgAddedAth){orgAddedAth._supaId=row.id;orgAddedAth._assignedToTrainer=true;if(localId)_orgTransferredLocalIds.add(localId);}
+        if(orgAddedAth){orgAddedAth._supaId=row.id;orgAddedAth._assignedToTrainer=true;if(localId)_orgTransferredLocalIds.add(localId);continue;}
         // Brand-new athlete added after heats — add normally (warning banner will flag them)
         const preservedId=localId||db.nextId.ath++;
         db.nextId.ath=Math.max(db.nextId.ath,preservedId+1);
@@ -5407,7 +5412,7 @@ async function _loadOrgTrainerAthletes(){
           (!athData.birthYear||!a.birthYear||String(a.birthYear)===String(athData.birthYear)))
       );
       const orgExisting=db.athletes.find(_matchOrgFree);
-      if(orgExisting){orgExisting._supaId=row.id;orgExisting._assignedToTrainer=true;if(localId)_orgTransferredLocalIds.add(localId);}
+      if(orgExisting){orgExisting._supaId=row.id;orgExisting._assignedToTrainer=true;if(localId)_orgTransferredLocalIds.add(localId);continue;}
 
       const athId=localId&&!db.athletes.find(a=>a.id===localId)?localId:db.nextId.ath++;
       db.nextId.ath=Math.max(db.nextId.ath,athId+1);
@@ -5443,15 +5448,17 @@ async function delAthlete(id){
     // Org/Admin: also delete from trainer_athletes (by supaId or by local_id)
     // to prevent athlete reappearing on next _loadOrgTrainerAthletes
     if(ath?._supaId){
+      // Add to persistent block-list so even if Supabase delete fails, athlete won't reappear
+      if(!db._orgDeletedSupaIds)db._orgDeletedSupaIds=[];
+      if(!db._orgDeletedSupaIds.includes(ath._supaId))db._orgDeletedSupaIds.push(ath._supaId);
       _supa.from('trainer_athletes').delete().eq('id',ath._supaId)
         .then(({error:e})=>{if(e)console.warn('[AquaMeet] del trainer_athletes:',e.message);});
-    } else {
-      // Fallback: delete by local_id for all comps of this organizer
-      const orgId=_getEffectiveOrgId()||_currentUser?.id;
-      if(orgId){
-        _supa.from('trainer_athletes').delete().eq('local_id',id).eq('organizer_id',orgId)
-          .then(({error:e})=>{if(e)console.warn('[AquaMeet] del trainer_athletes by local_id:',e.message);});
-      }
+    }
+    // Also try fallback by local_id in case _supaId was missing or wrong
+    const orgId=_getEffectiveOrgId()||_currentUser?.id;
+    if(orgId){
+      _supa.from('trainer_athletes').delete().eq('local_id',id).eq('organizer_id',orgId)
+        .then(({error:e})=>{if(e&&!ath?._supaId)console.warn('[AquaMeet] del trainer_athletes by local_id:',e.message);});
     }
     _orgTransferredLocalIds.delete(id);
   }
