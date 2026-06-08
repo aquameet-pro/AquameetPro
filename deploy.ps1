@@ -8,12 +8,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# 1. Auto-update cache version in sw.js
+# 1. Auto-update cache version in sw.js (use Python to avoid PowerShell encoding corruption)
 $ts    = Get-Date -Format "yyyyMMdd-HHmm"
 $cache = "aquameet-$ts"
-$sw    = Get-Content "sw.js" -Raw
-$sw    = $sw -replace "const CACHE = 'aquameet-[^']*'", "const CACHE = '$cache'"
-[System.IO.File]::WriteAllText("$PSScriptRoot\sw.js", $sw)
+python -c "
+import re, sys
+with open('sw.js', 'r', encoding='utf-8') as f:
+    s = f.read()
+s = re.sub(r\"const CACHE = 'aquameet-[^']*'\", \"const CACHE = 'aquameet-$ts'\", s)
+with open('sw.js', 'w', encoding='utf-8') as f:
+    f.write(s)
+print('SW cache updated')
+"
 Write-Host "SW cache: $cache"
 
 # 2. Copy main file to index.html

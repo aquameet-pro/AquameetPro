@@ -2784,10 +2784,14 @@ function ageGroup(a,comp,dist,style){
     //    (covers case where only female groups are defined — males still get grouped)
     return groups.find(g=>inYear(g))||null;
   };
-  // Event-specific override takes priority
+  // Event-specific override takes priority; if no match there — fall through to global
   if(dist!==undefined&&style!==undefined){
     const eventGroups=(c?.eventGroupSets||{})[_egsKey(dist,style)];
-    if(eventGroups?.length)return bestMatch(eventGroups);
+    if(eventGroups?.length){
+      const ev=bestMatch(eventGroups);
+      if(ev)return ev; // matched in event-specific groups — done
+      // no match in event groups → fall through to global groups below
+    }
   }
   // Global fallback
   return bestMatch(c?.ageGroups||[]);
