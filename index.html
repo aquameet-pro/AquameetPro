@@ -2768,14 +2768,21 @@ function getAg(id,comp){
 
 // Returns the best-matching age group for an athlete in a given competition.
 // When dist+style provided: checks event-specific groups first, then falls back to global.
-// Priority within any group set: 1) gender-specific match, 2) shared (gender='all').
+// Priority within any group set: 1) gender-specific match, 2) shared (gender='all'), 3) any year-match.
 function ageGroup(a,comp,dist,style){
   const c=comp||activeComp();
-  const inYear=g=>a.birthYear>=g.yearFrom&&a.birthYear<=g.yearTo;
+  const yr=Number(a.birthYear);
+  const inYear=g=>yr&&yr>=Number(g.yearFrom)&&yr<=Number(g.yearTo);
   const bestMatch=groups=>{
+    // 1) exact gender match
     const specific=groups.find(g=>inYear(g)&&g.gender===a.gender);
     if(specific)return specific;
-    return groups.find(g=>inYear(g)&&(g.gender==='all'||!g.gender))||null;
+    // 2) gender-neutral group
+    const shared=groups.find(g=>inYear(g)&&(g.gender==='all'||!g.gender));
+    if(shared)return shared;
+    // 3) fallback: use any group with matching year range regardless of gender
+    //    (covers case where only female groups are defined — males still get grouped)
+    return groups.find(g=>inYear(g))||null;
   };
   // Event-specific override takes priority
   if(dist!==undefined&&style!==undefined){
