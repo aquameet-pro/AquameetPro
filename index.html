@@ -5891,7 +5891,7 @@ function renderHeats(){
       const a=entry?db.athletes.find(x=>x.id===entry.athleteId):null;
       if(!a||!entry)return'';
       const exh=entry.exhibition?' ПК':'';
-      const club=[a.city,a.club].filter(Boolean).join(' · ')||'–';
+      const club=[a.coach,a.city,a.club].filter(Boolean).join(' · ')||'–';
       const seed=entry.seedTime||'–';
       return`<tr>
         <td rowspan="2" style="text-align:center;font-weight:700;vertical-align:middle;border:1px solid #888;border-right:2px solid #444;border-bottom:none;padding:1px 3px;font-size:8pt;width:5mm">${ln}</td>
