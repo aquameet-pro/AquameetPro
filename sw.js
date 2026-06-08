@@ -1,5 +1,5 @@
 // Cache version — update this string on every deploy to trigger auto-refresh
-const CACHE = 'aquameet-20260608-2352';
+const CACHE = 'aquameet-20260609-0006';
 
 // Only pre-cache static assets (icons, manifest). HTML is network-first.
 const STATIC = [

@@ -4809,16 +4809,15 @@ function renderAthletes(){
     if(['organizer','secretary','admin'].includes(_currentRole)&&a._trainerOwned&&a._supaId){
       if(_transferredOrgIds.has(a._supaId))continue;
     }
-    // Organizer: trainer-owned athletes — show if they have entries in this competition
-    // OR if they have no entries in ANY competition (unassigned/pending)
-    // Hide only if they have entries exclusively in other competitions
-    if(a._trainerOwned&&comp){
+    // All athletes: hide if they have entries ONLY in other competitions (not the active one).
+    // Show if: entries in this comp, OR no entries anywhere (newly added / unassigned).
+    if(comp){
       const hasEntriesHere=(comp.entries||[]).some(e=>e.athleteId===a.id);
       if(!hasEntriesHere){
         const hasEntriesElsewhere=(db.competitions||[])
           .filter(c=>c.id!==comp.id)
           .some(c=>(c.entries||[]).some(e=>e.athleteId===a.id));
-        if(hasEntriesElsewhere)continue; // has entries only in other comps → hide
+        if(hasEntriesElsewhere)continue; // belongs to other comp → hide
       }
     }
     const ag=ageGroup(a,comp);
