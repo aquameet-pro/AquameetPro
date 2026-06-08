@@ -184,8 +184,10 @@ tr:hover td{background:rgba(0,180,216,.04)}
 .lane-cell{padding:.6rem .35rem;text-align:center;border-right:1px solid var(--border);font-size:.8rem}
 .lane-cell.swap-source{outline:2.5px solid var(--accent);outline-offset:-2px;background:rgba(0,119,182,.10)}
 .lane-cell.swap-target{outline:2px dashed var(--accent2);outline-offset:-2px;background:rgba(0,180,216,.07);cursor:pointer}
-.swap-btn{font-size:.75rem;opacity:0;transition:opacity .15s;padding:.05rem .25rem;margin-top:.2rem}
-.lane-cell:hover .swap-btn,.lane-cell.swap-source .swap-btn{opacity:.7}
+.swap-btn{font-size:.95rem;opacity:0;transition:opacity .15s;padding:.1rem .35rem;margin-top:.2rem;min-width:28px;min-height:24px}
+.lane-cell:hover .swap-btn,.lane-cell.swap-source .swap-btn{opacity:.85}
+.lane-cell.swap-target{cursor:pointer}
+.lane-cell.swap-target .swap-btn{opacity:.85}
 .lane-cell:last-child{border-right:none}
 .lane-center{background:rgba(0,180,216,.07)}
 .lane-edge{background:rgba(0,119,182,.03)}
@@ -5860,7 +5862,13 @@ function renderHeats(){
     const centerLns=buildLaneOrder(activeLns).slice(0,Math.min(2,Math.floor(activeLns.length/2)));
     const cells=activeLns.map(ln=>{
       const eid=heat.lanes[ln];
-      if(!eid)return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}"><div class="lane-num">Д.${ln}</div><div class="lane-empty">вільна</div></div>`;
+      if(!eid){
+        const swapActiveEmpty=_swapState&&_swapState.heatId===heat.id&&_swapState.lane!==ln;
+        return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}${swapActiveEmpty?' swap-target':''}"${swapActiveEmpty?` onclick="startSwap(${heat.id},${ln})" title="Перемістити сюди"`:''}>
+          <div class="lane-num">Д.${ln}</div>
+          <div class="lane-empty">${swapActiveEmpty?'⬅ перемістити':'вільна'}</div>
+        </div>`;
+      }
       const entry=(comp.entries||[]).find(e=>e.id===eid);
       const a=entry?db.athletes.find(x=>x.id===entry.athleteId):null;
       const swapActive=_swapState&&_swapState.heatId===heat.id;
