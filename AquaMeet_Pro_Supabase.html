@@ -5233,7 +5233,8 @@ async function _loadTrainerAthletes(){
 const _orgTransferredLocalIds=new Set(); // local_ids already in trainer_athletes
 async function _loadOrgTrainerAthletes(){
   if(_supaOffline||_loggingOut)return;
-  const orgId=_currentRole==='secretary'?_currentProfile?.organizer_id:_currentUser?.id;
+  // Use effective org ID: for admin → viewingOwnerId; for secretary → their organizer; for org → self
+  const orgId=_getEffectiveOrgId();
   if(!orgId)return;
 
   // Note: duplicate prevention is handled at render time in renderAthletes()
