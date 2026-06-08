@@ -554,6 +554,17 @@ body.role-trainer button[onclick="generateProtocolQR()"]{ display:none!important
 body.role-trainer #btn-gen-heats{ display:none!important }
 body.role-trainer button[onclick^="generateHeats"]{ display:none!important }
 body.role-trainer button[onclick^="assignLateAthlete"]{ display:none!important }
+/* Assign-heat modal */
+.ahm-event{margin-bottom:.9rem;padding-bottom:.9rem;border-bottom:1px solid var(--border)}
+.ahm-event:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.ahm-ev-label{font-size:.78rem;font-weight:700;color:var(--accent);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.3px}
+.ahm-heat-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem;min-height:28px}
+.ahm-heat-num{font-size:.8rem;color:var(--text-muted);min-width:90px;flex-shrink:0}
+.ahm-lanes{display:flex;flex-wrap:wrap;gap:.3rem}
+.ahm-lane-btn{background:var(--bg-secondary);border:1.5px solid var(--accent2);color:var(--accent2);font-weight:700;font-size:.78rem;padding:.15rem .5rem;border-radius:6px;cursor:pointer;transition:background .12s,color .12s}
+.ahm-lane-btn:hover{background:var(--accent2);color:#fff}
+.ahm-no-free{font-size:.75rem;color:var(--text-muted);font-style:italic;margin-bottom:.35rem}
+.ahm-new-row{margin-top:.2rem}
 /* Естафети */
 body.role-trainer #btn-gen-relay-heats{ display:none!important }
 /* Новини — тільки перегляд */
@@ -3451,59 +3462,145 @@ function assignLateAthlete(athleteId){
   }
   const unassigned=getUnassignedEntries(athleteId,comp);
   if(!unassigned.length){showToast('✓ Учасник вже є в усіх запливах');return;}
+  // Open manual assignment modal
+  _openAssignHeatModal(athleteId,comp,unassigned);
+}
 
+function _getActiveLanes(comp){
   const poolLen=parseInt(comp.poolLength)||25;
   const defMax=poolLen>=50?10:6;
-  const activeLanes=(comp.activeLanes?.length?comp.activeLanes:Array.from({length:defMax},(_,i)=>i+1));
-  const maxLanes=activeLanes.length;
+  return comp.activeLanes?.length?[...comp.activeLanes]:Array.from({length:defMax},(_,i)=>i+1);
+}
+
+function _getEvHeats(comp,entry,eGender){
+  const mk=evKey(entry.dist,entry.style,eGender);
+  const mkM=evKey(entry.dist,entry.style,'MIX');
+  return comp.heats.filter(h=>h.eventKey===mk||h.eventKey===mkM||
+    (h.dist===entry.dist&&h.style===entry.style&&h.dayId===entry.dayId&&(h.gender===eGender||h.gender==='MIX')));
+}
+
+function _openAssignHeatModal(athleteId,comp,unassigned){
+  const ath=db.athletes.find(a=>a.id===athleteId);
+  const name=(ath?.surname||'?')+' '+(ath?.name||'')+(ath?.birthYear?' ('+ath.birthYear+')':'');
+  document.getElementById('ahm-name').textContent=name;
+  document.getElementById('ahm-auto').onclick=()=>{closeModal('modal-assign-heat');_doAutoAssign(athleteId);};
+  _renderAssignHeatBody(athleteId,comp,unassigned);
+  openModal('modal-assign-heat');
+}
+
+function _renderAssignHeatBody(athleteId,comp,unassigned){
+  const ath=db.athletes.find(a=>a.id===athleteId);
+  const activeLanes=_getActiveLanes(comp);
+  let html='';
+  for(const entry of unassigned){
+    const eGender=ath?.gender||'';
+    const ag=ageGroup(ath,comp,entry.dist,entry.style);
+    const label=`${entry.dist}м ${entry.style} · ${GMAP[eGender]||eGender}${ag?' · '+ag.name:''}`;
+    const evHeats=_getEvHeats(comp,entry,eGender);
+    html+=`<div class="ahm-event"><div class="ahm-ev-label">${label}</div>`;
+    let hasAny=false;
+    for(const heat of evHeats){
+      const used=new Set(Object.keys(heat.lanes||{}).map(Number));
+      const free=activeLanes.filter(l=>!used.has(l));
+      if(!free.length)continue;
+      hasAny=true;
+      const btns=free.map(ln=>`<button class="btn-xs ahm-lane-btn" onclick="doAssignToLane(${athleteId},${entry.id},${heat.id},${ln})">Д.${ln}</button>`).join('');
+      html+=`<div class="ahm-heat-row"><span class="ahm-heat-num">Заплив №${heat.globalNum}</span><span class="ahm-lanes">${btns}</span></div>`;
+    }
+    if(!hasAny)html+=`<div class="ahm-no-free">Всі доріжки зайняті</div>`;
+    html+=`<div class="ahm-heat-row ahm-new-row"><button class="btn-secondary btn-sm" onclick="doAssignNewHeat(${athleteId},${entry.id})">➕ Новий заплив</button></div>`;
+    html+=`</div>`;
+  }
+  document.getElementById('ahm-body').innerHTML=html;
+}
+
+function doAssignToLane(athleteId,entryId,heatId,lane){
+  const comp=activeComp();
+  const heat=comp.heats.find(h=>h.id===heatId);
+  if(!heat)return;
+  if(heat.lanes[lane]&&heat.lanes[lane]!==entryId){showToast('⚠ Ця доріжка вже зайнята',true);return;}
+  heat.lanes[lane]=entryId;
+  comp.heats.forEach((h,i)=>h.globalNum=i+1);
+  saveDB();_markJudgeQrDirty();renderAthletes();renderHeats&&renderHeats();
+  const remaining=getUnassignedEntries(athleteId,comp);
+  if(!remaining.length){
+    closeModal('modal-assign-heat');
+    showToast('✓ Всі дистанції розподілено');
+  }else{
+    _renderAssignHeatBody(athleteId,comp,remaining);
+    showToast('✓ Поставлено у заплив №'+(heat.globalNum||''));
+  }
+}
+
+function doAssignNewHeat(athleteId,entryId){
+  const comp=activeComp();
+  const entry=(comp.entries||[]).find(e=>e.id===entryId);
+  if(!entry)return;
+  const ath=db.athletes.find(a=>a.id===athleteId);
+  const eGender=ath?.gender||'';
+  const activeLanes=_getActiveLanes(comp);
+  const laneOrder=buildLaneOrder(activeLanes);
+  const evHeats=_getEvHeats(comp,entry,eGender);
+  const lastHeat=evHeats[evHeats.length-1];
+  const newHeat={
+    id:comp.heats.length+1,globalNum:0,
+    eventKey:lastHeat?lastHeat.eventKey:evKey(entry.dist,entry.style,eGender),
+    dist:entry.dist,style:entry.style,gender:lastHeat?.gender||eGender,
+    dayId:entry.dayId||null,
+    heatInEvent:(lastHeat?.totalHeatsInEvent||0)+1,
+    totalHeatsInEvent:(lastHeat?.totalHeatsInEvent||0)+1,
+    lanes:{[laneOrder[0]]:entryId},
+  };
+  comp.heats.push(newHeat);
+  comp.heats.filter(h=>h.eventKey===newHeat.eventKey).forEach(h=>h.totalHeatsInEvent=newHeat.heatInEvent);
+  comp.heats.forEach((h,i)=>h.globalNum=i+1);
+  saveDB();_markJudgeQrDirty();renderAthletes();renderHeats&&renderHeats();
+  const remaining=getUnassignedEntries(athleteId,comp);
+  if(!remaining.length){
+    closeModal('modal-assign-heat');
+    showToast('✓ Заплив №'+newHeat.globalNum+' створено');
+  }else{
+    _renderAssignHeatBody(athleteId,comp,remaining);
+    showToast('✓ Заплив №'+newHeat.globalNum+' створено');
+  }
+}
+
+function _doAutoAssign(athleteId){
+  const comp=activeComp();
+  const unassigned=getUnassignedEntries(athleteId,comp);
+  if(!unassigned.length){showToast('✓ Учасник вже є в усіх запливах');return;}
+  const activeLanes=_getActiveLanes(comp);
   const laneOrder=buildLaneOrder(activeLanes);
   let added=0,created=0;
-
   for(const entry of unassigned){
     const ath=db.athletes.find(a=>a.id===entry.athleteId);
     const eGender=ath?.gender||'';
-    // Use same format as evKey() helper: dist|style|genderSlot (no dayId)
-    const matchKey=evKey(entry.dist,entry.style,eGender);
-    const matchKeyMix=evKey(entry.dist,entry.style,'MIX');
-    // Find heats for this event (match by eventKey or by dist/style/dayId/gender)
-    const evHeats=comp.heats.filter(h=>h.eventKey===matchKey||h.eventKey===matchKeyMix||
-      (h.dist===entry.dist&&h.style===entry.style&&h.dayId===entry.dayId&&(h.gender===eGender||h.gender==='MIX')));
-    // Find heat with free lane
+    const evHeats=_getEvHeats(comp,entry,eGender);
     let placed=false;
     for(const heat of evHeats){
       const usedLanes=Object.keys(heat.lanes||{}).map(Number);
       const freeLane=activeLanes.find(l=>!usedLanes.includes(l));
-      if(freeLane!==undefined){
-        heat.lanes[freeLane]=entry.id;
-        placed=true;added++;break;
-      }
+      if(freeLane!==undefined){heat.lanes[freeLane]=entry.id;placed=true;added++;break;}
     }
     if(!placed){
-      // Create new heat at end of this event
       const lastHeat=evHeats[evHeats.length-1];
       const newHeat={
-        id:comp.heats.length+1,
-        globalNum:0, // will renumber below
-        eventKey:lastHeat?lastHeat.eventKey:evKey,
-        dist:entry.dist,style:entry.style,
-        gender:lastHeat?.gender||'',
+        id:comp.heats.length+1,globalNum:0,
+        eventKey:lastHeat?lastHeat.eventKey:evKey(entry.dist,entry.style,eGender),
+        dist:entry.dist,style:entry.style,gender:lastHeat?.gender||eGender,
         dayId:entry.dayId||null,
         heatInEvent:(lastHeat?.totalHeatsInEvent||0)+1,
         totalHeatsInEvent:(lastHeat?.totalHeatsInEvent||0)+1,
         lanes:{[laneOrder[0]]:entry.id},
       };
       comp.heats.push(newHeat);
-      // Update totalHeatsInEvent for all heats in this event
-      comp.heats.filter(h=>h.eventKey===newHeat.eventKey)
-        .forEach(h=>h.totalHeatsInEvent=newHeat.heatInEvent);
+      comp.heats.filter(h=>h.eventKey===newHeat.eventKey).forEach(h=>h.totalHeatsInEvent=newHeat.heatInEvent);
       placed=true;created++;added++;
     }
   }
-  // Renumber globalNums sequentially
   comp.heats.forEach((h,i)=>h.globalNum=i+1);
   saveDB();_markJudgeQrDirty();renderAthletes();renderHeats&&renderHeats();
-  const msg=`✓ Додано до ${added} запл.${created?' (створено '+created+' нових)':''}`;
-  showToast(msg);
+  showToast(`✓ Додано до ${added} запл.${created?' (створено '+created+' нових)':''}`);
 }
 function compStatus(comp){ return (comp||activeComp())?.status||'planning'; }
 function canEnterResults(comp){ return compStatus(comp)==='active'; }
@@ -15318,6 +15415,21 @@ async function _bootApp(user){
   <div class="modal-footer">
     <button class="btn-secondary" onclick="closeModal('modal-bulk-assign')">Скасувати</button>
     <button class="btn-primary" id="ba-btn" onclick="doBulkAssign()">📤 Передати всіх</button>
+  </div>
+</div>
+</div>
+
+<div class="modal-overlay" id="modal-assign-heat">
+<div class="modal" style="max-width:480px">
+  <div class="modal-header">
+    <div class="modal-title">📋 В заплив</div>
+    <button class="modal-close" onclick="closeModal('modal-assign-heat')">✕</button>
+  </div>
+  <div style="font-size:.88rem;font-weight:600;color:var(--text);margin-bottom:1rem" id="ahm-name"></div>
+  <div id="ahm-body" style="max-height:60vh;overflow-y:auto"></div>
+  <div class="modal-footer">
+    <button class="btn-secondary" onclick="closeModal('modal-assign-heat')">Закрити</button>
+    <button class="btn-primary" id="ahm-auto">⚡ Авто-розподіл</button>
   </div>
 </div>
 </div>
