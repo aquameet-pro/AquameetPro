@@ -11757,6 +11757,8 @@ async function switchOrganizerView(orgId){
   // Normalize DB
   if(!db.nextId)db.nextId={comp:1,ath:1,entry:1,heat:1,day:1,news:1,ag:1,relay:1,relayAg:1};
   if(!db.judges)db.judges=[];
+  // Load trainer athletes for this organizer (required so admin sees all athletes)
+  await _loadOrgTrainerAthletes();
   // Re-render
   refreshCompSelect();
   renderHome();
