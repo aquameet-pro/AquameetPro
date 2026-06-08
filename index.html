@@ -3151,6 +3151,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     if(_currentRole==='trainer'&&['results','heats','protocol','relays','standings'].includes(t)){
       _trainerRefreshDb();
     }
+    // Admin viewing organizer: load trainer athletes on first visit to athletes/protocol/standings
+    // (safe here: freeRows rebuild always runs both queries so no data loss)
+    if(_currentRole==='admin'&&_viewingOwnerId&&_viewingOwnerId!==_currentUser?.id
+        &&['athletes','protocol','standings','results'].includes(t)){
+      _loadOrgTrainerAthletes().then(()=>tabRenderers[t]?.());
+    }
     // Organizer: do NOT reload trainer athletes on every tab switch —
     // it purges/rebuilds athletes and breaks heat lane references.
     // Use manual "🔄 Тренери" button or org-panel open to refresh.
@@ -5242,31 +5248,35 @@ async function _loadOrgTrainerAthletes(){
   try{
     const mkTimeout=(ms)=>new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms));
 
-    // ── Primary query: by organizer_id ──────────────────────────
-    let{data,error}=await Promise.race([
-      _supa.from('trainer_athletes').select('*').eq('organizer_id',orgId),
-      mkTimeout(8000)
+    // ── Query 1: by organizer_id ─────────────────────────────────
+    const compIds=(db.competitions||[]).map(c=>c.id).filter(Boolean);
+    const [res1,res2]=await Promise.all([
+      Promise.race([
+        _supa.from('trainer_athletes').select('*').eq('organizer_id',orgId),
+        mkTimeout(8000)
+      ]).catch(e=>{console.warn('[AquaMeet] _loadOrgTrainerAthletes q1:',e.message);return{data:null,error:e};}),
+      // ── Query 2: by comp_id (catches rows without organizer_id) ──
+      compIds.length?Promise.race([
+        _supa.from('trainer_athletes').select('*').in('comp_id',compIds),
+        mkTimeout(8000)
+      ]).catch(e=>{console.warn('[AquaMeet] _loadOrgTrainerAthletes q2:',e.message);return{data:null,error:e};})
+      :Promise.resolve({data:null,error:null})
     ]);
-    if(error) console.warn('[AquaMeet] _loadOrgTrainerAthletes primary:',error.message);
 
-    // ── Fallback: if no rows found, try querying by comp_id list ─
-    if(!data?.length&&!error){
-      const compIds=(db.competitions||[]).map(c=>c.id).filter(Boolean);
-      if(compIds.length){
-        const res2=await Promise.race([
-          _supa.from('trainer_athletes').select('*').in('comp_id',compIds),
-          mkTimeout(8000)
-        ]);
-        if(!res2.error&&res2.data?.length){
-          data=res2.data;
-          const orphanIds=data.map(r=>r.id);
-          _supa.from('trainer_athletes').update({organizer_id:orgId}).in('id',orphanIds)
-            .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] organizer_id backfill:',ue.message);});
-        }
-      }
+    // Merge both result sets, deduplicate by row.id
+    const allRows=new Map();
+    (res1.data||[]).forEach(r=>allRows.set(r.id,r));
+    (res2.data||[]).forEach(r=>allRows.set(r.id,r)); // q2 never overwrites q1 due to Map semantics
+    let data=[...allRows.values()];
+
+    // Backfill organizer_id for rows that were missing it
+    const orphanIds=data.filter(r=>!r.organizer_id).map(r=>r.id);
+    if(orphanIds.length){
+      _supa.from('trainer_athletes').update({organizer_id:orgId}).in('id',orphanIds)
+        .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] organizer_id backfill:',ue.message);});
     }
 
-    if(!data?.length) return;
+    if(!data.length) return;
 
     // ── Deduplicate rows by trainer+comp+name+year (keep newest updated_at) ─
     // Multiple rows for same athlete can exist from previous bugs; pick one per athlete.
@@ -11757,9 +11767,7 @@ async function switchOrganizerView(orgId){
   // Normalize DB
   if(!db.nextId)db.nextId={comp:1,ath:1,entry:1,heat:1,day:1,news:1,ag:1,relay:1,relayAg:1};
   if(!db.judges)db.judges=[];
-  // Load trainer athletes for this organizer (required so admin sees all athletes)
-  await _loadOrgTrainerAthletes();
-  // Re-render
+  // Re-render (trainer athletes will be loaded on first athletes/protocol tab visit)
   refreshCompSelect();
   renderHome();
   const orgName=document.getElementById('org-switcher-select')?.selectedOptions[0]?.text||orgId;
