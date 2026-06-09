@@ -3684,7 +3684,9 @@ function renderHome(){
       <button class="btn-primary" style="font-size:1rem;padding:.65rem 1.5rem" onclick="openCreateComp()">＋ Створити перші змагання</button>
     </div>`;return;
   }
-  const entries=comp.entries||[];
+  // Only count entries for athletes that actually exist in db.athletes
+  const _validAthIds=new Set(db.athletes.map(a=>a.id));
+  const entries=(comp.entries||[]).filter(e=>_validAthIds.has(e.athleteId));
   const withRes=entries.filter(e=>e.result).length;
   const athIds=new Set(entries.map(e=>e.athleteId));
   el.innerHTML=`
