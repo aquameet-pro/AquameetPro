@@ -5915,7 +5915,8 @@ function renderHeats(){
     const assignedAthleteIds=new Set(
       (comp.entries||[]).filter(e=>assignedEntryIds.has(e.id)).map(e=>e.athleteId)
     );
-    const unassignedCount=[...new Set((comp.entries||[]).filter(e=>!assignedAthleteIds.has(e.athleteId)).map(e=>e.athleteId))].length;
+    const _existingAthIds=new Set(db.athletes.map(a=>a.id));
+    const unassignedCount=[...new Set((comp.entries||[]).filter(e=>_existingAthIds.has(e.athleteId)&&!assignedAthleteIds.has(e.athleteId)).map(e=>e.athleteId))].length;
     if(unassignedCount>0){
       alert_el.innerHTML=`<div class="alert alert-warn" style="margin-bottom:.6rem">
         ⚠ <strong>${unassignedCount} учасник(ів) не потрапили у запливи</strong> — їх додали після генерації.
