@@ -12973,6 +12973,9 @@ async function orgConfirmTrainerAttendance(invId,trainerId,compId){
   const{error}=await _supa.from('comp_invitations')
     .update({trainer_response:'attending'}).eq('id',invId);
   if(error){showToast('❌ '+error.message,true);return;}
+  // Update local cache immediately so button disappears on re-render
+  const cachedInv=_invitations.find(i=>i.id===invId||+i.id===+invId);
+  if(cachedInv)cachedInv.trainer_response='attending';
   // Notify trainer
   const orgName=_currentProfile?.full_name||_currentProfile?.email||'Організатор';
   const comp=(db.competitions||[]).find(c=>c.id===compId||c.id===+compId);
@@ -13026,6 +13029,21 @@ async function clearReminder(){
 }
 
 // ── TRAINER INVITATIONS ───────────────────────────────────────
+// Reload trainer's own invitations from Supabase and re-check confirmed status.
+// Called when an invitation_confirmed / access_approved notification arrives.
+async function _trainerRefreshInvitations(){
+  if(_currentRole!=='trainer'||!_currentUser)return;
+  try{
+    const{data}=await _supa.from('comp_invitations').select('*').eq('trainer_id',_currentUser.id);
+    if(data)_myInvitations=data;
+    _updateTrainerConfirmedForActiveComp();
+    // Also re-render invitations tab if it is visible
+    if(document.getElementById('tab-invitations')?.classList.contains('active')){
+      renderTrainerInvitations?.();
+    }
+  }catch(e){console.warn('[AquaMeet] _trainerRefreshInvitations:',e.message);}
+}
+
 function _setTrainerConfirmed(isConfirmed){
   document.body.classList.toggle('trainer-confirmed',!!isConfirmed);
 }
@@ -13093,7 +13111,7 @@ function _setTrainerReadonlyBanner(mode,compId){
   }else if(mode==='requested'){
     html=`<span style="font-size:1.2rem">👁</span>
       <div><strong>Режим перегляду.</strong> Запит надіслано — очікуйте підтвердження організатора.</div>
-      <button class="btn-secondary btn-sm" style="margin-left:auto;white-space:nowrap" disabled>⏳ Очікується</button>`;
+      <button class="btn-secondary btn-sm" style="margin-left:auto;white-space:nowrap" onclick="_trainerRefreshInvitations()">🔄 Перевірити</button>`;
   }else{
     html=`<span style="font-size:1.2rem">👁</span>
       <div><strong>Режим перегляду.</strong> Щоб вносити учасників — надішліть запит на участь. Організатор підтвердить.</div>
@@ -13500,6 +13518,7 @@ function _subscribeNotifications(){
       _renderNotifList();
       showToast(payload.new.title||'🔔 Нове сповіщення');
       if(payload.new.type==='news')_trainerRefreshDb();
+      if(payload.new.type==='invitation_confirmed'||payload.new.type==='access_approved')_trainerRefreshInvitations();
     })
     .subscribe();
   // Polling fallback every 30s — fires when realtime subscription is not available
@@ -13523,6 +13542,7 @@ async function _pollNewNotifications(){
       _notifs.unshift(n);
       showToast(n.title||'🔔 Нове сповіщення');
       if(n.type==='news')_trainerRefreshDb();
+      if(n.type==='invitation_confirmed'||n.type==='access_approved')_trainerRefreshInvitations();
       hasNew=true;
     }
     if(hasNew){_renderNotifBadge();_renderNotifList();}
