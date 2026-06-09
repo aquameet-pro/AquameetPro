@@ -11659,7 +11659,7 @@ async function startApp(){
   try{await loadDB();}catch(e){
     try{const s=localStorage.getItem(_lsKey());if(s)db=JSON.parse(s);}catch(_){}
   }
-  _subscribeDataUpdates(); // trainer: realtime + polling refresh
+  _subscribeDataUpdates(); // trainer/admin/secretary: realtime + polling refresh from organizer's app_state
 
   // One-time migration: clear stale achievedRank/confirmedBy on entries without a result
   if(!db._migrated_clear_stale_rank){
@@ -13560,10 +13560,11 @@ function _setSyncIndicator(text){
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text;}
 }
 function _subscribeDataUpdates(){
-  if(_currentRole!=='trainer')return;
+  // Trainers, admins, and secretaries all need to watch the organizer's data in real-time
+  if(!['trainer','admin','secretary'].includes(_currentRole))return;
   const ownerId=_getTargetOwnerId();
   if(!ownerId){_setSyncIndicator('⚠ no ownerId');return;}
-  // Realtime channel
+  // Realtime channel — fire _applyRemoteDb whenever the organizer's app_state changes
   if(!_dataChannel){
     _dataChannel=_supa.channel('dbupd_'+ownerId)
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_state',filter:`id=eq.${ownerId}`},
@@ -13580,7 +13581,7 @@ function _scheduleTrainerPoll(){
   },20000);
 }
 async function _trainerRefreshDb(){
-  if(_currentRole!=='trainer')return;
+  if(!['trainer','admin','secretary'].includes(_currentRole))return;
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   if(_supaOffline){_setSyncIndicator('📵 офлайн '+t);return;}
   const ownerId=_getTargetOwnerId();
