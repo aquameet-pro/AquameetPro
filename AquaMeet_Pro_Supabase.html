@@ -1959,15 +1959,15 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <div class="modal" style="max-width:900px">
   <div class="modal-header"><div class="modal-title" id="ath-modal-title">Учасник</div><button class="modal-close" onclick="closeModal('modal-athlete')">✕</button></div>
   <div class="form-row cols-3">
-    <div style="position:relative"><label>Прізвище *</label><input id="pa-surname" placeholder="Петренко" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')" oninput="paAcInput(this.value)" onblur="setTimeout(()=>paAcHide(),180)"><div id="pa-ac-drop" style="display:none;position:absolute;z-index:9999;background:var(--card);border:1px solid var(--accent);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:220px;max-height:220px;overflow-y:auto;top:100%;left:0"></div></div>
-    <div><label>Ім'я *</label><input id="pa-name" placeholder="Олег" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
+    <div style="position:relative"><label>Прізвище *</label><input id="pa-surname" name="aq-surname" placeholder="Петренко" autocomplete="off" oninput="paAcInput(this.value)" onblur="setTimeout(()=>paAcHide(),180)"><div id="pa-ac-drop" style="display:none;position:absolute;z-index:9999;background:var(--card);border:1px solid var(--accent);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.18);min-width:220px;max-height:220px;overflow-y:auto;top:100%;left:0"></div></div>
+    <div><label>Ім'я *</label><input id="pa-name" name="aq-firstname" placeholder="Олег" autocomplete="off"></div>
     <div><label>Стать *</label><select id="pa-gender"><option value="M">Чоловік (Ч)</option><option value="F">Жінка (Ж)</option></select></div>
   </div>
   <div class="form-row cols-4">
-    <div><label>Рік нар. *</label><input id="pa-year" type="number" min="1990" max="2022" placeholder="2011" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
-    <div><label>Місто</label><input id="pa-city" placeholder="Київ" list="dl-cities" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
-    <div><label>Клуб / Школа</label><input id="pa-club" placeholder="ДЮСШ-1" list="dl-clubs" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
-    <div><label>Тренер</label><input id="pa-coach" placeholder="Коваленко В.В." list="dl-coaches" autocomplete="nope" readonly onfocus="this.removeAttribute('readonly')"></div>
+    <div><label>Рік нар. *</label><input id="pa-year" name="aq-year" type="number" min="1990" max="2022" placeholder="2011" autocomplete="off"></div>
+    <div><label>Місто</label><input id="pa-city" name="aq-city" placeholder="Київ" list="dl-cities" autocomplete="off"></div>
+    <div><label>Клуб / Школа</label><input id="pa-club" name="aq-club" placeholder="ДЮСШ-1" list="dl-clubs" autocomplete="off"></div>
+    <div><label>Тренер</label><input id="pa-coach" name="aq-coach" placeholder="Коваленко В.В." list="dl-coaches" autocomplete="off"></div>
   </div>
   <div class="form-row cols-2">
     <div><label>Поточний розряд</label>
@@ -2059,11 +2059,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
   <div class="alert alert-info" style="font-size:.78rem;margin-bottom:.8rem">Мінімальна форма — спортсмен без заявок. Дистанції додати пізніше через редагування.</div>
   <div class="form-row cols-2">
-    <div><label>Прізвище *</label><input id="qg-surname" placeholder="Петренко"></div>
-    <div><label>Ім'я *</label><input id="qg-name" placeholder="Олексій"></div>
+    <div><label>Прізвище *</label><input id="qg-surname" name="aq-qg-surname" placeholder="Петренко" autocomplete="off"></div>
+    <div><label>Ім'я *</label><input id="qg-name" name="aq-qg-name" placeholder="Олексій" autocomplete="off"></div>
   </div>
   <div class="form-row cols-3">
-    <div><label>Рік нар. *</label><input id="qg-year" type="number" min="1990" max="2022" placeholder="2011"></div>
+    <div><label>Рік нар. *</label><input id="qg-year" name="aq-qg-year" type="number" min="1990" max="2022" placeholder="2011" autocomplete="off"></div>
     <div><label>Стать</label><select id="qg-gender"><option value="M">Хлопець (Ч)</option><option value="F">Дівчина (Ж)</option></select></div>
     <div><label>Клуб</label><input id="qg-club" placeholder="ДЮСШ №1" list="dl-clubs" autocomplete="off"></div>
   </div>
