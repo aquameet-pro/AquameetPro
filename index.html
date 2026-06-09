@@ -4970,7 +4970,7 @@ function openAddAthlete(){
   ['pa-surname','pa-name','pa-city','pa-club','pa-coach'].forEach(id=>{
     const el=document.getElementById(id);
     el.value='';
-    el.setAttribute('readonly',''); // reset readonly so Safari won't show contacts on next open
+    el.removeAttribute('readonly'); // ensure fields are editable (autocomplete="off"+name="aq-*" handles Safari)
   });
   document.getElementById('pa-gender').value='M';
   document.getElementById('pa-year').value='';
