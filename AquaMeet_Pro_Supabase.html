@@ -5343,51 +5343,58 @@ async function _loadTrainerAthletes(){
       return;
     }
 
-    // ── No heats yet: full purge + rebuild ──
-    const mySupaIds=new Set(db.athletes.filter(a=>a._trainerOwned&&a._trainerId===_currentUser.id).map(a=>a._supaId));
-    // Save organizer-assigned IDs before purging so entries/heats remain valid
-    const savedOrgIds=new Map(
-      db.athletes.filter(a=>a._trainerOwned&&a._supaId&&a._trainerId===_currentUser.id)
-        .map(a=>[a._supaId,a.id])
+    // ── No heats yet: incremental update — never purge, so just-created athletes survive
+    // race conditions where Supabase INSERT hasn't propagated yet when this runs. ──
+
+    // Step 1: Remove only athletes explicitly deleted this session
+    db.athletes=db.athletes.filter(a=>
+      !(a._trainerOwned&&a._trainerId===_currentUser.id&&a._supaId&&_trainerDeletedSupaIds.has(a._supaId))
     );
-    db.athletes=db.athletes.filter(a=>!(a._trainerOwned&&(a._trainerId===_currentUser.id||!a._trainerId)));
+    // Clean up entries for deleted athletes
     (db.competitions||[]).forEach(c=>{
       if(c.entries?.length)
-        c.entries=c.entries.filter(e=>!mySupaIds.has(e._trainerSupaId));
+        c.entries=c.entries.filter(e=>!(e._trainerSupaId&&_trainerDeletedSupaIds.has(e._trainerSupaId)));
     });
+
+    // Step 2: Update existing athletes in-place; add new ones from Supabase
     for(const row of data){
-      // Priority: 1) organizer's app_state id (heats reference this), 2) Supabase local_id, 3) new id
-      const preservedId=savedOrgIds.get(row.id)||null;
-      const localId=preservedId||(row.local_id>0?row.local_id:null)||db.nextId.ath++;
-      db.nextId.ath=Math.max(db.nextId.ath,localId+1);
-      const ath={id:localId,...(row.athlete_data||{}),isTest:false,_trainerOwned:true,
-        _supaId:row.id,_compId:row.comp_id,_trainerId:_currentUser.id,_orgId:row.organizer_id||null};
-      // Avoid collision with organizer's non-trainer athletes
-      if(!db.athletes.find(a=>a.id===localId&&!a._trainerOwned)){
-        db.athletes.push(ath);
+      const existing=db.athletes.find(a=>a._supaId===row.id);
+      if(existing){
+        // Update data in-place — never change local id (heats reference it)
+        Object.assign(existing,row.athlete_data||{});
+        existing._compId=row.comp_id;
+        existing._orgId=row.organizer_id||null;
       }else{
-        const newId=db.nextId.ath++;
-        ath.id=newId;
-        db.athletes.push(ath);
-      }
-      // Restore entries into the active competition
-      const c=db.competitions.find(c=>c.id===compId||c.id===+compId);
-      if(c&&row.entries_data?.length){
-        (row.entries_data||[]).forEach(e=>{
-          const exists=(c.entries||[]).find(x=>x.athleteId===ath.id&&x.dist===e.dist&&x.style===e.style);
-          if(!exists){
-            if(!c.entries)c.entries=[];
-            c.entries.push({id:db.nextId.entry++,athleteId:ath.id,...e,result:null,_trainerSupaId:row.id});
-          }
-        });
-      }
-      // Keep Supabase local_id + organizer_id in sync
-      const needsSync=(!row.local_id&&row.id)||(!row.organizer_id&&_viewingOwnerId);
-      if(needsSync){
-        const upd={};
-        if(!row.local_id)upd.local_id=ath.id;
-        if(!row.organizer_id&&_viewingOwnerId)upd.organizer_id=_viewingOwnerId;
-        _supa.from('trainer_athletes').update(upd).eq('id',row.id).eq('trainer_id',_currentUser.id);
+        // New from Supabase (not yet in db.athletes)
+        const localId=(row.local_id>0?row.local_id:null)||db.nextId.ath++;
+        db.nextId.ath=Math.max(db.nextId.ath,localId+1);
+        const ath={id:localId,...(row.athlete_data||{}),isTest:false,_trainerOwned:true,
+          _supaId:row.id,_compId:row.comp_id,_trainerId:_currentUser.id,_orgId:row.organizer_id||null};
+        if(!db.athletes.find(a=>a.id===localId&&!a._trainerOwned)){
+          db.athletes.push(ath);
+        }else{
+          ath.id=db.nextId.ath++;
+          db.athletes.push(ath);
+        }
+        // Restore entries into the active competition
+        const c=db.competitions.find(c=>c.id===compId||c.id===+compId);
+        if(c&&row.entries_data?.length){
+          row.entries_data.forEach(e=>{
+            const exists=(c.entries||[]).find(x=>x.athleteId===ath.id&&x.dist===e.dist&&x.style===e.style);
+            if(!exists){
+              if(!c.entries)c.entries=[];
+              c.entries.push({id:db.nextId.entry++,athleteId:ath.id,...e,result:null,_trainerSupaId:row.id});
+            }
+          });
+        }
+        // Sync local_id + organizer_id to Supabase
+        const needsSync=(!row.local_id&&row.id)||(!row.organizer_id&&_viewingOwnerId);
+        if(needsSync){
+          const upd={};
+          if(!row.local_id)upd.local_id=ath.id;
+          if(!row.organizer_id&&_viewingOwnerId)upd.organizer_id=_viewingOwnerId;
+          _supa.from('trainer_athletes').update(upd).eq('id',row.id).eq('trainer_id',_currentUser.id);
+        }
       }
     }
   }catch(e){console.warn('[AquaMeet] _loadTrainerAthletes:',e.message);}
@@ -13724,9 +13731,11 @@ function _applyRemoteDb(newData,updatedAt){
     :[];
   db=newData;
   if(localActiveId!=null)db.activeCompId=localActiveId;
-  // Immediately restore saved trainer athletes (Supabase refresh will overwrite below)
+  // Immediately restore saved trainer athletes so UI never flashes empty
   if(_savedTrainerAths.length){
     _savedTrainerAths.forEach(a=>{if(!db.athletes.find(x=>x.id===a.id))db.athletes.push(a);});
+    // If athletes tab is open, re-render it now so restored athletes appear right away
+    if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
   }
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
