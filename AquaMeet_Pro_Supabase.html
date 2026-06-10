@@ -5318,6 +5318,9 @@ async function _loadTrainerAthletes(){
       if(!r2.error&&r2.data?.length){data=r2.data;error=null;}
     }
     if(error||!data?.length)return;
+    // Skip rows the trainer just deleted in this session (block-list prevents race-condition re-adds)
+    if(_trainerDeletedSupaIds.size)data=data.filter(r=>!_trainerDeletedSupaIds.has(r.id));
+    if(!data?.length)return;
 
     // ── If heats already exist: update athlete data in-place, never change IDs ──
     // Heats reference athleteId from organizer's app_state — changing IDs breaks them.
@@ -5582,9 +5585,11 @@ async function delAthlete(id){
   if(_currentRole==='trainer'){
     // Trainer deletes their own trainer_athletes record
     if(ath?._supaId){
+      // Block-list immediately so _loadTrainerAthletes skips this row even if delete is still in-flight
+      _trainerDeletedSupaIds.add(ath._supaId);
       const{error}=await _supa.from('trainer_athletes').delete()
         .eq('id',ath._supaId).eq('trainer_id',_currentUser.id);
-      if(error){showToast('❌ '+error.message,true);return;}
+      if(error){_trainerDeletedSupaIds.delete(ath._supaId);showToast('❌ '+error.message,true);return;}
     }
   } else if(['organizer','secretary','admin'].includes(_currentRole)){
     // Org/Admin: also delete from trainer_athletes (by supaId or by local_id)
@@ -13658,6 +13663,7 @@ function _unsubscribeNotifications(){
 // Skip one tab-switch refresh when openInvitedComp just loaded data itself
 let _skipNextTabRefresh=false;
 let _lastOrgTrainerAthRefresh=0;
+const _trainerDeletedSupaIds=new Set(); // supaIds deleted in this session — block _loadTrainerAthletes from re-adding them
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
