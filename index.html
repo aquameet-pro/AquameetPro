@@ -13725,15 +13725,33 @@ function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
   _lastDbUpdatedAt=newData._savedAt||updatedAt||'';
   const localActiveId=db.activeCompId!=null?db.activeCompId:null;
-  // Save trainer's current athletes before db replacement so UI never flashes empty
+  // Save trainer's current athletes AND their entries before db replacement so UI never flashes empty
   const _savedTrainerAths=(_currentRole==='trainer'&&_currentUser)
     ?db.athletes.filter(a=>a._trainerOwned&&a._trainerId===_currentUser.id&&!_trainerDeletedSupaIds.has(a._supaId))
     :[];
+  let _savedTrainerEntries=[]; // [{compId, entry}]
+  if(_savedTrainerAths.length){
+    const _myAthIds=new Set(_savedTrainerAths.map(a=>a.id));
+    (db.competitions||[]).forEach(c=>{
+      (c.entries||[]).forEach(e=>{
+        if(_myAthIds.has(e.athleteId))_savedTrainerEntries.push({compId:c.id,entry:e});
+      });
+    });
+  }
   db=newData;
   if(localActiveId!=null)db.activeCompId=localActiveId;
-  // Immediately restore saved trainer athletes so UI never flashes empty
+  // Immediately restore saved trainer athletes + entries so UI never flashes empty
   if(_savedTrainerAths.length){
     _savedTrainerAths.forEach(a=>{if(!db.athletes.find(x=>x.id===a.id))db.athletes.push(a);});
+    _savedTrainerEntries.forEach(({compId,entry})=>{
+      const c=(db.competitions||[]).find(x=>x.id===compId);
+      if(!c)return;
+      if(!c.entries)c.entries=[];
+      const exists=c.entries.find(x=>x.athleteId===entry.athleteId&&x.dist===entry.dist&&x.style===entry.style);
+      if(!exists)c.entries.push(entry);
+      // If organizer's copy lost the result but ours has it, keep ours
+      else if(!exists.result&&entry.result)exists.result=entry.result;
+    });
     // If athletes tab is open, re-render it now so restored athletes appear right away
     if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
   }
