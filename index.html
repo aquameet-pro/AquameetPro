@@ -5262,13 +5262,18 @@ async function _saveTrainerAthlete(data,entries,comp){
                  organizer_id:row.organizer_id,updated_at:row.updated_at})
         .eq('id',supaId).eq('trainer_id',_currentUser.id);
       if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
-      Object.assign(ath,data);
+      // Re-resolve from current db: _applyRemoteDb may have replaced `db` during the awaits above,
+      // making `ath`/`comp` stale detached objects — mutations on them would be silently lost.
+      const athNow=db.athletes.find(a=>a.id===editingAthId||(supaId&&a._supaId===supaId))||ath;
+      if(comp)comp=db.competitions.find(c=>c.id===comp.id)||comp;
+      Object.assign(athNow,data);
       if(comp){
-        const oldEntries=(comp.entries||[]).filter(e=>e.athleteId===editingAthId);
-        comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==editingAthId);
+        const aid=athNow.id;
+        const oldEntries=(comp.entries||[]).filter(e=>e.athleteId===aid);
+        comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==aid);
         entries.forEach(e=>{
           const old=oldEntries.find(o=>o.dist===e.dist&&o.style===e.style);
-          comp.entries.push({id:db.nextId.entry++,athleteId:editingAthId,...e,result:old?.result||null});
+          comp.entries.push({id:db.nextId.entry++,athleteId:aid,...e,result:old?.result||null,_trainerSupaId:supaId});
         });
         // Do NOT clear comp.heats here — trainer cannot regenerate heats;
         // new athletes appear with "В заплив" button instead
@@ -5277,7 +5282,15 @@ async function _saveTrainerAthlete(data,entries,comp){
       // Insert new trainer_athlete
       const{data:saved,error}=await _supa.from('trainer_athletes').insert(row).select('id').maybeSingle();
       if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
-      const localId=db.nextId.ath++;
+      // Re-resolve comp from current db: _applyRemoteDb may have replaced `db` during the awaits,
+      // making the captured `comp` a stale detached object — entries pushed there would vanish.
+      if(comp)comp=db.competitions.find(c=>c.id===comp.id)||comp;
+      // Fresh id guaranteed unused (avoid collision with athletes restored from another device)
+      let localId=db.nextId.ath++;
+      if(db.athletes.find(a=>a.id===localId)){
+        localId=Math.max(localId,...db.athletes.map(x=>x.id+1));
+        db.nextId.ath=localId+1;
+      }
       // Write local_id to Supabase immediately so organizer always uses this same ID.
       // This ensures heat lane references (athleteId) are consistent for both sides.
       if(saved?.id){
@@ -5291,13 +5304,12 @@ async function _saveTrainerAthlete(data,entries,comp){
         entries.forEach(e=>{
           const exists=(comp.entries||[]).find(x=>x.athleteId===localId&&x.dist===e.dist&&x.style===e.style);
           if(exists)dups.push(`${e.dist}м ${e.style}`);
-          else comp.entries.push({id:db.nextId.entry++,athleteId:localId,...e,result:null});
+          else comp.entries.push({id:db.nextId.entry++,athleteId:localId,...e,result:null,_trainerSupaId:saved?.id||null});
         });
         if(dups.length)showToast(`⚠ Дублі пропущено: ${dups.join(', ')}`,true);
         // Do NOT clear comp.heats here — trainer cannot regenerate heats;
         // new athletes appear with "В заплив" button instead
       }
-      if(saved?.id)_supa.from('trainer_athletes').update({local_id:localId}).eq('id',saved.id);
     }
     refreshDataLists();closeModal('modal-athlete');renderAthletes();showToast('✅ Учасника збережено');
   }catch(e){
@@ -5368,6 +5380,17 @@ async function _loadTrainerAthletes(){
         existing._trainerOwned=true;
         existing._trainerId=_currentUser.id;
         existing._supaId=row.id;
+        // Heal lost entries: re-add any entry from Supabase that's missing locally
+        const c=db.competitions.find(c=>c.id===compId||c.id===+compId);
+        if(c&&row.entries_data?.length){
+          row.entries_data.forEach(e=>{
+            const ex=(c.entries||[]).find(x=>x.athleteId===existing.id&&x.dist===e.dist&&x.style===e.style);
+            if(!ex){
+              if(!c.entries)c.entries=[];
+              c.entries.push({id:db.nextId.entry++,athleteId:existing.id,...e,result:null,_trainerSupaId:row.id});
+            }
+          });
+        }
       }else{
         // New from Supabase (not yet in db.athletes)
         const localId=(row.local_id>0?row.local_id:null)||db.nextId.ath++;
