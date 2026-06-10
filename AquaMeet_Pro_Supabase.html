@@ -3190,6 +3190,10 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
         &&['athletes','protocol','standings','results'].includes(t)){
       _loadOrgTrainerAthletes().then(()=>tabRenderers[t]?.());
     }
+    // Trainer: refresh own athletes from Supabase when opening athletes tab
+    if(_currentRole==='trainer'&&t==='athletes'){
+      _loadTrainerAthletes().then(()=>renderAthletes());
+    }
     // Organizer: auto-refresh trainer athletes when opening athletes tab
     // (protectedRows=in-place for comps with heats; freeRows=purge+rebuild safe for planning stage)
     if(_currentRole==='organizer'&&t==='athletes'){
@@ -5233,68 +5237,74 @@ async function _saveTrainerAthlete(data,entries,comp){
   const _saveBtn=document.querySelector('#modal-athlete .btn-primary[onclick="saveAthlete()"]');
   if(_saveBtn){_saveBtn.disabled=true;_saveBtn.textContent='⏳ Збереження…';}
   const _restoreBtn=()=>{if(_saveBtn){_saveBtn.disabled=false;_saveBtn.textContent='💾 Зберегти';}};
-  // Force token refresh so JWT is valid even after startup timeouts
-  try{await _supa.auth.refreshSession();}catch(_){}
-  const{data:{session}}=await _supa.auth.getSession();
-  if(!session){_restoreBtn();showToast('❌ Сесія закінчилась — увійдіть знову',true);return;}
+  try{
+    // Force token refresh so JWT is valid even after startup timeouts
+    try{await _supa.auth.refreshSession();}catch(_){}
+    const{data:{session}}=await _supa.auth.getSession();
+    if(!session){_restoreBtn();showToast('❌ Сесія закінчилась — увійдіть знову',true);return;}
 
-  const ath=editingAthId?db.athletes.find(a=>a.id===editingAthId):null;
-  const supaId=ath?._supaId||null;
-  const row={
-    trainer_id:_currentUser.id,
-    organizer_id:_viewingOwnerId||null,
-    comp_id:comp?.id||null,
-    // Store comp name so organizer can match by name even if comp IDs drift
-    athlete_data:{...data,_compName:comp?.name||null},
-    entries_data:entries,
-    updated_at:new Date().toISOString()
-  };
+    const ath=editingAthId?db.athletes.find(a=>a.id===editingAthId):null;
+    const supaId=ath?._supaId||null;
+    const row={
+      trainer_id:_currentUser.id,
+      organizer_id:_viewingOwnerId||null,
+      comp_id:comp?.id||null,
+      // Store comp name so organizer can match by name even if comp IDs drift
+      athlete_data:{...data,_compName:comp?.name||null},
+      entries_data:entries,
+      updated_at:new Date().toISOString()
+    };
 
-  if(supaId){
-    // Update existing trainer_athlete (also update organizer_id in case it was null before)
-    const{error}=await _supa.from('trainer_athletes')
-      .update({athlete_data:row.athlete_data,entries_data:row.entries_data,
-               organizer_id:row.organizer_id,updated_at:row.updated_at})
-      .eq('id',supaId).eq('trainer_id',_currentUser.id);
-    if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
-    Object.assign(ath,data);
-    if(comp){
-      const oldEntries=(comp.entries||[]).filter(e=>e.athleteId===editingAthId);
-      comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==editingAthId);
-      entries.forEach(e=>{
-        const old=oldEntries.find(o=>o.dist===e.dist&&o.style===e.style);
-        comp.entries.push({id:db.nextId.entry++,athleteId:editingAthId,...e,result:old?.result||null});
-      });
-      // Do NOT clear comp.heats here — trainer cannot regenerate heats;
-      // new athletes appear with "В заплив" button instead
+    if(supaId){
+      // Update existing trainer_athlete (also update organizer_id in case it was null before)
+      const{error}=await _supa.from('trainer_athletes')
+        .update({athlete_data:row.athlete_data,entries_data:row.entries_data,
+                 organizer_id:row.organizer_id,updated_at:row.updated_at})
+        .eq('id',supaId).eq('trainer_id',_currentUser.id);
+      if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
+      Object.assign(ath,data);
+      if(comp){
+        const oldEntries=(comp.entries||[]).filter(e=>e.athleteId===editingAthId);
+        comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==editingAthId);
+        entries.forEach(e=>{
+          const old=oldEntries.find(o=>o.dist===e.dist&&o.style===e.style);
+          comp.entries.push({id:db.nextId.entry++,athleteId:editingAthId,...e,result:old?.result||null});
+        });
+        // Do NOT clear comp.heats here — trainer cannot regenerate heats;
+        // new athletes appear with "В заплив" button instead
+      }
+    } else {
+      // Insert new trainer_athlete
+      const{data:saved,error}=await _supa.from('trainer_athletes').insert(row).select('id').maybeSingle();
+      if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
+      const localId=db.nextId.ath++;
+      // Write local_id to Supabase immediately so organizer always uses this same ID.
+      // This ensures heat lane references (athleteId) are consistent for both sides.
+      if(saved?.id){
+        _supa.from('trainer_athletes').update({local_id:localId}).eq('id',saved.id)
+          .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] local_id write:',ue.message);});
+      }
+      db.athletes.push({id:localId,...data,isTest:false,_trainerOwned:true,_supaId:saved?.id||null,
+        _compId:comp?.id||null,_trainerId:_currentUser?.id||null,_orgId:_viewingOwnerId||null});
+      if(comp&&entries.length){
+        const dups=[];
+        entries.forEach(e=>{
+          const exists=(comp.entries||[]).find(x=>x.athleteId===localId&&x.dist===e.dist&&x.style===e.style);
+          if(exists)dups.push(`${e.dist}м ${e.style}`);
+          else comp.entries.push({id:db.nextId.entry++,athleteId:localId,...e,result:null});
+        });
+        if(dups.length)showToast(`⚠ Дублі пропущено: ${dups.join(', ')}`,true);
+        // Do NOT clear comp.heats here — trainer cannot regenerate heats;
+        // new athletes appear with "В заплив" button instead
+      }
+      if(saved?.id)_supa.from('trainer_athletes').update({local_id:localId}).eq('id',saved.id);
     }
-  } else {
-    // Insert new trainer_athlete
-    const{data:saved,error}=await _supa.from('trainer_athletes').insert(row).select('id').maybeSingle();
-    if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
-    const localId=db.nextId.ath++;
-    // Write local_id to Supabase immediately so organizer always uses this same ID.
-    // This ensures heat lane references (athleteId) are consistent for both sides.
-    if(saved?.id){
-      _supa.from('trainer_athletes').update({local_id:localId}).eq('id',saved.id)
-        .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] local_id write:',ue.message);});
-    }
-    db.athletes.push({id:localId,...data,isTest:false,_trainerOwned:true,_supaId:saved?.id||null,
-      _compId:comp?.id||null,_trainerId:_currentUser?.id||null,_orgId:_viewingOwnerId||null});
-    if(comp&&entries.length){
-      const dups=[];
-      entries.forEach(e=>{
-        const exists=(comp.entries||[]).find(x=>x.athleteId===localId&&x.dist===e.dist&&x.style===e.style);
-        if(exists)dups.push(`${e.dist}м ${e.style}`);
-        else comp.entries.push({id:db.nextId.entry++,athleteId:localId,...e,result:null});
-      });
-      if(dups.length)showToast(`⚠ Дублі пропущено: ${dups.join(', ')}`,true);
-      // Do NOT clear comp.heats here — trainer cannot regenerate heats;
-      // new athletes appear with "В заплив" button instead
-    }
-    if(saved?.id)_supa.from('trainer_athletes').update({local_id:localId}).eq('id',saved.id);
+    refreshDataLists();closeModal('modal-athlete');renderAthletes();showToast('✅ Учасника збережено');
+  }catch(e){
+    _restoreBtn();
+    showToast('❌ Помилка збереження: '+(e?.message||e),true);
+    console.warn('[AquaMeet] _saveTrainerAthlete exception:',e);
   }
-  refreshDataLists();closeModal('modal-athlete');renderAthletes();showToast('✅ Учасника збережено');
 }
 
 async function _loadTrainerAthletes(){
@@ -13730,12 +13740,8 @@ function _applyRemoteDb(newData,updatedAt){
   else if(document.getElementById('tab-standings')?.classList.contains('active'))renderStandings();
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   _setSyncIndicator('✅ '+t);
-  // db=newData wiped trainer's local athletes — reload them from trainer_athletes table
-  if(_currentRole==='trainer'){
-    _loadTrainerAthletes().then(()=>{
-      if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
-    });
-  }
+  // Trainer athletes are restored above from _savedTrainerAths; no async reload here to avoid race-condition
+  // flicker when a just-created athlete isn't yet visible in Supabase. Fresh data loads on next tab switch.
 }
 
 // Close notif panel on outside click
