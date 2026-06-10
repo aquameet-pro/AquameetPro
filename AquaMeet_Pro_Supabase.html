@@ -5634,9 +5634,10 @@ async function delAthlete(id){
     if(ath?._supaId){
       // Block-list immediately so _loadTrainerAthletes skips this row even if delete is still in-flight
       _trainerDeletedSupaIds.add(ath._supaId);
+      _saveTrainerDeletedIds();
       const{error}=await _supa.from('trainer_athletes').delete()
         .eq('id',ath._supaId).eq('trainer_id',_currentUser.id);
-      if(error){_trainerDeletedSupaIds.delete(ath._supaId);showToast('❌ '+error.message,true);return;}
+      if(error){_trainerDeletedSupaIds.delete(ath._supaId);_saveTrainerDeletedIds();showToast('❌ '+error.message,true);return;}
     }
   } else if(['organizer','secretary','admin'].includes(_currentRole)){
     // Org/Admin: also delete from trainer_athletes (by supaId or by local_id)
@@ -11729,6 +11730,7 @@ async function startApp(){
 
   // For trainer: find approved organizers before loading data
   if(_currentRole==='trainer'){
+    _loadTrainerDeletedIds(); // restore deleted-athletes block-list before any data load
     setAuthLoadingMsg('Перевірка доступу… (з\'єднання з сервером)');
     await loadTrainerAccess();
     // Preload trainer's own invitations for per-competition confirmed check
@@ -13714,7 +13716,16 @@ function _unsubscribeNotifications(){
 // Skip one tab-switch refresh when openInvitedComp just loaded data itself
 let _skipNextTabRefresh=false;
 let _lastOrgTrainerAthRefresh=0;
-const _trainerDeletedSupaIds=new Set(); // supaIds deleted in this session — block _loadTrainerAthletes from re-adding them
+// SupaIds of athletes this trainer deleted — blocks re-adds from _loadTrainerAthletes and from
+// organizer's app_state copies. Persisted per-user so it survives reloads/re-logins.
+const _trainerDeletedSupaIds=new Set();
+function _delIdsKey(){return 'aquameet_trainer_deleted_'+(_currentUser?.id||'');}
+function _loadTrainerDeletedIds(){
+  try{(JSON.parse(localStorage.getItem(_delIdsKey())||'[]')).forEach(id=>_trainerDeletedSupaIds.add(id));}catch(_){}
+}
+function _saveTrainerDeletedIds(){
+  try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
+}
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
 const APP_BUILD='20260610-1946'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
@@ -13776,6 +13787,16 @@ function _applyRemoteDb(newData,updatedAt){
   }
   db=newData;
   if(localActiveId!=null)db.activeCompId=localActiveId;
+  // Purge athletes the trainer deleted this session: organizer's app_state may still hold their
+  // copies until the organizer refreshes — without this they resurrect a few seconds after delete
+  if(_currentRole==='trainer'&&_trainerDeletedSupaIds.size){
+    db.athletes=db.athletes.filter(a=>!(a._trainerOwned&&a._supaId&&_trainerDeletedSupaIds.has(a._supaId)));
+    (db.competitions||[]).forEach(c=>{
+      if(c.entries?.length)
+        c.entries=c.entries.filter(e=>!(e._trainerSupaId&&_trainerDeletedSupaIds.has(e._trainerSupaId)));
+    });
+    if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
+  }
   // Immediately restore saved trainer athletes + entries so UI never flashes empty
   if(_savedTrainerAths.length){
     const _idRemap=new Map(); // oldId → newId for athletes whose id was taken by a different athlete
