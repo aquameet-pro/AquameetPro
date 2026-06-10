@@ -5344,19 +5344,8 @@ async function _loadTrainerAthletes(){
     if(_trainerDeletedSupaIds.size)data=data.filter(r=>!_trainerDeletedSupaIds.has(r.id));
     if(!data?.length)return;
 
-    // ── If heats already exist: update athlete data in-place, never change IDs ──
-    // Heats reference athleteId from organizer's app_state — changing IDs breaks them.
-    const comp=db.competitions.find(c=>c.id===compId||c.id===+compId);
-    if(comp?.heats?.length){
-      for(const row of data){
-        const existing=db.athletes.find(a=>a._supaId===row.id||(a._trainerOwned&&a._trainerId===_currentUser.id&&a._compId===row.comp_id&&(row.athlete_data?.surname===a.surname)));
-        if(existing)Object.assign(existing,row.athlete_data||{});
-      }
-      return;
-    }
-
-    // ── No heats yet: incremental update — never purge, so just-created athletes survive
-    // race conditions where Supabase INSERT hasn't propagated yet when this runs. ──
+    // ── Incremental update — never purge, never change existing ids (heats-safe), so
+    // just-created athletes survive race conditions where Supabase INSERT hasn't propagated yet. ──
 
     // Step 1: Remove only athletes explicitly deleted this session
     db.athletes=db.athletes.filter(a=>
