@@ -5223,10 +5223,14 @@ async function _saveTrainerAthlete(data,entries,comp){
     showToast('🔒 Реєстрацію закрито організатором — додавання та редагування учасників заборонено.',true);
     return;
   }
+  // Show loading state on save button
+  const _saveBtn=document.querySelector('#modal-athlete .btn-primary[onclick="saveAthlete()"]');
+  if(_saveBtn){_saveBtn.disabled=true;_saveBtn.textContent='⏳ Збереження…';}
+  const _restoreBtn=()=>{if(_saveBtn){_saveBtn.disabled=false;_saveBtn.textContent='💾 Зберегти';}};
   // Force token refresh so JWT is valid even after startup timeouts
   try{await _supa.auth.refreshSession();}catch(_){}
   const{data:{session}}=await _supa.auth.getSession();
-  if(!session){showToast('❌ Сесія закінчилась — увійдіть знову',true);return;}
+  if(!session){_restoreBtn();showToast('❌ Сесія закінчилась — увійдіть знову',true);return;}
 
   const ath=editingAthId?db.athletes.find(a=>a.id===editingAthId):null;
   const supaId=ath?._supaId||null;
@@ -5246,7 +5250,7 @@ async function _saveTrainerAthlete(data,entries,comp){
       .update({athlete_data:row.athlete_data,entries_data:row.entries_data,
                organizer_id:row.organizer_id,updated_at:row.updated_at})
       .eq('id',supaId).eq('trainer_id',_currentUser.id);
-    if(error){showToast('❌ Помилка збереження: '+error.message,true);return;}
+    if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
     Object.assign(ath,data);
     if(comp){
       const oldEntries=(comp.entries||[]).filter(e=>e.athleteId===editingAthId);
@@ -5261,7 +5265,7 @@ async function _saveTrainerAthlete(data,entries,comp){
   } else {
     // Insert new trainer_athlete
     const{data:saved,error}=await _supa.from('trainer_athletes').insert(row).select('id').maybeSingle();
-    if(error){showToast('❌ Помилка збереження: '+error.message,true);return;}
+    if(error){_restoreBtn();showToast('❌ Помилка збереження: '+error.message,true);return;}
     const localId=db.nextId.ath++;
     // Write local_id to Supabase immediately so organizer always uses this same ID.
     // This ensures heat lane references (athleteId) are consistent for both sides.
