@@ -3190,9 +3190,15 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
         &&['athletes','protocol','standings','results'].includes(t)){
       _loadOrgTrainerAthletes().then(()=>tabRenderers[t]?.());
     }
-    // Organizer: do NOT reload trainer athletes on every tab switch —
-    // it purges/rebuilds athletes and breaks heat lane references.
-    // Use manual "🔄 Тренери" button or org-panel open to refresh.
+    // Organizer: auto-refresh trainer athletes when opening athletes tab
+    // (protectedRows=in-place for comps with heats; freeRows=purge+rebuild safe for planning stage)
+    if(_currentRole==='organizer'&&t==='athletes'){
+      const _now=Date.now();
+      if(!_lastOrgTrainerAthRefresh||_now-_lastOrgTrainerAthRefresh>30000){
+        _lastOrgTrainerAthRefresh=_now;
+        _loadOrgTrainerAthletes().then(()=>renderAthletes());
+      }
+    }
   });
 });
 function switchTab(name){document.querySelector(`.tab-btn[data-tab="${name}"]`)?.click();}
@@ -13638,6 +13644,7 @@ function _unsubscribeNotifications(){
 // ─── Auto-refresh DB data for trainer (realtime + polling fallback) ────────────
 // Skip one tab-switch refresh when openInvitedComp just loaded data itself
 let _skipNextTabRefresh=false;
+let _lastOrgTrainerAthRefresh=0;
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
