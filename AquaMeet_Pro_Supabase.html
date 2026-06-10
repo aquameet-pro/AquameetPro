@@ -11798,6 +11798,10 @@ async function startApp(){
 
   hideAuthOverlay();
 
+  // Show build version for all roles (trainer's sync indicator will overwrite with sync time + version)
+  {const _vi=document.getElementById('sync-indicator');
+   if(_vi){_vi.style.display='inline';_vi.textContent='v'+APP_BUILD;}}
+
   // Always reset to home tab
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
@@ -15755,14 +15759,31 @@ async function _bootApp(user){
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     // updateViaCache:'none' — browser always fetches sw.js fresh (bypasses HTTP cache)
+    // Compare running build vs server build (sw.js cache string); pull update on mismatch
+    let _verToastShown=false;
+    async function _checkAppVersion(reg){
+      try{
+        const r=await fetch('sw.js?ts='+Date.now(),{cache:'no-store'});
+        if(!r.ok)return;
+        const m=(await r.text()).match(/aquameet-([0-9-]+)/);
+        if(m&&m[1]!==APP_BUILD){
+          if(!_verToastShown){_verToastShown=true;
+            try{showToast('🔄 Доступна нова версія v'+m[1]+' — завантажую…');}catch(_){}}
+          await reg.update();
+          // If the new SW is installed but stuck waiting — activate it now (triggers auto-reload)
+          if(reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});
+        }
+      }catch(_){}
+    }
     navigator.serviceWorker.register('sw.js',{updateViaCache:'none'})
       .then(reg=>{
         // Check for update every time user returns to the app (works on iOS/Android)
         document.addEventListener('visibilitychange',()=>{
-          if(document.visibilityState==='visible') reg.update();
+          if(document.visibilityState==='visible'){reg.update();_checkAppVersion(reg);}
         });
-        // Also check every 10 minutes while app is open
-        setInterval(()=>reg.update(), 10*60*1000);
+        // Also check every 5 minutes while app is open + once shortly after load
+        setInterval(()=>_checkAppVersion(reg), 5*60*1000);
+        setTimeout(()=>_checkAppVersion(reg), 15*1000);
 
         // When a new SW is found installing — notify user
         reg.addEventListener('updatefound',()=>{
