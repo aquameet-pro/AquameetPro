@@ -11768,7 +11768,18 @@ async function startApp(){
     applyRolePermissions();
     if(_currentRole==='admin')renderAdmin();
     if(_currentRole==='organizer'||_currentRole==='secretary')renderOrgPanel();
-    if(_currentRole==='trainer'){_checkTrainerInvitations();_updateTrainerConfirmedForActiveComp();}
+    if(_currentRole==='trainer'){
+      // Restore trainer's own competition preference (overrides organizer's activeCompId from app_state)
+      try{
+        const _savedComp=localStorage.getItem('aquameet_trainer_comp_'+(_currentUser?.id||''));
+        if(_savedComp&&+_savedComp){
+          const _comp=(db.competitions||[]).find(c=>c.id===+_savedComp);
+          if(_comp){db.activeCompId=+_savedComp;refreshCompSelect();renderHome();}
+        }
+      }catch(_){}
+      _checkTrainerInvitations();
+      _updateTrainerConfirmedForActiveComp();
+    }
     // Load organizer pending requests notification (organizer and secretary)
     if(_currentRole==='organizer'||_currentRole==='admin'||_currentRole==='secretary')
       await loadOrganizerRequests();
@@ -13292,6 +13303,8 @@ async function openInvitedComp(compId, invStatus){
 
   // Open competition
   db.activeCompId=comp.id;
+  // Persist trainer's competition choice so it survives next login (organizer's app_state has different activeCompId)
+  try{localStorage.setItem('aquameet_trainer_comp_'+(_currentUser?.id||''),''+comp.id);}catch(_){}
   document.body.classList.add('trainer-has-access');
   // Ensure realtime + polling subscription is active (may not have been set up at boot if trainer had no prior access)
   _subscribeDataUpdates();
