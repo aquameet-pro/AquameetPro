@@ -13712,9 +13712,10 @@ let _skipNextTabRefresh=false;
 let _lastOrgTrainerAthRefresh=0;
 const _trainerDeletedSupaIds=new Set(); // supaIds deleted in this session — block _loadTrainerAthletes from re-adding them
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
+const APP_BUILD='20260610-1932'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
-  if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text;}
+  if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
 }
 function _subscribeDataUpdates(){
   // Trainers, admins, and secretaries all need to watch the organizer's data in real-time
