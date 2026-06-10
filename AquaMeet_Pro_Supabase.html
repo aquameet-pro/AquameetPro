@@ -4883,7 +4883,7 @@ function renderAthletes(){
   }
 
   const _totalEntries=rows.reduce((s,r)=>s+r.ent.length,0);
-  const _trainerCount=db.athletes.filter(a=>a._trainerOwned).length;
+  const _trainerCount=rows.filter(r=>r.a._trainerOwned).length;
   const _trainerSuffix=(['organizer','secretary','admin'].includes(_currentRole)&&_trainerCount>0)?` (у т.ч. ${_trainerCount} від тренерів)`:'';
   document.getElementById('ath-sub').textContent=`${rows.length} учасників, ${_totalEntries} заявок${_trainerSuffix}`;
   const body=rows.flatMap(({a,ag,ent})=>{
