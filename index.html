@@ -66,12 +66,12 @@ label{font-size:.8rem;color:var(--text-dim);display:block;margin-bottom:.3rem;fo
 .app-header{
   background:rgba(255,255,255,0.97);backdrop-filter:blur(12px);
   border-bottom:2px solid rgba(0,119,182,.18);
-  padding:.6rem 1.5rem;display:flex;align-items:center;gap:1rem;
+  padding:.6rem 1rem;display:flex;align-items:center;gap:.6rem;
 }
 .app-logo{font-size:1.45rem;font-weight:900;letter-spacing:-1px;color:var(--accent);white-space:nowrap}
 .app-logo span{color:var(--accent2)}
 .app-logo sup{font-size:.5rem;color:var(--text-muted);font-weight:400;letter-spacing:1px;vertical-align:super}
-.comp-selector{flex:0 1 auto;max-width:560px;min-width:140px}
+.comp-selector{flex:0 1 auto;max-width:300px;min-width:120px}
 .comp-selector select{background:rgba(0,119,182,.06);border-color:rgba(0,119,182,.22);font-weight:600;font-size:.85rem;padding:.35rem .65rem}
 .header-actions{display:flex;gap:.4rem;align-items:center;margin-left:auto;flex-wrap:wrap}
 .status-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.22rem .65rem;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap}
@@ -331,9 +331,9 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 #auth-loading-state p{font-size:.88rem;color:#1a6a9a;font-weight:600}
 @keyframes spin{to{transform:rotate(360deg)}}
 /* Organizer switcher (admin only) */
-.org-switcher{display:none;align-items:center;gap:.4rem;background:rgba(0,119,182,.07);border:1.5px solid rgba(0,119,182,.25);border-radius:8px;padding:.28rem .6rem}
-.org-switcher label{font-size:.72rem;font-weight:800;color:#023e8a;white-space:nowrap}
-.org-switcher select{background:transparent;border:none;font-size:.82rem;font-weight:700;color:#023e8a;padding:.1rem .2rem;cursor:pointer;max-width:340px}
+.org-switcher{display:none;align-items:center;gap:.3rem;background:rgba(0,119,182,.07);border:1.5px solid rgba(0,119,182,.25);border-radius:8px;padding:.24rem .5rem}
+.org-switcher label{font-size:.68rem;font-weight:800;color:#023e8a;white-space:nowrap}
+.org-switcher select{background:transparent;border:none;font-size:.76rem;font-weight:700;color:#023e8a;padding:.1rem .1rem;cursor:pointer;max-width:175px;text-overflow:ellipsis}
 .org-switcher select:focus{outline:none}
 .viewing-indicator{font-size:.72rem;color:#0055a0;font-weight:700;white-space:nowrap}
 .user-badge{display:inline-flex;align-items:center;gap:.45rem;padding:.28rem .75rem;border-radius:20px;font-size:.75rem;font-weight:700;background:rgba(0,119,182,.1);border:1px solid rgba(0,119,182,.22);color:#0055a0;white-space:nowrap}
@@ -345,7 +345,7 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 .btn-logout{background:rgba(230,57,70,.1);color:#c0001a;border:1px solid rgba(230,57,70,.25);font-size:.75rem;font-weight:700;padding:.28rem .65rem;border-radius:6px;cursor:pointer;transition:all .15s;font-family:inherit}
 .btn-logout:hover{background:rgba(230,57,70,.18)}
 /* Competition selector button */
-.comp-selector-btn{display:inline-flex;align-items:center;gap:.5rem;background:rgba(0,119,182,.07);border:1.5px solid rgba(0,119,182,.25);border-radius:8px;color:#023e8a;font-size:.85rem;font-weight:700;padding:.32rem .75rem;cursor:pointer;font-family:inherit;width:100%;max-width:560px;transition:all .15s;text-align:left}
+.comp-selector-btn{display:inline-flex;align-items:center;gap:.4rem;background:rgba(0,119,182,.07);border:1.5px solid rgba(0,119,182,.25);border-radius:8px;color:#023e8a;font-size:.8rem;font-weight:700;padding:.3rem .6rem;cursor:pointer;font-family:inherit;width:100%;max-width:300px;transition:all .15s;text-align:left}
 .comp-selector-btn:hover{background:rgba(0,119,182,.13);border-color:rgba(0,119,182,.45)}
 .comp-selector-btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;color:#023e8a}
 .comp-selector-btn .ti{flex-shrink:0;font-size:13px;color:#5a9ab8}
@@ -13727,7 +13727,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20260610-1959'; // stamped by deploy.ps1
+const APP_BUILD='20260610-2006'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
