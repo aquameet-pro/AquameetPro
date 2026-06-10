@@ -13707,10 +13707,17 @@ async function _trainerRefreshDb(){
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
   _lastDbUpdatedAt=newData._savedAt||updatedAt||'';
-  // Preserve the viewer's own competition selection — organizer's activeCompId must not redirect them
   const localActiveId=db.activeCompId!=null?db.activeCompId:null;
+  // Save trainer's current athletes before db replacement so UI never flashes empty
+  const _savedTrainerAths=(_currentRole==='trainer'&&_currentUser)
+    ?db.athletes.filter(a=>a._trainerOwned&&a._trainerId===_currentUser.id&&!_trainerDeletedSupaIds.has(a._supaId))
+    :[];
   db=newData;
   if(localActiveId!=null)db.activeCompId=localActiveId;
+  // Immediately restore saved trainer athletes (Supabase refresh will overwrite below)
+  if(_savedTrainerAths.length){
+    _savedTrainerAths.forEach(a=>{if(!db.athletes.find(x=>x.id===a.id))db.athletes.push(a);});
+  }
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
   // Always re-render tabs trainers commonly watch
