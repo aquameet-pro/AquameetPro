@@ -5364,6 +5364,10 @@ async function _loadTrainerAthletes(){
         Object.assign(existing,row.athlete_data||{});
         existing._compId=row.comp_id;
         existing._orgId=row.organizer_id||null;
+        // Ensure ownership flags so this athlete is always included in _applyRemoteDb backup
+        existing._trainerOwned=true;
+        existing._trainerId=_currentUser.id;
+        existing._supaId=row.id;
       }else{
         // New from Supabase (not yet in db.athletes)
         const localId=(row.local_id>0?row.local_id:null)||db.nextId.ath++;
@@ -13726,8 +13730,9 @@ function _applyRemoteDb(newData,updatedAt){
   _lastDbUpdatedAt=newData._savedAt||updatedAt||'';
   const localActiveId=db.activeCompId!=null?db.activeCompId:null;
   // Save trainer's current athletes AND their entries before db replacement so UI never flashes empty
+  // Include athletes without _trainerId (copies synced via organizer's app_state lack the flag)
   const _savedTrainerAths=(_currentRole==='trainer'&&_currentUser)
-    ?db.athletes.filter(a=>a._trainerOwned&&a._trainerId===_currentUser.id&&!_trainerDeletedSupaIds.has(a._supaId))
+    ?db.athletes.filter(a=>a._trainerOwned&&(!a._trainerId||a._trainerId===_currentUser.id)&&!_trainerDeletedSupaIds.has(a._supaId))
     :[];
   let _savedTrainerEntries=[]; // [{compId, entry}]
   if(_savedTrainerAths.length){
@@ -13742,13 +13747,21 @@ function _applyRemoteDb(newData,updatedAt){
   if(localActiveId!=null)db.activeCompId=localActiveId;
   // Immediately restore saved trainer athletes + entries so UI never flashes empty
   if(_savedTrainerAths.length){
-    _savedTrainerAths.forEach(a=>{if(!db.athletes.find(x=>x.id===a.id))db.athletes.push(a);});
+    _savedTrainerAths.forEach(a=>{
+      // Dedup by _supaId: organizer's app_state may hold the same athlete under a different local id
+      if(a._supaId&&db.athletes.find(x=>x._trainerOwned&&x._supaId===a._supaId))return;
+      if(!db.athletes.find(x=>x.id===a.id))db.athletes.push(a);
+    });
     _savedTrainerEntries.forEach(({compId,entry})=>{
       const c=(db.competitions||[]).find(x=>x.id===compId);
       if(!c)return;
       if(!c.entries)c.entries=[];
-      const exists=c.entries.find(x=>x.athleteId===entry.athleteId&&x.dist===entry.dist&&x.style===entry.style);
-      if(!exists)c.entries.push(entry);
+      // Resolve the surviving athlete id (the saved copy may have been deduped to organizer's copy)
+      const savedAth=_savedTrainerAths.find(a=>a.id===entry.athleteId);
+      const surviving=savedAth?._supaId?db.athletes.find(x=>x._trainerOwned&&x._supaId===savedAth._supaId):null;
+      const targetId=surviving?surviving.id:entry.athleteId;
+      const exists=c.entries.find(x=>x.athleteId===targetId&&x.dist===entry.dist&&x.style===entry.style);
+      if(!exists)c.entries.push(targetId===entry.athleteId?entry:{...entry,athleteId:targetId});
       // If organizer's copy lost the result but ours has it, keep ours
       else if(!exists.result&&entry.result)exists.result=entry.result;
     });
