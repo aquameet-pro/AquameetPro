@@ -541,6 +541,9 @@ body.role-trainer:not(.trainer-confirmed) button[onclick="openAddRelayAg()"]{ di
 /* Банер «лише перегляд» — коли є доступ, але не підтверджено */
 body.role-trainer.trainer-has-access:not(.trainer-confirmed) #trainer-readonly-banner{ display:flex!important }
 body.role-trainer.trainer-has-access:not(.trainer-confirmed) #trainer-readonly-banner-relay{ display:flex!important }
+/* Якщо підтверджено — банер прихований незалежно від inline-style */
+body.role-trainer.trainer-confirmed #trainer-readonly-banner{ display:none!important }
+body.role-trainer.trainer-confirmed #trainer-readonly-banner-relay{ display:none!important }
 /* Кнопка «Розпочати змагання» — тільки організатор */
 body.role-trainer button[onclick^="setCompStatus"]{ display:none!important }
 /* Comp selector button always visible for all roles */
@@ -2760,6 +2763,11 @@ function updateJudgePanelRow(i,field,val){
 function removeJudgePanelRow(i){
   _judgePanel.splice(i,1);
   renderJudgePanelInModal(_judgePanel);
+  // Auto-save immediately so the deletion is not lost if the modal is closed without clicking Save
+  if(editingCompId){
+    const c=db.competitions.find(x=>x.id===editingCompId);
+    if(c){c.judgePanel=_judgePanel.filter(j=>j.name||j.role);saveDB();}
+  }
 }
 
 function getJudgePanelFromModal(){
@@ -3123,7 +3131,7 @@ const tabRenderers={
   heats:renderHeats,results:renderResults,protocol:renderProtocol,
   standings:renderStandings,'athletes-dir':renderAthletesDir,
   relays:renderRelays,news:renderNews,archive:renderArchive,reglament:renderReglament,
-  print:renderPrint,settings:renderSettings
+  print:renderPrint,settings:renderSettings,invitations:renderTrainerInvitations
 };
 // ── Sticky offsets: nav → section-header → filter-bar → thead ──
 function _updateStickyOffset(){
@@ -3170,9 +3178,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     setTimeout(()=>{applyPermissions();_updateStickyOffset();},80);
     _syncBnav(t);
     closeBnavDrawer();
-    // Trainer: refresh data when switching to result-heavy tabs
-    if(_currentRole==='trainer'&&['results','heats','protocol','relays','standings'].includes(t)){
-      _trainerRefreshDb();
+    // Viewers (trainer/admin/secretary): refresh organizer data when switching to home or result-heavy tabs
+    if(['trainer','admin','secretary'].includes(_currentRole)&&
+        ['home','results','heats','protocol','relays','standings'].includes(t)){
+      if(_skipNextTabRefresh){_skipNextTabRefresh=false;}
+      else{_trainerRefreshDb();}
     }
     // Admin viewing organizer: load trainer athletes on first visit to athletes/protocol/standings
     // (safe here: freeRows rebuild always runs both queries so no data loss)
@@ -3396,7 +3406,9 @@ function createComp(){
   for(const [fieldId,prop] of Object.entries(NC_FIELD_MAP)){
     const el=document.getElementById(fieldId);if(!el)continue;
     const v=el.value;
-    if(v!==''&&v!=null)data[prop]=v.trim?v.trim():v;
+    // When editing always include the value even if empty — lets user clear a field (e.g. remove a judge name).
+    // When creating skip empty optional fields to keep the new object clean.
+    if(editingCompId?v!=null:(v!==''&&v!=null))data[prop]=v.trim?v.trim():v;
   }
   data.feeWaiver=document.getElementById('nc-fee-waiver').checked;
   data.registrationClosed=document.getElementById('nc-reg-closed').checked;
@@ -3446,6 +3458,11 @@ function collapseSection(bodyId,collapsed){
 }
 function setCompStatus(status){
   const c=activeComp();if(!c)return;
+  // Require explicit confirmation when reverting away from 'done' (prevents accidental clicks)
+  if(c.status==='done'&&status!=='done'){
+    const label=status==='active'?'Активні':'Планування';
+    if(!confirm(`Змінити статус «Завершені» → «${label}»?`))return;
+  }
   c.status=status;saveDB();refreshCompSelect();renderHome();renderStatusBanner();
   // Re-render active tab so permissions apply immediately without tab switch
   const activeTab=document.querySelector('.tab-btn.active')?.dataset?.tab;
@@ -3649,7 +3666,7 @@ function renderStatusBanner(){
   if(comp?.status==='done'){
     banner.innerHTML=`<div style="background:rgba(244,162,49,.15);border-bottom:2px solid rgba(244,162,49,.4);padding:.55rem 1.5rem;font-size:.83rem;color:#7a4000;display:flex;align-items:center;gap:.7rem">
       <strong>✅ Змагання завершено.</strong> Редагування заблоковано. Доступні тільки перегляд і друк.
-      <button class="btn-secondary btn-sm" onclick="setCompStatus('active')" style="margin-left:.5rem">↩ Повернути до «Змагання»</button>
+      <button class="btn-secondary btn-sm" onclick="setCompStatus('active')" style="margin-left:.5rem">↩ Змінити статус на «Активні»</button>
     </div>`;
   } else if(comp?.status==='planning'){
     banner.innerHTML=`<div style="background:rgba(0,180,216,.07);border-bottom:1px solid rgba(0,180,216,.2);padding:.4rem 1.5rem;font-size:.8rem;color:#005f7a;display:flex;align-items:center;gap:.7rem">
@@ -5158,6 +5175,10 @@ async function saveAthlete(){
     if(comp){
       // Preserve previously-recorded results when re-saving an athlete
       const oldEntries=(comp.entries||[]).filter(e=>e.athleteId===editingAthId);
+      // Check if event selection actually changed — only then must heats be cleared
+      const oldEvKey=oldEntries.map(e=>`${e.dist}|${e.style}`).sort().join(',');
+      const newEvKey=newEnts.map(e=>`${e.dist}|${e.style}`).sort().join(',');
+      const entriesChanged=oldEvKey!==newEvKey;
       comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==editingAthId);
       const seen=new Set();const dups=[];
       newEnts.forEach(e=>{
@@ -5168,7 +5189,8 @@ async function saveAthlete(){
         comp.entries.push({id:db.nextId.entry++,athleteId:editingAthId,...e,result:old?.result||null});
       });
       if(dups.length)showToast(`⚠ Дублі пропущено: ${dups.join(', ')}`,true);
-      comp.heats=[];
+      // Clear heats only if the set of events changed (bio-only edits preserve existing heats)
+      if(entriesChanged)comp.heats=[];
     }
     // Sync organizer's edits back to Supabase so trainer reload doesn't overwrite them
     if(athToEdit?._trainerOwned&&athToEdit?._supaId&&!_supaOffline){
@@ -5233,7 +5255,8 @@ async function _saveTrainerAthlete(data,entries,comp){
         const old=oldEntries.find(o=>o.dist===e.dist&&o.style===e.style);
         comp.entries.push({id:db.nextId.entry++,athleteId:editingAthId,...e,result:old?.result||null});
       });
-      comp.heats=[];
+      // Do NOT clear comp.heats here — trainer cannot regenerate heats;
+      // new athletes appear with "В заплив" button instead
     }
   } else {
     // Insert new trainer_athlete
@@ -5256,7 +5279,8 @@ async function _saveTrainerAthlete(data,entries,comp){
         else comp.entries.push({id:db.nextId.entry++,athleteId:localId,...e,result:null});
       });
       if(dups.length)showToast(`⚠ Дублі пропущено: ${dups.join(', ')}`,true);
-      comp.heats=[];
+      // Do NOT clear comp.heats here — trainer cannot regenerate heats;
+      // new athletes appear with "В заплив" button instead
     }
     if(saved?.id)_supa.from('trainer_athletes').update({local_id:localId}).eq('id',saved.id);
   }
@@ -12807,6 +12831,17 @@ async function doBulkInvite(){
     );
   }
 
+  // Optimistically update local _invitations cache so panel shows new records
+  // even if the Supabase reload below falls back to cache due to slow network
+  const alreadyIds=new Set(_invitations.filter(i=>i.comp_id===_bulkInvCompId).map(i=>i.trainer_id));
+  for(const tid of selected){
+    if(!alreadyIds.has(tid)){
+      _invitations.push({comp_id:_bulkInvCompId,comp_name:_bulkInvCompName,
+        organizer_id:orgId,trainer_id:tid,trainer_response:'pending',comp_snapshot:compSnapshot});
+    }
+  }
+  _saveInvDataCache();
+
   closeModal('modal-bulk-invite');
   showToast(`✅ Запрошено ${selected.length} тренерів до «${_bulkInvCompName}»`);
   await renderOrgPanel({silent:true});
@@ -13139,9 +13174,14 @@ function _setTrainerReadonlyBanner(mode,compId){
   if(mode==='none'){readonlyBanners.forEach(b=>b.style.display='none');return;}
   let html;
   if(mode==='invite'){
+    const _invForComp=_myInvitations.find(i=>+i.comp_id===+db.activeCompId);
+    const _invIdForComp=_invForComp?.id;
     html=`<span style="font-size:1.2rem">👁</span>
-      <div><strong>Режим перегляду.</strong> Щоб вносити учасників — підтвердіть участь у вкладці <strong>📬 Запрошення</strong>.</div>
-      <button class="btn-warn btn-sm" style="margin-left:auto;white-space:nowrap" onclick="switchTab('invitations')">📬 Підтвердити</button>`;
+      <div><strong>Режим перегляду.</strong> Щоб вносити учасників — підтвердіть участь.</div>
+      ${_invIdForComp
+        ?`<button class="btn-warn btn-sm" style="margin-left:auto;white-space:nowrap" onclick="respondInvitation('${_invIdForComp}','attending')">✅ Беру участь</button>`
+        :`<button class="btn-warn btn-sm" style="margin-left:auto;white-space:nowrap" onclick="switchTab('invitations')">📬 Запрошення</button>`
+      }`;
   }else if(mode==='requested'){
     html=`<span style="font-size:1.2rem">👁</span>
       <div><strong>Режим перегляду.</strong> Запит надіслано — очікуйте підтвердження організатора.</div>
@@ -13243,11 +13283,15 @@ async function openInvitedComp(compId, invStatus){
   // Open competition
   db.activeCompId=comp.id;
   document.body.classList.add('trainer-has-access');
+  // Ensure realtime + polling subscription is active (may not have been set up at boot if trainer had no prior access)
+  _subscribeDataUpdates();
   // Only grant edit rights if trainer confirmed attendance
   _setTrainerConfirmed(invStatus==='attending');
+  if(invStatus==='attending') _setTrainerReadonlyBanner('none');
   refreshCompSelect();
   renderHome();
   _updateCompSelectorLabel();
+  _skipNextTabRefresh=true;  // prevent _trainerRefreshDb() from overwriting activeCompId right after open
   switchTab('home');
   showToast('🏊 Змагання відкрито!');
   // Reload this trainer's own athletes on top of organizer's DB
@@ -13588,6 +13632,8 @@ function _unsubscribeNotifications(){
 }
 
 // ─── Auto-refresh DB data for trainer (realtime + polling fallback) ────────────
+// Skip one tab-switch refresh when openInvitedComp just loaded data itself
+let _skipNextTabRefresh=false;
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
@@ -13631,11 +13677,15 @@ async function _trainerRefreshDb(){
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
   _lastDbUpdatedAt=newData._savedAt||updatedAt||'';
+  // Preserve the viewer's own competition selection — organizer's activeCompId must not redirect them
+  const localActiveId=db.activeCompId!=null?db.activeCompId:null;
   db=newData;
+  if(localActiveId!=null)db.activeCompId=localActiveId;
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
   // Always re-render tabs trainers commonly watch
   renderHome();
+  renderStatusBanner();
   renderNews();
   if(document.getElementById('tab-results')?.classList.contains('active'))renderResults();
   else if(document.getElementById('tab-heats')?.classList.contains('active'))renderHeats();
