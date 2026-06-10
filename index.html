@@ -5374,10 +5374,13 @@ async function _loadTrainerAthletes(){
         db.nextId.ath=Math.max(db.nextId.ath,localId+1);
         const ath={id:localId,...(row.athlete_data||{}),isTest:false,_trainerOwned:true,
           _supaId:row.id,_compId:row.comp_id,_trainerId:_currentUser.id,_orgId:row.organizer_id||null};
-        if(!db.athletes.find(a=>a.id===localId&&!a._trainerOwned)){
+        // Id collision with ANY existing athlete (incl. another trainer athlete created on a
+        // different device with its own nextId counter) → assign a fresh id
+        if(!db.athletes.find(a=>a.id===localId)){
           db.athletes.push(ath);
         }else{
-          ath.id=db.nextId.ath++;
+          ath.id=Math.max(db.nextId.ath||1,...db.athletes.map(x=>x.id+1));
+          db.nextId.ath=ath.id+1;
           db.athletes.push(ath);
         }
         // Restore entries into the active competition
@@ -13747,19 +13750,29 @@ function _applyRemoteDb(newData,updatedAt){
   if(localActiveId!=null)db.activeCompId=localActiveId;
   // Immediately restore saved trainer athletes + entries so UI never flashes empty
   if(_savedTrainerAths.length){
+    const _idRemap=new Map(); // oldId → newId for athletes whose id was taken by a different athlete
     _savedTrainerAths.forEach(a=>{
       // Dedup by _supaId: organizer's app_state may hold the same athlete under a different local id
-      if(a._supaId&&db.athletes.find(x=>x._trainerOwned&&x._supaId===a._supaId))return;
-      if(!db.athletes.find(x=>x.id===a.id))db.athletes.push(a);
+      if(a._supaId){
+        const dup=db.athletes.find(x=>x._trainerOwned&&x._supaId===a._supaId);
+        if(dup){if(dup.id!==a.id)_idRemap.set(a.id,dup.id);return;}
+      }
+      const taken=db.athletes.find(x=>x.id===a.id);
+      if(!taken){db.athletes.push(a);return;}
+      // Id occupied by a DIFFERENT athlete (cross-device id collision) — reassign instead of dropping
+      if(!db.nextId)db.nextId={};
+      const newId=Math.max(db.nextId.ath||1,a.id+1,...db.athletes.map(x=>x.id+1));
+      db.nextId.ath=newId+1;
+      _idRemap.set(a.id,newId);
+      a.id=newId;
+      db.athletes.push(a);
     });
     _savedTrainerEntries.forEach(({compId,entry})=>{
       const c=(db.competitions||[]).find(x=>x.id===compId);
       if(!c)return;
       if(!c.entries)c.entries=[];
-      // Resolve the surviving athlete id (the saved copy may have been deduped to organizer's copy)
-      const savedAth=_savedTrainerAths.find(a=>a.id===entry.athleteId);
-      const surviving=savedAth?._supaId?db.athletes.find(x=>x._trainerOwned&&x._supaId===savedAth._supaId):null;
-      const targetId=surviving?surviving.id:entry.athleteId;
+      // Resolve the surviving athlete id (deduped to organizer's copy or remapped after collision)
+      const targetId=_idRemap.get(entry.athleteId)||entry.athleteId;
       const exists=c.entries.find(x=>x.athleteId===targetId&&x.dist===entry.dist&&x.style===entry.style);
       if(!exists)c.entries.push(targetId===entry.athleteId?entry:{...entry,athleteId:targetId});
       // If organizer's copy lost the result but ours has it, keep ours
