@@ -13697,6 +13697,12 @@ function _applyRemoteDb(newData,updatedAt){
   else if(document.getElementById('tab-standings')?.classList.contains('active'))renderStandings();
   const t=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   _setSyncIndicator('✅ '+t);
+  // db=newData wiped trainer's local athletes — reload them from trainer_athletes table
+  if(_currentRole==='trainer'){
+    _loadTrainerAthletes().then(()=>{
+      if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
+    });
+  }
 }
 
 // Close notif panel on outside click
