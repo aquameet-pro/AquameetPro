@@ -404,6 +404,10 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
   body.printing-tab .section-header button,
   body.printing-tab .print-hide{display:none!important}
   body.printing-tab .tbl-wrap{overflow:visible!important;box-shadow:none!important;border:none!important}
+  body.printing-tab,body.printing-tab #app,body.printing-tab #app>.app-main,
+  body.printing-tab .tab-panel.active{overflow:visible!important;height:auto!important}
+  ::-webkit-scrollbar{display:none!important}
+  html,body{scrollbar-width:none!important}
   body.printing-tab table{page-break-inside:auto}
   body.printing-tab tr{page-break-inside:avoid}
   body.printing-tab .proto-section{page-break-inside:avoid;margin-bottom:.6rem!important;box-shadow:none!important}
@@ -13716,7 +13720,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20260611-0056'; // stamped by deploy.ps1
+const APP_BUILD='20260611-2128'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
