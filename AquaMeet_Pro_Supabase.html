@@ -3677,10 +3677,12 @@ function renderStatusBanner(){
     const main=document.getElementById('app-main')||document.querySelector('main');
     if(main)main.prepend(banner);
   }
-  if(comp?.status==='done'){
-    banner.innerHTML=`<div style="background:rgba(244,162,49,.15);border-bottom:2px solid rgba(244,162,49,.4);padding:.55rem 1.5rem;font-size:.83rem;color:#7a4000;display:flex;align-items:center;gap:.7rem">
+  const _doneBannerKey='aquameet_done_banner_dismissed_'+(comp?.id||'');
+  if(comp?.status==='done'&&!sessionStorage.getItem(_doneBannerKey)){
+    banner.innerHTML=`<div style="background:rgba(244,162,49,.15);border-bottom:2px solid rgba(244,162,49,.4);padding:.55rem 1.5rem;font-size:.83rem;color:#7a4000;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap">
       <strong>✅ Змагання завершено.</strong> Редагування заблоковано. Доступні тільки перегляд і друк.
-      <button class="btn-secondary btn-sm" onclick="setCompStatus('active')" style="margin-left:.5rem">↩ Змінити статус на «Активні»</button>
+      ${['organizer','secretary','admin'].includes(_currentRole)?`<button class="btn-secondary btn-sm" onclick="setCompStatus('active')" style="margin-left:.5rem">↩ Змінити статус на «Активні»</button>`:''}
+      <button onclick="sessionStorage.setItem('${_doneBannerKey}','1');this.closest('#status-banner').innerHTML=''" style="margin-left:auto;background:none;border:none;font-size:1.2rem;cursor:pointer;color:#7a4000;line-height:1;padding:0 .25rem" title="Закрити">×</button>
     </div>`;
   } else if(comp?.status==='planning'){
     banner.innerHTML=`<div style="background:rgba(0,180,216,.07);border-bottom:1px solid rgba(0,180,216,.2);padding:.4rem 1.5rem;font-size:.8rem;color:#005f7a;display:flex;align-items:center;gap:.7rem">
