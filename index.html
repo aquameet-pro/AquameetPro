@@ -5654,7 +5654,11 @@ async function delAthlete(id){
   }
   db.athletes=db.athletes.filter(a=>a.id!==id);
   const comp=activeComp();
-  if(comp){comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==id);comp.heats=[];}
+  if(comp){
+    comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==id);
+    // Trainers cannot regenerate heats — don't wipe them locally (org's app_state is the source of truth)
+    if(_currentRole!=='trainer')comp.heats=[];
+  }
   if(_currentRole!=='trainer')saveDB();
   renderAthletes();
 }
@@ -13722,7 +13726,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20260723-1023'; // stamped by deploy.ps1
+const APP_BUILD='20260815-2214'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
@@ -13784,13 +13788,14 @@ function _applyRemoteDb(newData,updatedAt){
   if(localActiveId!=null)db.activeCompId=localActiveId;
   // Purge athletes the trainer deleted this session: organizer's app_state may still hold their
   // copies until the organizer refreshes — without this they resurrect a few seconds after delete
+  let _needAthRender=false;
   if(_currentRole==='trainer'&&_trainerDeletedSupaIds.size){
     db.athletes=db.athletes.filter(a=>!(a._trainerOwned&&a._supaId&&_trainerDeletedSupaIds.has(a._supaId)));
     (db.competitions||[]).forEach(c=>{
       if(c.entries?.length)
         c.entries=c.entries.filter(e=>!(e._trainerSupaId&&_trainerDeletedSupaIds.has(e._trainerSupaId)));
     });
-    if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
+    _needAthRender=true;
   }
   // Immediately restore saved trainer athletes + entries so UI never flashes empty
   if(_savedTrainerAths.length){
@@ -13822,9 +13827,10 @@ function _applyRemoteDb(newData,updatedAt){
       // If organizer's copy lost the result but ours has it, keep ours
       else if(!exists.result&&entry.result)exists.result=entry.result;
     });
-    // If athletes tab is open, re-render it now so restored athletes appear right away
-    if(document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
+    _needAthRender=true;
   }
+  // Single renderAthletes call to avoid double-render when both branches ran
+  if(_needAthRender&&document.getElementById('tab-athletes')?.classList.contains('active'))renderAthletes();
   try{localStorage.setItem(_lsKey(),JSON.stringify(db));}catch(_){}
   refreshCompSelect();
   // Always re-render tabs trainers commonly watch
