@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>AquaMeet Pro — Система управління змаганнями з плавання</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0077b6">
 <meta name="mobile-web-app-capable" content="yes">
@@ -10966,6 +10968,8 @@ function _buildPublicHTML(comp,dbData,views){
   return`<!DOCTYPE html><html lang="uk"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${comp.name||'Змагання'} — AquaMeet Pro</title>
+<!-- Inline SVG icon: the public page is also downloaded as a standalone file, so it cannot reference icon-192.png -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230077b6'/><path d='M0 46c8 0 8-5 16-5s8 5 16 5 8-5 16-5 8 5 16 5v18H0z' fill='%2300b4d8' opacity='.85'/><text x='32' y='38' font-family='Arial,Helvetica,sans-serif' font-size='31' font-weight='bold' fill='%23ffffff' text-anchor='middle'>AM</text></svg>">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f8ff;color:#023e8a}
@@ -13748,7 +13752,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261017-0036'; // stamped by deploy.ps1
+const APP_BUILD='20261017-0041'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
