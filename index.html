@@ -6735,41 +6735,36 @@ function renderPreProtocol(){
 // ═══════════════════════════════════════════════════════════════
 // STANDINGS
 // ═══════════════════════════════════════════════════════════════
-function renderStandings(){
-  syncEventFilters();
-  const comp=activeComp();
-  const filt=document.getElementById('stf-event')?.value||'';
-  const el=document.getElementById('standings-content');
-  if(!comp){el.innerHTML='<div class="alert alert-warn">Оберіть змагання</div>';return;}
+// ── Shared ranking core ───────────────────────────────────────
+// Groups scored entries by event (dist|style|gender|age group), sorts each group
+// by time and assigns FINA tie-aware places. Pure: everything it needs arrives as
+// arguments, so the standalone public HTML (which has no `db`) can call it too.
+function _rankEntries(comp,athletes){
+  if(!comp)return[];
+  const list=athletes||[];
   const groups={};
   for(const entry of (comp.entries||[])){
     if(!entry.result)continue;
     if(entry.exhibition)continue; // Exhibition entries do not compete for medals
     if(parseTime(entry.result)===null)continue; // skip Н/С, Д/К and any non-time result
-    const a=db.athletes.find(x=>x.id===entry.athleteId);if(!a)continue;
+    const a=list.find(x=>x.id===entry.athleteId);if(!a)continue;
     const ag=ageGroup(a,comp,entry.dist,entry.style);const agId=ag?ag.id:0;
     const key=protoEvKey(entry.dist,entry.style,a.gender,agId);
-    if(filt&&key!==filt)continue;
-    if(!groups[key])groups[key]={dist:entry.dist,style:entry.style,gender:a.gender,agId,items:[]};
+    if(!groups[key])groups[key]={key,dist:entry.dist,style:entry.style,gender:a.gender,agId,ag:ag||null,items:[]};
     groups[key].items.push({entry,a,ag});
   }
-  const keys=Object.keys(groups).sort((a,b)=>{
+  return Object.keys(groups).sort((a,b)=>{
     const ea=groups[a],eb=groups[b];
     // Same order as Protocol: style (canonical) → distance → gender (F first) → age group (youngest first)
     const sa=STYLES.indexOf(ea.style),sb=STYLES.indexOf(eb.style);
     if(sa!==sb)return sa-sb;
     if(ea.dist!==eb.dist)return ea.dist-eb.dist;
     if(ea.gender!==eb.gender)return ea.gender==='F'?-1:1;
-    const ya=getAg(ea.agId),yb=getAg(eb.agId);
-    const yfA=ya?ya.yearFrom:-Infinity;
-    const yfB=yb?yb.yearFrom:-Infinity;
+    const yfA=ea.ag?ea.ag.yearFrom:-Infinity;
+    const yfB=eb.ag?eb.ag.yearFrom:-Infinity;
     return yfB-yfA;
-  });
-  if(!keys.length&&!(comp.relays||[]).filter(t=>t.result&&parseTime(t.result)!==null&&!t.exhibition).length){
-    el.innerHTML='<div class="empty-state"><div class="icon">🏆</div><p>Немає призерів. Внесіть результати у вкладці «Результати».</p></div>';return;
-  }
-  const indHtml=keys.length?keys.map(key=>{
-    const ev=groups[key];const ag=getAg(ev.agId);
+  }).map(key=>{
+    const ev=groups[key];
     // Sort by result time (fastest first); entries without a time fall to the end
     const allSorted=[...ev.items].sort((a,b)=>{
       const ta=parseTime(a.entry.result),tb=parseTime(b.entry.result);
@@ -6778,15 +6773,30 @@ function renderStandings(){
     // Assign competition places with tie-handling (FINA rules):
     // equal times → equal place; next place number skips by the size of the tied group.
     // Example: 28.50, 28.50, 28.60 → places 1, 1, 3 (place 2 is skipped).
-    // We include everyone whose place is ≤ 3 — so a tie at 3rd place produces 4+ medalists.
     let lastCs=null,lastPlace=0;
-    const withPlace=allSorted.map((item,idx)=>{
+    const items=allSorted.map((item,idx)=>{
       const cs=parseTime(item.entry.result);
       const place=(cs!==null&&cs===lastCs)?lastPlace:(idx+1);
       lastCs=cs;lastPlace=place;
       return{...item,place};
     });
-    const sorted=withPlace.filter(x=>x.place<=3);
+    return{...ev,items};
+  });
+}
+function renderStandings(){
+  syncEventFilters();
+  const comp=activeComp();
+  const filt=document.getElementById('stf-event')?.value||'';
+  const el=document.getElementById('standings-content');
+  if(!comp){el.innerHTML='<div class="alert alert-warn">Оберіть змагання</div>';return;}
+  const ranked=_rankEntries(comp,db.athletes).filter(ev=>!filt||ev.key===filt);
+  if(!ranked.length&&!(comp.relays||[]).filter(t=>t.result&&parseTime(t.result)!==null&&!t.exhibition).length){
+    el.innerHTML='<div class="empty-state"><div class="icon">🏆</div><p>Немає призерів. Внесіть результати у вкладці «Результати».</p></div>';return;
+  }
+  const indHtml=ranked.length?ranked.map(ev=>{
+    const ag=ev.ag;
+    // We include everyone whose place is ≤ 3 — so a tie at 3rd place produces 4+ medalists.
+    const sorted=ev.items.filter(x=>x.place<=3);
     const rows=sorted.map(item=>{
       const place=item.place;
       const medal=place===1?'🥇':place===2?'🥈':'🥉';
@@ -10990,20 +11000,30 @@ h4{color:#0055a0;font-size:.83rem;margin:.8rem 0 .3rem}
 function _buildPubProtocol(comp,athletes,entries,heats){
   if(!heats.length)return'<p style="color:#5a9ab8;padding:1rem">Запливи ще не згенеровані.</p>';
   const getAth=id=>athletes.find(a=>a.id===id)||{};
+  const getEntry=id=>entries.find(e=>e.id===id)||null;
   const days=comp.days||[];
+  // heat.lanes is a {laneNumber: entryId} map — walk it the same way renderHeats does.
+  // Heats with no dayId (not scheduled yet) still have to appear somewhere.
+  const buckets=days.map(d=>({title:`📅 ${escapeHtml(d.label||('День '+d.id))}${d.date?' — '+escapeHtml(d.date):''}`,list:heats.filter(h=>h.dayId===d.id)}));
+  const orphans=heats.filter(h=>!days.some(d=>d.id===h.dayId));
+  if(orphans.length)buckets.push({title:'📅 Поза розкладом',list:orphans});
   let html='';
-  days.forEach(day=>{
-    html+=`<h3>📅 День ${day.num} — ${day.date||''}</h3>`;
-    const dayHeats=heats.filter(h=>h.dayId===day.id);
-    if(!dayHeats.length){html+='<p style="color:#5a9ab8;font-size:.82rem">Запливів немає.</p>';return;}
-    dayHeats.forEach(heat=>{
-      html+=`<h4>Заплив №${heat.num} · ${heat.style||''} ${heat.dist||''}м · ${heat.gender==='M'?'Чоловіки':'Жінки'}</h4>`;
-      html+=`<table><thead><tr><th>Доріжка</th><th>Спортсмен</th><th>Р.н.</th><th>Клуб</th><th>Кращий час</th><th>Результат</th></tr></thead><tbody>`;
-      const lanes=[...(heat.lanes||[])].sort((a,b)=>a.lane-b.lane);
-      lanes.forEach(l=>{
-        const a=getAth(l.athleteId);
-        const e=entries.find(en=>en.athleteId===l.athleteId&&en.style===heat.style&&en.dist===heat.dist);
-        html+=`<tr><td><strong>${l.lane}</strong></td><td>${a.lastName||''} ${a.firstName||''}</td><td>${a.birthYear||''}</td><td>${a.club||''}</td><td>${e?.pb||'—'}</td><td>${e?.result||''}</td></tr>`;
+  buckets.forEach(b=>{
+    html+=`<h3>${b.title}</h3>`;
+    if(!b.list.length){html+='<p style="color:#5a9ab8;font-size:.82rem">Запливів немає.</p>';return;}
+    b.list.forEach(heat=>{
+      const gl=heat.gender==='M'?'Чоловіки':heat.gender==='F'?'Жінки':'Змішаний';
+      html+=`<h4>Заплив №${heat.globalNum} · ${heat.dist||''}м ${escapeHtml(heat.style||'')} · ${gl}</h4>`;
+      html+=`<table><thead><tr><th>Доріжка</th><th>Спортсмен</th><th>Р.н.</th><th>Клуб</th><th>Заявлений час</th><th>Результат</th></tr></thead><tbody>`;
+      const lanes=Object.keys(heat.lanes||{}).map(Number).filter(n=>!isNaN(n)).sort((x,y)=>x-y);
+      lanes.forEach(ln=>{
+        const e=getEntry(heat.lanes[ln]);if(!e)return;
+        const a=getAth(e.athleteId);
+        const club=[a.city,a.club].filter(Boolean).join(' · ');
+        html+=`<tr><td><strong>${ln}</strong></td>`+
+          `<td>${escapeHtml(a.surname||'')} ${escapeHtml(a.name||'')}${e.exhibition?' <span style="color:#5a9ab8;font-size:.78rem">(поза заліком)</span>':''}</td>`+
+          `<td>${a.birthYear||''}</td><td>${escapeHtml(club)}</td>`+
+          `<td>${escapeHtml(e.seedTime||'—')}</td><td>${escapeHtml(e.result||'')}</td></tr>`;
       });
       html+=`</tbody></table>`;
     });
@@ -11012,26 +11032,25 @@ function _buildPubProtocol(comp,athletes,entries,heats){
 }
 
 function _buildPubResults(comp,athletes,entries){
-  const finished=entries.filter(e=>e.result);
-  if(!finished.length)return'<p style="color:#5a9ab8;padding:1rem">Результатів ще немає.</p>';
-  const getAth=id=>athletes.find(a=>a.id===id)||{};
-  // Group by style+dist+gender+ageGroup
-  const groups={};
-  finished.forEach(e=>{
-    const a=getAth(e.athleteId);
-    const key=`${e.style}|${e.dist}|${a.gender||''}|${e.ageGroup||''}`;
-    if(!groups[key])groups[key]={style:e.style,dist:e.dist,gender:a.gender,ag:e.ageGroup||'',entries:[]};
-    groups[key].entries.push({...e,ath:a});
-  });
+  // Same ranking core as the Standings tab — exhibition entries and Н/С, Д/К get no place.
+  const ranked=_rankEntries(comp,athletes);
+  if(!ranked.length)return'<p style="color:#5a9ab8;padding:1rem">Результатів ще немає.</p>';
   let html='';
-  Object.values(groups).sort((a,b)=>`${a.style}${a.dist}`.localeCompare(`${b.style}${b.dist}`)).forEach(g=>{
-    const sorted=g.entries.sort((a,b)=>parseFloat(a.result||99999)-parseFloat(b.result||99999));
-    html+=`<h3>${g.style} ${g.dist}м · ${g.gender==='M'?'Чоловіки':g.gender==='F'?'Жінки':''} · ${g.ag||'Всі'}</h3>`;
+  ranked.forEach(ev=>{
+    const gl=ev.gender==='M'?'Чоловіки':ev.gender==='F'?'Жінки':'';
+    html+=`<h3>${ev.dist}м ${escapeHtml((ev.style||'').toUpperCase())}${gl?' · '+gl:''}${ev.ag?' · '+escapeHtml(ev.ag.name||''):''}</h3>`;
     html+=`<table><thead><tr><th>Місце</th><th>Спортсмен</th><th>Р.н.</th><th>Клуб</th><th>Результат</th><th>Розряд</th></tr></thead><tbody>`;
-    sorted.forEach((e,i)=>{
-      const medal=i===0?'medal-1':i===1?'medal-2':i===2?'medal-3':'';
-      const place=i<3?['🥇','🥈','🥉'][i]:i+1;
-      html+=`<tr><td class="${medal}">${place}</td><td>${e.ath.lastName||''} ${e.ath.firstName||''}</td><td>${e.ath.birthYear||''}</td><td>${e.ath.club||''}</td><td><strong>${e.result}</strong></td><td>${e.achievedRank||''}</td></tr>`;
+    ev.items.forEach(item=>{
+      const pl=item.place;
+      const medal=pl===1?'medal-1':pl===2?'medal-2':pl===3?'medal-3':'';
+      const label=pl===1?'🥇 1':pl===2?'🥈 2':pl===3?'🥉 3':pl;
+      const tc=parseTime(item.entry.result);
+      const rk=item.entry.achievedRank!==undefined?item.entry.achievedRank:(tc?checkRank(ev.style,ev.dist,ev.gender,tc,comp):null);
+      const club=[item.a.city,item.a.club].filter(Boolean).join(' · ');
+      html+=`<tr><td class="${medal}">${label}</td>`+
+        `<td>${escapeHtml(item.a.surname||'')} ${escapeHtml(item.a.name||'')}</td>`+
+        `<td>${item.a.birthYear||''}</td><td>${escapeHtml(club)}</td>`+
+        `<td><strong>${escapeHtml(item.entry.result||'')}</strong></td><td>${escapeHtml(rk||'')}</td></tr>`;
     });
     html+=`</tbody></table>`;
   });
@@ -11042,9 +11061,12 @@ function _buildPubSchedule(comp,days){
   if(!days.length)return'<p style="color:#5a9ab8;padding:1rem">Розклад не сформовано.</p>';
   let html='';
   days.forEach(day=>{
-    html+=`<h3>📅 День ${day.num} — ${day.date||''}</h3><table><thead><tr><th>Дистанція</th><th>Стиль</th><th>Стать</th></tr></thead><tbody>`;
-    (day.events||[]).forEach(ev=>{
-      html+=`<tr><td>${ev.dist||''}м</td><td>${ev.style||''}</td><td>${ev.gender==='M'?'Чоловіки':ev.gender==='F'?'Жінки':'Змішані'}</td></tr>`;
+    html+=`<h3>📅 ${escapeHtml(day.label||('День '+day.id))}${day.date?' — '+escapeHtml(day.date):''}${day.startTime?' · початок '+escapeHtml(day.startTime):''}</h3>`;
+    const evs=day.events||[];
+    if(!evs.length){html+='<p style="color:#5a9ab8;font-size:.82rem">Подій не заплановано.</p>';return;}
+    html+=`<table><thead><tr><th>Дистанція</th><th>Стиль</th></tr></thead><tbody>`;
+    evs.forEach(ev=>{
+      html+=`<tr><td>${ev.dist||''}м</td><td>${escapeHtml(ev.style||'')}</td></tr>`;
     });
     html+=`</tbody></table>`;
   });
@@ -13726,7 +13748,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20260815-2214'; // stamped by deploy.ps1
+const APP_BUILD='20261017-0036'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
