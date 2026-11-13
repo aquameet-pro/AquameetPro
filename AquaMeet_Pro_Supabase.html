@@ -2462,6 +2462,9 @@ function saveDB(){
         showToast('⚠️ Помилка збереження в хмару: '+error.message,true);
       }else{
         _supaLastSaveTs=Date.now();
+        // Remember our own save stamp so the realtime echo / next poll of this very save
+        // (or any older organizer save) is not re-applied over newer local state
+        _lastDbUpdatedAt=db._savedAt;
         console.log('[AquaMeet] Saved to cloud, _savedAt:',db._savedAt);
       }
     }catch(e){console.warn('[AquaMeet] Save exception:',e);showToast('⚠️ Виняток збереження: '+e.message,true);}
@@ -2473,6 +2476,7 @@ async function loadDB(){
   const ownerId=_getTargetOwnerId();
   _viewingOwnerId=ownerId; // lock in for this session
   let loaded=false;
+  let serverEmpty=false; // server reached and has NO row for this owner (fresh account)
 
   if(ownerId){
     try{
@@ -2488,6 +2492,8 @@ async function loadDB(){
         console.log('[AquaMeet] Loaded from Supabase ✓ owner:',ownerId);
       }else if(error){
         console.warn('[AquaMeet] Supabase load error:',error.message);
+      }else{
+        serverEmpty=true; // no error, no row
       }
     }catch(e){
       if(e.message==='timeout'){_supaOffline=true;_updateOfflineBanner();}
@@ -2502,8 +2508,10 @@ async function loadDB(){
       if(s){
         db=JSON.parse(s);
         setAuthLoadingMsg('Завантаження з кешу…');
-        // Fire-and-forget sync to cloud (only for the data owner — trainers never write organizer data)
-        if(ownerId && _currentRole!=='trainer'){
+        // Push the cache to the cloud ONLY when the server was reached and has no row at all
+        // (fresh account). On any load error/timeout the cloud may be newer — never overwrite it
+        // with a possibly stale cache; _tryReconnect compares _savedAt and resyncs properly.
+        if(ownerId && _currentRole!=='trainer' && serverEmpty){
           _supa.from(SUPA_TABLE).upsert(
             {id:ownerId,owner_id:ownerId,data:db,updated_at:new Date().toISOString()},
             {onConflict:'id'}
@@ -2989,13 +2997,14 @@ function parseTime(str){
   const t=str.trim();
   // M:SS.cc  or  M:SS:CC  (with min)
   let m=/^(\d+):(\d{1,2})[.:\,](\d{1,2})$/.exec(t);
-  if(m){const c=parseInt(m[3]);return parseInt(m[1])*6000+parseInt(m[2])*100+(c>=100?Math.floor(c/10):Math.min(c,99));}
+  // A single fractional digit means tenths ("1:02.5" = 1:02.50), not centiseconds
+  if(m){const c=m[3].length===1?parseInt(m[3])*10:parseInt(m[3]);return parseInt(m[1])*6000+parseInt(m[2])*100+Math.min(c,99);}
   // M:SS  (min:sec, no centiseconds)
   m=/^(\d+):(\d{1,2})$/.exec(t);
   if(m)return parseInt(m[1])*6000+parseInt(m[2])*100;
   // SS.cc  or  SS,cc  (sec + centisec, no minutes — most common for short events)
   m=/^(\d{1,3})[.,](\d{1,2})$/.exec(t);
-  if(m){const c=parseInt(m[2]);return parseInt(m[1])*100+Math.min(c,99);}
+  if(m){const c=m[2].length===1?parseInt(m[2])*10:parseInt(m[2]);return parseInt(m[1])*100+Math.min(c,99);} // "28.5" = 28.50
   // Bare integer — treat as total centiseconds if >9999, else as whole seconds
   m=/^(\d+)$/.exec(t);
   if(m){const n=parseInt(m[1]);return n>9999?n:n*100;}
@@ -5377,9 +5386,10 @@ async function _loadTrainerAthletes(){
         existing._trainerOwned=true;
         existing._trainerId=_currentUser.id;
         existing._supaId=row.id;
-        // Heal lost entries: re-add any entry from Supabase that's missing locally
+        // Heal lost entries: re-add any entry from Supabase that's missing locally.
+        // Only for rows of THIS competition — the organizer_id fallback also returns rows of other comps
         const c=db.competitions.find(c=>c.id===compId||c.id===+compId);
-        if(c&&row.entries_data?.length){
+        if(c&&row.entries_data?.length&&String(row.comp_id)===String(compId)){
           row.entries_data.forEach(e=>{
             const ex=(c.entries||[]).find(x=>x.athleteId===existing.id&&x.dist===e.dist&&x.style===e.style);
             if(!ex){
@@ -5403,9 +5413,9 @@ async function _loadTrainerAthletes(){
           db.nextId.ath=ath.id+1;
           db.athletes.push(ath);
         }
-        // Restore entries into the active competition
+        // Restore entries into the active competition — only from rows that belong to it
         const c=db.competitions.find(c=>c.id===compId||c.id===+compId);
-        if(c&&row.entries_data?.length){
+        if(c&&row.entries_data?.length&&String(row.comp_id)===String(compId)){
           row.entries_data.forEach(e=>{
             const exists=(c.entries||[]).find(x=>x.athleteId===ath.id&&x.dist===e.dist&&x.style===e.style);
             if(!exists){
@@ -5420,7 +5430,9 @@ async function _loadTrainerAthletes(){
           const upd={};
           if(!row.local_id)upd.local_id=ath.id;
           if(!row.organizer_id&&_viewingOwnerId)upd.organizer_id=_viewingOwnerId;
-          _supa.from('trainer_athletes').update(upd).eq('id',row.id).eq('trainer_id',_currentUser.id);
+          // PostgrestBuilder is lazy — without .then()/await the request is never sent
+          _supa.from('trainer_athletes').update(upd).eq('id',row.id).eq('trainer_id',_currentUser.id)
+            .then(({error})=>{if(error)console.warn('[AquaMeet] local_id sync:',error.message);});
         }
       }
     }
@@ -5655,12 +5667,17 @@ async function delAthlete(id){
     _orgTransferredLocalIds.delete(id);
   }
   db.athletes=db.athletes.filter(a=>a.id!==id);
-  const comp=activeComp();
-  if(comp){
-    comp.entries=(comp.entries||[]).filter(e=>e.athleteId!==id);
-    // Trainers cannot regenerate heats — don't wipe them locally (org's app_state is the source of truth)
-    if(_currentRole!=='trainer')comp.heats=[];
-  }
+  // Drop this athlete's entries in EVERY competition (no orphans left behind) and free only
+  // their lanes — wiping comp.heats=[] destroyed the whole generated/printed grid.
+  // Trainers never touch heats (org's app_state is the source of truth)
+  (db.competitions||[]).forEach(c=>{
+    const gone=new Set((c.entries||[]).filter(e=>e.athleteId===id).map(e=>e.id));
+    if(!gone.size)return;
+    c.entries=c.entries.filter(e=>!gone.has(e.id));
+    if(_currentRole!=='trainer')(c.heats||[]).forEach(h=>{
+      for(const ln of Object.keys(h.lanes||{}))if(gone.has(h.lanes[ln]))delete h.lanes[ln];
+    });
+  });
   if(_currentRole!=='trainer')saveDB();
   renderAthletes();
 }
@@ -11049,7 +11066,9 @@ function _buildPubResults(comp,athletes,entries){
       const medal=pl===1?'medal-1':pl===2?'medal-2':pl===3?'medal-3':'';
       const label=pl===1?'🥇 1':pl===2?'🥈 2':pl===3?'🥉 3':pl;
       const tc=parseTime(item.entry.result);
-      const rk=item.entry.achievedRank!==undefined?item.entry.achievedRank:(tc?checkRank(ev.style,ev.dist,ev.gender,tc,comp):null);
+      // Always recompute like the Standings tab does — a stored achievedRank goes stale when the
+      // result is edited or the norm table changes, and the two views must agree
+      const rk=tc?checkRank(ev.style,ev.dist,ev.gender,tc,comp):null;
       const club=[item.a.city,item.a.club].filter(Boolean).join(' · ');
       html+=`<tr><td class="${medal}">${label}</td>`+
         `<td>${escapeHtml(item.a.surname||'')} ${escapeHtml(item.a.name||'')}</td>`+
@@ -11698,6 +11717,11 @@ async function doLogout(){
   // Show login screen immediately — don't wait for Supabase signOut (avoids 8s timeout hang)
   _appStarted=false;
   _currentUser=null;_currentProfile=null;_currentRole=null;_viewingOwnerId=null;
+  // Tear down data subscriptions — otherwise the old organizer's channel keeps feeding
+  // _applyRemoteDb after the next login, and _subscribeDataUpdates refuses to open a new one
+  if(_dataChannel){try{_supa.removeChannel(_dataChannel);}catch(_){}_dataChannel=null;}
+  if(_trainerPollTimer){clearTimeout(_trainerPollTimer);_trainerPollTimer=null;}
+  try{_unsubscribeNotifications();}catch(_){}
   document.body.classList.remove('role-admin','role-organizer','role-secretary','role-trainer','trainer-has-access','trainer-confirmed');
   showAuthOverlay(true);
   // signOut in background — onAuthStateChange will fire but _appStarted=false prevents re-boot
@@ -13757,7 +13781,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261017-0041'; // stamped by deploy.ps1
+const APP_BUILD='20261113-2245'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
@@ -13799,6 +13823,13 @@ async function _trainerRefreshDb(){
 }
 function _applyRemoteDb(newData,updatedAt){
   if(!newData)return;
+  // Reject malformed payloads outright instead of half-applying them (db.athletes.filter would throw)
+  if(!Array.isArray(newData.athletes)||!Array.isArray(newData.competitions))return;
+  // Writers (secretary/admin): a poll or realtime echo must never clobber an in-flight local save,
+  // and a payload that is not newer than what we already applied/saved carries nothing new
+  if(_supaSavePending)return;
+  const incTs=Date.parse(newData._savedAt||updatedAt||''),lastTs=Date.parse(_lastDbUpdatedAt||'');
+  if(incTs&&lastTs&&incTs<=lastTs)return;
   _lastDbUpdatedAt=newData._savedAt||updatedAt||'';
   const localActiveId=db.activeCompId!=null?db.activeCompId:null;
   // Save trainer's current athletes AND their entries before db replacement so UI never flashes empty
