@@ -2217,7 +2217,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
   <div class="form-group">
     <label>Файл Excel (.xlsx)</label>
-    <input type="file" id="import-file" accept=".xlsx,.xls">
+    <input type="file" id="import-file" accept=".xlsx,.xls" onchange="previewImportExcel()">
   </div>
   <div id="import-preview" style="font-size:.82rem;color:var(--text-dim);margin-top:.4rem"></div>
   <div class="modal-footer">
@@ -10924,69 +10924,134 @@ async function downloadTemplate(){
 function openImportExcel(){
   document.getElementById('import-file').value='';
   document.getElementById('import-preview').textContent='';
+  _importParsed=null;
   openModal('modal-import');
 }
-function doImportExcel(){
+// ── Excel import: parse → preview (with reasons) → apply (undoable) ──────────────────────────
+let _importParsed=null; // {valid:[…], rejected:[{rowNo,reason,raw}], fileName}
+// Case/apostrophe/space-insensitive key for matching people: «Петренко Дар'я» == «ПЕТРЕНКО Дар’я »
+function _normName(s){return String(s||'').toLowerCase().replace(/[’ʼ`´]/g,"'").replace(/\s+/g,' ').trim();}
+function _findAthleteByName(surname,name,birthYear){
+  const s=_normName(surname),n=_normName(name);
+  return db.athletes.find(x=>_normName(x.surname)===s&&_normName(x.name)===n&&x.birthYear===birthYear)||null;
+}
+// Pure parser: every rejected row carries the reason, nothing is silently dropped
+function parseEntriesSheet(rows){
+  const valid=[],rejected=[];
+  const thisYear=new Date().getFullYear();
+  rows.forEach((r,i)=>{
+    const rowNo=i+1;
+    const v=String(r[0]||'').trim();
+    // Skip header / instruction rows
+    if(!v||v.toUpperCase().includes('ЗАЯВКА')||v.toUpperCase().includes('ПРІЗВИЩЕ')||v.toUpperCase().includes('КЛУБ')||v.toUpperCase().includes('ІНСТРУКЦІЯ')||/^[1-7]\./.test(v))return;
+    const surname=v,name=String(r[1]||'').trim();
+    const rawGender=String(r[2]||'').trim().toUpperCase();
+    const gender=(rawGender==='Ч'||rawGender==='M')?'M':(rawGender==='Ж'||rawGender==='F')?'F':'';
+    const birthYear=parseInt(r[3]);
+    const city=String(r[4]||'').trim(),club=String(r[5]||'').trim(),coach=String(r[6]||'').trim(),rank=String(r[7]||'').trim();
+    const dist=parseInt(r[8]);const style=String(r[9]||'').trim().toLowerCase();
+    const rawTime=String(r[10]||'').trim();const normTime=normalizeResult(rawTime);
+    const time=(normTime.ok&&normTime.kind==='time')?normTime.value:null;
+    const exhibition=['так','yes','y','1','true','x','+'].includes(String(r[11]||'').trim().toLowerCase());
+    const raw=[surname,name,rawGender,r[3],city,club,coach,rank,r[8],r[9],rawTime,r[11]];
+    const rej=reason=>rejected.push({rowNo,reason,raw});
+    if(!name)return rej("немає імені (колонка B)");
+    if(!gender)return rej(`стать «${rawGender||'—'}» не Ч/Ж (колонка C)`);
+    if(!birthYear||birthYear<1940||birthYear>thisYear)return rej(`рік «${r[3]||'—'}» поза 1940–${thisYear} (колонка D)`);
+    if(!dist||!style)return rej('немає дистанції або стилю (колонки I, J)');
+    if(!isValidEvent(dist,style))return rej(`подія «${dist}м ${style}» не існує`);
+    if(rawTime&&!time)return rej(`час «${rawTime}» не розпізнано (колонка K)`);
+    valid.push({rowNo,surname,name,gender,birthYear,city,club,coach,rank,dist,style,time,exhibition});
+  });
+  return{valid,rejected};
+}
+function _readImportFile(cb){
   const file=document.getElementById('import-file').files[0];
   if(!file){alert('Оберіть файл');return;}
-  const comp=activeComp();
   const reader=new FileReader();
   reader.onload=e=>{
     try{
       const wb=XLSX.read(e.target.result,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      let added=0,skipped=0;
-      // Find data rows: skip header rows (where col A = 'Прізвище' or starts with title text)
-      const dataRows=rows.filter(r=>{
-        const v=String(r[0]||'').trim();
-        if(!v||v.toUpperCase().includes('ЗАЯВКА')||v.toUpperCase().includes('ПРІЗВИЩЕ')||v.toUpperCase().includes('КЛУБ')||v.toUpperCase().includes('ІНСТРУКЦІЯ')||v.startsWith('1.')||v.startsWith('2.')||v.startsWith('3.')||v.startsWith('4.')||v.startsWith('5.')||v.startsWith('6.')||v.startsWith('7.'))return false;
-        return true;
-      });
-      for(const r of dataRows){
-        const surname=String(r[0]||'').trim();
-        const name=String(r[1]||'').trim();
-        const rawGender=String(r[2]||'').trim().toUpperCase();
-        // Accept both Ukrainian (Ч/Ж) and Latin (M/F) markers; normalize to internal M/F
-        const gender=(rawGender==='Ч'||rawGender==='M')?'M':(rawGender==='Ж'||rawGender==='F')?'F':'';
-        const birthYear=parseInt(r[3]);
-        if(!birthYear||birthYear<1940||birthYear>new Date().getFullYear()){skipped++;continue;}
-        const city=String(r[4]||'').trim();
-        const club=String(r[5]||'').trim();
-        const coach=String(r[6]||'').trim();
-        const rank=String(r[7]||'').trim();
-        const dist=parseInt(r[8]);
-        const style=String(r[9]||'').trim().toLowerCase();
-        const rawTime=String(r[10]||'').trim();
-        const normTime=normalizeResult(rawTime);
-        const time=(normTime.ok&&normTime.kind==='time')?normTime.value:null;
-        // "Поза конкурсом" flag — accept "Так"/"так"/"yes"/"1"/true; anything else (including "Ні"/blank) is false
-        const rawExh=String(r[11]||'').trim().toLowerCase();
-        const exhibition=['так','yes','y','1','true','x','+'].includes(rawExh);
-        if(!surname||!name||!['M','F'].includes(gender)||!birthYear||!dist||!style){skipped++;continue;}
-        if(!isValidEvent(dist,style)){skipped++;continue;}
-        let a=db.athletes.find(x=>x.surname===surname&&x.name===name&&x.birthYear===birthYear);
-        if(!a){
-          a={id:db.nextId.ath++,surname,name,gender,birthYear,city,club,coach,currentRank:rank||null,isTest:false};
-          db.athletes.push(a);
-        }
-        if(comp){
-          const exists=(comp.entries||[]).find(e=>e.athleteId===a.id&&e.dist===dist&&e.style===style);
-          if(!exists){
-            (comp.entries=comp.entries||[]).push({id:db.nextId.entry++,athleteId:a.id,dist,style,dayId:null,seedTime:time||null,exhibition,result:null});
-          }
-        }
-        added++;
-      }
-      if(comp&&(comp.heats||[]).length){
-        if(!confirm(`⚠ Імпорт скине всі вже згенеровані запливи (${comp.heats.length} шт.).\nПродовжити?`)){return;}
-        comp.heats=[];
-      }
-      saveDB();closeModal('modal-import');renderAthletes();renderHome();
-      showToast(`✅ Імпортовано ${added} записів${skipped?', пропущено '+skipped:''}`);}
-    catch(err){alert('Помилка читання файлу: '+err.message);}
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+      cb({...parseEntriesSheet(rows),fileName:file.name});
+    }catch(err){alert('Помилка читання файлу: '+err.message);}
   };
   reader.readAsArrayBuffer(file);
+}
+function previewImportExcel(){
+  const box=document.getElementById('import-preview');
+  box.innerHTML='<span style="color:var(--text-muted)">⏳ Читаю файл…</span>';
+  _readImportFile(p=>{
+    _importParsed=p;
+    const comp=activeComp();
+    const people=new Map();let newPeople=0,dupEntries=0,inFileDup=0;
+    const seenRows=new Set();
+    for(const v of p.valid){
+      const key=_normName(v.surname)+'|'+_normName(v.name)+'|'+v.birthYear;
+      if(!people.has(key)){people.set(key,v);if(!_findAthleteByName(v.surname,v.name,v.birthYear))newPeople++;}
+      const rk=key+'|'+v.dist+'|'+v.style;
+      if(seenRows.has(rk))inFileDup++;else seenRows.add(rk);
+      const a=_findAthleteByName(v.surname,v.name,v.birthYear);
+      if(a&&comp&&(comp.entries||[]).some(e=>e.athleteId===a.id&&e.dist===v.dist&&e.style===v.style))dupEntries++;
+    }
+    const rejList=p.rejected.slice(0,12).map(x=>`<li>рядок ${x.rowNo}: ${escapeHtml(x.reason)}${x.raw[0]?` — <i>${escapeHtml(x.raw[0]+' '+(x.raw[1]||''))}</i>`:''}</li>`).join('');
+    box.innerHTML=`<div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem">
+        <span class="badge badge-heat">${p.valid.length} заявок</span>
+        <span class="badge badge-dist">${people.size} учасників · ${newPeople} нових</span>
+        ${dupEntries?`<span class="badge" style="background:rgba(244,162,97,.2);color:#7a4000">${dupEntries} вже заявлені — пропущу</span>`:''}
+        ${inFileDup?`<span class="badge" style="background:rgba(244,162,97,.2);color:#7a4000">${inFileDup} дублів у файлі</span>`:''}
+        ${p.rejected.length?`<span class="badge" style="background:rgba(230,57,70,.15);color:var(--danger)">${p.rejected.length} відхилено</span>`:''}
+      </div>
+      ${p.rejected.length?`<details ${p.rejected.length<=12?'open':''}><summary style="cursor:pointer;color:var(--danger);font-weight:600">Чому відхилено</summary><ul style="margin:.3rem 0 0 1rem;padding:0;font-size:.78rem">${rejList}${p.rejected.length>12?`<li>… і ще ${p.rejected.length-12}</li>`:''}</ul>
+        <button class="btn-secondary btn-xs" style="margin-top:.4rem" onclick="downloadRejectedRows()">⬇ Відхилені рядки (.xlsx) — для тренера</button></details>`:''}
+      ${!p.valid.length?'<div style="color:var(--danger);margin-top:.3rem">Жодного придатного рядка.</div>':''}`;
+  });
+}
+function downloadRejectedRows(){
+  if(!_importParsed?.rejected?.length)return;
+  const header=['Прізвище','Ім\'я','Стать','Рік','Місто','Клуб','Тренер','Розряд','Дистанція','Стиль','Час','Поза конкурсом','ПРИЧИНА ВІДХИЛЕННЯ','Рядок у файлі'];
+  const rows=_importParsed.rejected.map(x=>[...x.raw,x.reason,x.rowNo]);
+  const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Відхилені');
+  XLSX.writeFile(wb,'vidhyleni_'+(_importParsed.fileName||'import').replace(/\.xlsx?$/i,'')+'.xlsx');
+}
+function doImportExcel(){
+  const apply=p=>{
+    const comp=activeComp();
+    if(!p.valid.length){alert('У файлі немає придатних рядків — див. причини у прев\'ю');return;}
+    if(comp&&(comp.heats||[]).length){
+      if(!confirm(`⚠ Імпорт скине всі вже згенеровані запливи (${comp.heats.length} шт.).\nПродовжити?`))return;
+      comp.heats=[];
+    }
+    const importId=Date.now().toString(36);
+    let added=0,skippedDup=0,newPeople=0;
+    for(const v of p.valid){
+      let a=_findAthleteByName(v.surname,v.name,v.birthYear);
+      if(!a){
+        a={id:db.nextId.ath++,surname:v.surname,name:v.name,gender:v.gender,birthYear:v.birthYear,city:v.city,club:v.club,coach:v.coach,currentRank:v.rank||null,isTest:false,_importId:importId};
+        db.athletes.push(a);newPeople++;
+      }
+      if(comp){
+        const exists=(comp.entries||[]).find(e=>e.athleteId===a.id&&e.dist===v.dist&&e.style===v.style);
+        if(exists){skippedDup++;continue;}
+        (comp.entries=comp.entries||[]).push({id:db.nextId.entry++,athleteId:a.id,dist:v.dist,style:v.style,dayId:null,seedTime:v.time||null,exhibition:v.exhibition,result:null,_importId:importId});
+      }
+      added++;
+    }
+    saveDB();closeModal('modal-import');renderAthletes();renderHome();
+    showToast(`✅ Імпортовано ${added} заявок, ${newPeople} нових учасників${skippedDup?', '+skippedDup+' вже були':''}${p.rejected.length?', відхилено '+p.rejected.length:''}`,false,()=>undoImport(importId));
+  };
+  if(_importParsed)apply(_importParsed);else _readImportFile(apply);
+}
+// Undo: remove entries and athletes created by one import (athletes only if nothing else references them)
+function undoImport(importId){
+  const comp=activeComp();let ents=0,aths=0;
+  if(comp){const before=(comp.entries||[]).length;comp.entries=(comp.entries||[]).filter(e=>e._importId!==importId);ents=before-comp.entries.length;}
+  const referenced=new Set((db.competitions||[]).flatMap(c=>(c.entries||[]).map(e=>e.athleteId)));
+  const before=db.athletes.length;
+  db.athletes=db.athletes.filter(a=>!(a._importId===importId&&!referenced.has(a.id)));aths=before-db.athletes.length;
+  saveDB();renderAthletes();renderHome();
+  showToast(`↩ Імпорт скасовано: −${ents} заявок, −${aths} учасників`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -14168,7 +14233,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0032'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0034'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
