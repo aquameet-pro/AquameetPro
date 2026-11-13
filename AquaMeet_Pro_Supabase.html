@@ -3660,6 +3660,7 @@ function doAssignToLane(athleteId,entryId,heatId,lane){
   if(!heat)return;
   if(heat.lanes[lane]&&heat.lanes[lane]!==entryId){showToast('⚠ Ця доріжка вже зайнята',true);return;}
   heat.lanes[lane]=entryId;
+  if(heat.scratched)delete heat.scratched[lane]; // lane reused after a scratch — forget the old occupant
   comp.heats.forEach((h,i)=>h.globalNum=i+1);
   saveDB();_markJudgeQrDirty();renderAthletes();renderHeats&&renderHeats();
   const remaining=getUnassignedEntries(athleteId,comp);
@@ -6000,6 +6001,39 @@ function startSwap(heatId,lane){
   showToast('⇄ Тепер натисніть ⇄ на іншій доріжці щоб поміняти. Або ще раз ⇄ на цій — скасувати.');
 }
 
+// ── Scratch (зняття зі старту) ─────────────────────────────────────────────────────────────────
+// Н/С as a result already existed, but it left the swimmer on the lane. A scratch records Н/С AND
+// frees the lane, remembering who was there (heat.scratched[lane] = entryId) so it can be undone
+// and so the printed heat sheet says "знято", not just "вільна".
+function scratchEntry(heatId,lane){
+  const comp=activeComp();if(!comp)return;
+  const heat=(comp.heats||[]).find(h=>h.id===heatId);if(!heat)return;
+  const eid=heat.lanes?.[lane];if(!eid)return;
+  const entry=(comp.entries||[]).find(e=>e.id===eid);
+  const a=entry?db.athletes.find(x=>x.id===entry.athleteId):null;
+  const who=a?a.surname+' '+a.name:'учасника';
+  if(entry?.result&&parseTime(entry.result)!==null){showToast('У цього учасника вже є результат — спершу зітріть його',true);return;}
+  if(!confirm(`Зняти ${who} зі старту?\nДоріжка ${lane} звільниться, у протоколі буде «Н/С». Це можна повернути.`))return;
+  if(entry)entry.result='Н/С';
+  heat.scratched=heat.scratched||{};
+  heat.scratched[lane]=eid;
+  delete heat.lanes[lane];
+  saveDB();_markJudgeQrDirty();renderHeats();
+  showToast(`${who} знято зі старту · доріжка ${lane} вільна`,false,()=>unscratchEntry(heatId,lane));
+}
+function unscratchEntry(heatId,lane){
+  const comp=activeComp();if(!comp)return;
+  const heat=(comp.heats||[]).find(h=>h.id===heatId);if(!heat)return;
+  const eid=heat.scratched?.[lane];if(!eid)return;
+  if(heat.lanes?.[lane]){showToast('⚠ Доріжка вже зайнята іншим учасником',true);return;}
+  const entry=(comp.entries||[]).find(e=>e.id===eid);
+  if(entry&&entry.result==='Н/С')entry.result=null;
+  heat.lanes[lane]=eid;
+  delete heat.scratched[lane];
+  saveDB();_markJudgeQrDirty();renderHeats();
+  showToast('↩ Учасника повернуто на доріжку '+lane);
+}
+
 let _genHeatsInProgress=false;
 function generateHeats(){
   if(_genHeatsInProgress)return;
@@ -6232,9 +6266,14 @@ function renderHeats(){
       const eid=heat.lanes[ln];
       if(!eid){
         const swapActiveEmpty=_swapState&&_swapState.heatId===heat.id&&_swapState.lane!==ln;
+        // A lane freed by a scratch keeps the swimmer's name so the deck sees "nobody is coming", not "oops"
+        const scrId=heat.scratched?.[ln];
+        const scrE=scrId?(comp.entries||[]).find(e=>e.id===scrId):null;
+        const scrA=scrE?db.athletes.find(x=>x.id===scrE.athleteId):null;
         return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}${swapActiveEmpty?' swap-target':''}"${swapActiveEmpty?` onclick="startSwap(${heat.id},${ln})" title="Перемістити сюди"`:''}>
           <div class="lane-num">Д.${ln}</div>
-          <div class="lane-empty">${swapActiveEmpty?'⬅ перемістити':'вільна'}</div>
+          <div class="lane-empty">${swapActiveEmpty?'⬅ перемістити':(scrA?`знято: ${escapeHtml(scrA.surname+' '+scrA.name)}`:'вільна')}</div>
+          ${scrA&&isPriv3&&!swapActiveEmpty?`<button class="btn-secondary btn-xs" style="margin-top:.3rem" title="Повернути учасника на цю доріжку" onclick="unscratchEntry(${heat.id},${ln})">↩ Повернути</button>`:''}
         </div>`;
       }
       const entry=(comp.entries||[]).find(e=>e.id===eid);
@@ -6249,12 +6288,17 @@ function renderHeats(){
         <div class="lane-time">${entry?.seedTime||'–'}</div>
         ${entry?.result?(parseTime(entry.result)!==null?`<div class="lane-result">✓ ${entry.result}</div>`:`<div class="lane-result" style="color:${entry.result==='Д/К'?'var(--danger)':'var(--text-muted)'}">${entry.result}</div>`):''}
         <button class="btn-icon btn-xs swap-btn" title="Поміняти доріжку" onclick="startSwap(${heat.id},${ln})">⇄</button>
+        ${isPriv3&&!swapActive&&!(entry?.result&&parseTime(entry.result)!==null)?`<button class="btn-icon btn-xs swap-btn" style="color:var(--danger)" title="Зняти зі старту (Н/С) і звільнити доріжку" onclick="scratchEntry(${heat.id},${ln})">✕</button>`:''}
       </div>`;
     }).join('');
     // Print-only compact table — 2 rows per lane: "ПІБ (рік) · заявл." / "Місто · Клуб"
     const printLaneBlock=ln=>{
       const eid=heat.lanes[ln];
-      if(!eid)return`<tr style="height:7mm"><td style="text-align:center;font-weight:700;border:1px solid #888;border-right:2px solid #444;padding:1px 3px;font-size:8pt">${ln}</td><td colspan="3" style="border:1px solid #888;padding:1px 4px;font-size:8pt;color:#aaa;font-style:italic">вільна</td></tr>`;
+      if(!eid){
+        const sE=heat.scratched?.[ln]?(comp.entries||[]).find(e=>e.id===heat.scratched[ln]):null;
+        const sA=sE?db.athletes.find(x=>x.id===sE.athleteId):null;
+        return`<tr style="height:7mm"><td style="text-align:center;font-weight:700;border:1px solid #888;border-right:2px solid #444;padding:1px 3px;font-size:8pt">${ln}</td><td colspan="3" style="border:1px solid #888;padding:1px 4px;font-size:8pt;color:#aaa;font-style:italic">${sA?'знято зі старту — '+escapeHtml(sA.surname+' '+sA.name):'вільна'}</td></tr>`;
+      }
       const entry=(comp.entries||[]).find(e=>e.id===eid);
       const a=entry?db.athletes.find(x=>x.id===entry.athleteId):null;
       if(!a||!entry)return'';
@@ -13974,7 +14018,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0022'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0024'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
