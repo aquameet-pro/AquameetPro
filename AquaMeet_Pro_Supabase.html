@@ -11149,11 +11149,15 @@ async function exportResultsExcel(){
       {header:'Рік',key:'year',width:7},{header:'Місто',key:'city',width:14},
       {header:'Клуб',key:'club',width:22},{header:'Тренер',key:'coach',width:18},
       {header:'Дист.',key:'dist',width:7},{header:'Стиль',key:'style',width:14},
-      {header:'День',key:'day',width:10},{header:'Заявл.',key:'seed',width:10},
+      {header:'День',key:'day',width:10},{header:'Заплив',key:'heat',width:8},{header:'Дор.',key:'lane',width:6},
+      {header:'Заявл.',key:'seed',width:10},
       {header:'Результат',key:'res',width:10},{header:'Розряд',key:'rank',width:9},
       {header:'Місце',key:'place',width:7},
     ];
-    ws.getRow(1).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0077B6'}};c.alignment={horizontal:'center'};});
+    const _hdr=w=>{w.getRow(1).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0077B6'}};c.alignment={horizontal:'center'};});w.views=[{state:'frozen',ySplit:1}];w.autoFilter={from:{row:1,column:1},to:{row:1,column:w.columns.length}};};
+    _hdr(ws);
+    // entry → heat number / lane
+    const laneMap={};(comp.heats||[]).forEach(h=>Object.entries(h.lanes||{}).forEach(([ln,eid])=>{laneMap[eid]={h:h.globalNum,ln:+ln};}));
 
     // Precompute places per event
     const groups={};
@@ -11183,7 +11187,7 @@ async function exportResultsExcel(){
       const rank=tc?checkRank(e.style,e.dist,a.gender,tc,comp):null;
       const row=ws.addRow({n:ri++,surn:a.surname,name:a.name,gen:a.gender==='M'?'Ч':'Ж',
         year:a.birthYear,city:a.city||'',club:a.club||'',coach:a.coach||'',
-        dist:e.dist,style:e.style,day:day?fmtUkrDate(day.date):'',
+        dist:e.dist,style:e.style,day:day?fmtUkrDate(day.date):'',heat:laneMap[e.id]?.h||'',lane:laneMap[e.id]?.ln||'',
         seed:e.seedTime||'',res:e.result||'',rank:rank||'',place:placeMap[e.id]||''});
       if(tc&&e.seedTime){const sc=parseTime(e.seedTime);if(sc)row.getCell('res').font={color:{argb:tc<=sc?'FF006600':'FFCC0000'},bold:true};}
       if(rank)row.getCell('rank').font={bold:true,color:{argb:'FF0077B6'}};
@@ -11206,9 +11210,58 @@ async function exportResultsExcel(){
         if(pl===1)cs2[k].g++;else if(pl===2)cs2[k].s++;else cs2[k].b++;
       });
     }
+    // Relay medals belong in the club ranking too (the Archive tab already counts them)
+    const relayRanked=[];
+    {
+      const eligible=(comp.relays||[]).filter(t=>t.result&&parseTime(t.result)!==null&&!t.exhibition);
+      const grouped={};
+      for(const t of eligible){const ag=relayAgeGroup(t,comp);const k=relayEvKey(t.type,t.gender,ag?ag.id:0);(grouped[k]=grouped[k]||{ag,teams:[]}).teams.push(t);}
+      for(const g of Object.values(grouped)){
+        const s=[...g.teams].sort((a,b)=>parseTime(a.result)-parseTime(b.result));
+        let last=null,lp=0;
+        s.forEach((t,i)=>{const cs=parseTime(t.result);const pl=cs===last?lp:i+1;last=cs;lp=pl;relayRanked.push({t,pl,ag:g.ag});
+          if(pl>3)return;const k=`${(t.city||'').trim()}|${(t.club||'—').trim()}`;
+          if(!cs2[k])cs2[k]={club:(t.club||'—').trim(),city:(t.city||'').trim(),g:0,s:0,b:0};
+          if(pl===1)cs2[k].g++;else if(pl===2)cs2[k].s++;else cs2[k].b++;});
+      }
+    }
     Object.values(cs2).sort((a,b)=>b.g-a.g||b.s-a.s||b.b-a.b).forEach((c,i)=>{
       ws2.addRow({n:i+1,club:c.club,city:c.city,g:c.g,s:c.s,b:c.b,t:c.g+c.s+c.b});
     });
+
+    // ── Sheet 3: Winners (places 1–3) ───────────────────────────
+    const ws3=wb.addWorksheet('Призери');
+    ws3.columns=[{header:'Подія',key:'ev',width:30},{header:'Місце',key:'pl',width:7},{header:'Прізвище',key:'surn',width:18},{header:"Ім'я",key:'name',width:13},{header:'Рік',key:'year',width:7},{header:'Клуб',key:'club',width:22},{header:'Результат',key:'res',width:10},{header:'Розряд',key:'rank',width:9}];
+    _hdr(ws3);
+    for(const ev of _rankEntries(comp,db.athletes)){
+      const label=`${ev.dist}м ${ev.style} · ${ev.gender==='M'?'Чоловіки':'Жінки'}${ev.ag?' · '+ev.ag.name:''}`;
+      for(const it of ev.items.filter(x=>x.place<=3)){
+        const tc=parseTime(it.entry.result);
+        ws3.addRow({ev:label,pl:it.place,surn:it.a.surname,name:it.a.name,year:it.a.birthYear,club:it.a.club||'',res:it.entry.result,rank:tc?(checkRank(ev.style,ev.dist,ev.gender,tc,comp)||''):''});
+      }
+    }
+
+    // ── Sheet 4: Relays ─────────────────────────────────────────
+    if(relayRanked.length||(comp.relays||[]).length){
+      const ws4=wb.addWorksheet('Естафети');
+      ws4.columns=[{header:'Естафета',key:'type',width:22},{header:'Категорія',key:'cat',width:12},{header:'Група',key:'ag',width:16},{header:'Команда',key:'name',width:24},{header:'Клуб',key:'club',width:22},{header:'Місто',key:'city',width:14},{header:'Склад',key:'legs',width:48},{header:'Результат',key:'res',width:10},{header:'Місце',key:'pl',width:7}];
+      _hdr(ws4);
+      const plOf=new Map(relayRanked.map(r=>[r.t.id,r.pl]));
+      for(const t of (comp.relays||[])){
+        const ag=relayAgeGroup(t,comp);
+        const legs=(t.legs||[]).map(l=>{if(l?.athleteId){const a=db.athletes.find(x=>x.id===l.athleteId);return a?a.surname+' '+a.name:'?';}return l?.guestName||'—';}).join(', ');
+        ws4.addRow({type:RELAY_TYPES[t.type]?.label||t.type,cat:t.gender==='F'?'Жінки':t.gender==='M'?'Чоловіки':'Змішана',ag:ag?ag.name:'',name:t.name,club:t.club||'',city:t.city||'',legs,res:t.result||'',pl:plOf.get(t.id)||''});
+      }
+    }
+
+    // ── Sheet 5: Team points (only when a scoring system is on) ──
+    const tp=computeTeamPoints(comp);
+    if(tp&&tp.length){
+      const ws5=wb.addWorksheet('Командний залік');
+      ws5.columns=[{header:'#',key:'n',width:5},{header:'Клуб',key:'club',width:26},{header:'Місто',key:'city',width:15},{header:'Очки',key:'p',width:8},{header:'Індив.',key:'ind',width:8},{header:'Естаф.',key:'rel',width:8},{header:'🥇',key:'g',width:6},{header:'🥈',key:'s',width:6},{header:'🥉',key:'b',width:6}];
+      _hdr(ws5);
+      tp.forEach((r,i)=>ws5.addRow({n:i+1,club:r.club,city:r.city,p:r.points,ind:r.ind,rel:r.rel,g:r.g,s:r.s,b:r.b}));
+    }
 
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
@@ -13746,6 +13799,16 @@ async function saveReminder(){
   if(error){showToast('❌ '+error.message,true);return;}
   closeModal('modal-reminder');
   showToast('✅ Нагадування збережено');
+  // Push it to every invited trainer's bell — the countdown in their tab is only seen when they open it
+  try{
+    const{data:invs}=await _supa.from('comp_invitations').select('trainer_id,comp_name').eq('comp_id',_reminderCompId);
+    const seen=new Set();
+    for(const inv of (invs||[])){
+      if(!inv.trainer_id||seen.has(inv.trainer_id))continue;seen.add(inv.trainer_id);
+      await _insertNotification(inv.trainer_id,'reminder','⏰ Нагадування від організатора',
+        `«${inv.comp_name||'Змагання'}»: заявки до ${fmtUkrDate(date)}`,{comp_id:_reminderCompId});
+    }
+  }catch(_){}
   await renderOrgPanel({silent:true});
 }
 
@@ -14053,6 +14116,14 @@ async function respondInvitation(invId,response){
 
   const{error}=await _supa.from('comp_invitations').update({trainer_response:response}).eq('id',invId);
   if(error){showToast('❌ '+error.message,true);return;}
+  // The organizer only learned about answers by opening the panel — tell them now
+  if(inv.organizer_id){
+    const trainerName=_currentProfile?.full_name||_currentProfile?.email||'Тренер';
+    const compName=_myInvitations.find(i=>i.comp_id==inv.comp_id)?.comp_name||'змагання';
+    _insertNotification(inv.organizer_id,'trainer_response',
+      response==='attending'?'✅ Тренер підтвердив участь':'❌ Тренер не братиме участі',
+      `${trainerName} — «${compName}»`,{comp_id:inv.comp_id,trainer_id:_currentUser.id}).catch(()=>{});
+  }
 
   if(response==='attending'){
     await loadTrainerAccess();
@@ -14126,8 +14197,13 @@ async function openRequestAccessModal(){
     {trainer_id:_currentUser.id,organizer_id:org.id,status:'pending'},
     {onConflict:'trainer_id,organizer_id'}
   );
-  if(error)showToast('❌ Помилка: '+error.message,true);
-  else showToast('✅ Запит надіслано — очікуйте підтвердження від організатора');
+  if(error){showToast('❌ Помилка: '+error.message,true);return;}
+  showToast('✅ Запит надіслано — очікуйте підтвердження від організатора');
+  // Without this the request sat in comp_access until the organizer happened to look
+  const trainerName=_currentProfile?.full_name||_currentProfile?.email||'Тренер';
+  _insertNotification(org.id,'access_request','📨 Запит доступу від тренера',
+    `${trainerName}${_currentProfile?.club?' ('+_currentProfile.club+')':''} просить доступ до ваших змагань. Підтвердіть у вкладці «Мої змагання».`,
+    {trainer_id:_currentUser.id}).catch(()=>{});
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -14164,6 +14240,9 @@ const _notifActionTab={
   // Organizer receives these → go to org panel
   trainer_request:'orgpanel',
   trainer_response:'orgpanel',
+  access_request:'orgpanel',
+  // Trainer: reminder from the organizer → invitations tab (deadline countdown lives there)
+  reminder:'invitations',
   // Trainer receives these → go to trainer invitations tab
   invitation:'invitations',
   invitation_confirmed:'invitations',
@@ -14307,7 +14386,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0038'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0040'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
