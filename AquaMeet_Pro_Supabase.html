@@ -1133,6 +1133,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
       <div class="j-special-btns">
         <button class="j-dns-btn" onclick="submitSpecial('dns')">🚫 Н/С</button>
         <button class="j-dsq-btn" onclick="submitSpecial('dsq')">⛔ Д/К</button>
+        <button class="j-dsq-btn" style="background:#f4a261;color:#4a2a00" onclick="submitSpecial('dnf')" title="Не фінішував">🏁 Н/Ф</button>
         <button class="j-relay-toggle" id="j-relay-toggle" onclick="toggleRelayMode()">🔄 Естафета</button>
       </div>
       <div class="jstatus" id="j-status"></div>
@@ -3077,14 +3078,16 @@ function normalizeResult(raw){
   const upNoSpace=t.toUpperCase().replace(/\s+/g,'');
   if(upNoSpace==='Н/С'||upNoSpace==='НС'||upNoSpace==='DNS')return{ok:true,kind:'dns',value:'Н/С'};
   if(upNoSpace==='Д/К'||upNoSpace==='ДК'||upNoSpace==='ДСК'||upNoSpace==='DSQ')return{ok:true,kind:'dsq',value:'Д/К'};
+  if(upNoSpace==='Н/Ф'||upNoSpace==='НФ'||upNoSpace==='DNF')return{ok:true,kind:'dnf',value:'Н/Ф'}; // не фінішував
   if(parseTime(t)!==null)return{ok:true,kind:'time',value:t};
   return{ok:false};
 }
 // Render a result cell consistently: time → green monospace; Н/С → grey; Д/К → red; empty → "—"
-function fmtResultDisplay(r){
+function fmtResultDisplay(r,reason){
   if(!r||!r.toString().trim())return'<span style="color:var(--text-muted)">—</span>';
   if(r==='Н/С')return'<span style="font-weight:700;color:var(--text-muted);font-size:.85rem">Н/С</span>';
-  if(r==='Д/К')return'<span style="font-weight:700;color:var(--danger);font-size:.85rem">Д/К</span>';
+  if(r==='Н/Ф')return'<span style="font-weight:700;color:var(--warning);font-size:.85rem" title="Не фінішував">Н/Ф</span>';
+  if(r==='Д/К')return'<span style="font-weight:700;color:var(--danger);font-size:.85rem">Д/К</span>'+(reason?`<span style="font-size:.7rem;color:var(--danger);margin-left:.3rem;font-weight:500">${escapeHtml(reason)}</span>`:'');
   if(parseTime(r)!==null)return`<span style="font-family:monospace;font-weight:700;color:var(--success)">${r}</span>`;
   return`<span>${r}</span>`;
 }
@@ -3111,7 +3114,7 @@ function onTimeInput(e){
     const raw=inp.value;
     // Allow special result codes Н/С and Д/К — don't reformat them
     const up=raw.toUpperCase().replace(/\s+/g,'');
-    if(up==='Н/С'||up==='НС'||up==='DNS'||up==='Д/К'||up==='ДК'||up==='ДСК'||up==='DSQ')return;
+    if(up==='Н/С'||up==='НС'||up==='DNS'||up==='Д/К'||up==='ДК'||up==='ДСК'||up==='DSQ'||up==='Н/Ф'||up==='НФ'||up==='DNF')return;
     _applyTimeFormat(inp,raw);
   },0);
 }
@@ -3120,7 +3123,7 @@ function autoFormatTime(inp){
   setTimeout(()=>{
     const raw=inp.value;
     const up=raw.toUpperCase().replace(/\s+/g,'');
-    if(up==='Н/С'||up==='НС'||up==='DNS'||up==='Д/К'||up==='ДК'||up==='ДСК'||up==='DSQ')return;
+    if(up==='Н/С'||up==='НС'||up==='DNS'||up==='Д/К'||up==='ДК'||up==='ДСК'||up==='DSQ'||up==='Н/Ф'||up==='НФ'||up==='DNF')return;
     _applyTimeFormat(inp,raw);
   },0);
 }
@@ -6443,6 +6446,9 @@ function renderResults(){
             const tv=fmtTime(r.result_cs);
             items.push(`<div class="judge-pending-item"><span class="judge-pending-val">${tv}</span><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem" onclick="acceptJudgeTime('${r.id}',${eid})">✓</button></div>`);
           }
+          if(r.status==='dnf'){
+            items.push(`<div class="judge-pending-item"><span class="judge-pending-val status-dsq" style="background:rgba(244,162,97,.25);color:#7a4000">Н/Ф</span><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem" onclick="acceptJudgeStatus('${r.id}',${eid},'dnf')">✓</button></div>`);
+          }
           if(r.status==='dns'){
             items.push(`<div class="judge-pending-item"><span class="judge-pending-val status-dns">Н/С</span><button class="btn-success btn-xs" style="font-size:.68rem;padding:.1rem .3rem" onclick="acceptJudgeStatus('${r.id}',${eid},'dns')">✓</button></div>`);
           }else if(r.status==='dsq'){
@@ -6473,8 +6479,10 @@ function renderResults(){
           ${isPriv
             ?`<input class="t-inp" id="res-${eid}" type="text" value="${entry.result||''}" placeholder="хх:хх:хх" style="width:90px;font-family:monospace;font-size:.82rem" inputmode="decimal" oninput="onTimeInput(event)" onkeydown="onResultKeydown(event)" onchange="saveResult(${eid},this.value)">
               <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Н/С')" title="Не стартував">Н/С</button>
-              <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований">Д/К</button>`
+              <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований (з причиною)">Д/К</button>
+              <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Н/Ф')" title="Не фінішував">Н/Ф</button>`
             :`<span style="font-family:monospace;font-size:.82rem">${entry.result||'–'}</span>`}
+          ${entry.result==='Д/К'&&entry.dsqReason?`<span style="font-size:.68rem;color:var(--danger);max-width:140px;white-space:normal" title="Причина Д/К">${escapeHtml(entry.dsqReason)}</span>`:''}
           ${_isPB?'<span class="badge" style="background:rgba(244,162,40,.18);color:#8a5a00;font-size:.66rem;padding:.1rem .35rem" title="Особистий рекорд">⭐ ОР</span>':''}
         </div></td>
         <td id="rank-${eid}" style="text-align:center">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
@@ -6616,9 +6624,11 @@ function saveResult(eid,val){
     entry.result=null;
     entry.achievedRank=null;
     entry.confirmedBy=null;
+    delete entry.dsqReason;
     if(rankCell)rankCell.innerHTML='<span style="color:var(--text-muted)">–</span>';
   } else if(norm.kind==='time'){
     entry.result=norm.value;
+    delete entry.dsqReason;
     // Reflect normalized value in the input (e.g. trimmed)
     const inp=document.getElementById('res-'+eid);if(inp&&inp.value!==norm.value)inp.value=norm.value;
     // Auto-check rank — store in entry so future norm changes don't affect past results
@@ -6647,9 +6657,18 @@ function saveResult(eid,val){
   if(norm.kind!=='empty'){onResultSaved();_checkManualResultsComplete(eid);}
 }
 function setResultStatus(eid,code){
+  const entry=(activeComp()?.entries||[]).find(x=>x.id===eid);
+  let reason=null;
+  if(code==='Д/К'){
+    // The protocol must say WHY — a bare Д/К is not an official record
+    reason=prompt('Причина дискваліфікації (напр.: фальстарт, техніка стилю, поворот, фініш, не торкнувся стінки):',entry?.dsqReason||'');
+    if(reason===null)return;
+    reason=reason.trim();
+  }
   const inp=document.getElementById('res-'+eid);
   if(inp)inp.value=code;
   saveResult(eid,code);
+  if(entry){if(code==='Д/К'&&reason)entry.dsqReason=reason;else delete entry.dsqReason;saveDB();}
 }
 function clearResult(eid){
   const comp=activeComp();if(!comp)return;
@@ -6773,11 +6792,12 @@ function renderProtocol(){
       // 3: regular without any result (didn't get scored at all)
       // 4: exhibition (Поза конкурсом) — always last, but sorted by time inside
       const bucketFor=(x)=>{
-        if(x.entry.exhibition)return 4;
+        if(x.entry.exhibition)return 5;
         if(x.resultCs!==null)return 0;
         if(x.entry.result==='Д/К')return 1;
-        if(x.entry.result==='Н/С')return 2;
-        return 3;
+        if(x.entry.result==='Н/Ф')return 2; // did not finish — after DSQ, before DNS
+        if(x.entry.result==='Н/С')return 3;
+        return 4;
       };
       const ba=bucketFor(a),bb=bucketFor(b);
       if(ba!==bb)return ba-bb;
@@ -6804,7 +6824,7 @@ function renderProtocol(){
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.a.city||'–')}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.a.club||'–')}</td>
         <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${escapeHtml(item.a.coach||'–')}</td>
-        <td style="text-align:center;white-space:nowrap">${fmtResultDisplay(item.entry.result)}</td>
+        <td style="text-align:center;white-space:nowrap">${fmtResultDisplay(item.entry.result,item.entry.dsqReason)}</td>
         <td style="text-align:center;white-space:nowrap">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
       </tr>`;
     }).join('');
@@ -14047,7 +14067,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0025'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0028'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -14424,7 +14444,7 @@ function _judgeRenderList(){
     const ico=h.submitted?(h.status==='dns'?'—':h.status==='dsq'?'✗':'✓'):isCur?'▶':'○';
     const timeSpan=h.submitted?(h.resultCs?`<span class="jhi-time">${fmtTime(h.resultCs)}</span>`
       :(h.status==='dns'?'<span class="jhi-time" style="color:#ef9a9a">Н/С</span>'
-      :h.status==='dsq'?'<span class="jhi-time" style="color:#ef9a9a">Д/К</span>':'')):'';
+      :h.status==='dsq'?'<span class="jhi-time" style="color:#ef9a9a">Д/К</span>':h.status==='dnf'?'<span class="jhi-time" style="color:#f4a261">Н/Ф</span>':'')):'';
     return `<div class="${cls}" onclick="judgeGoTo(${i})">
       <span class="jhi-ico">${ico}</span>
       <span class="jhi-heat">З.${h.h+1}</span>
@@ -14476,7 +14496,7 @@ function _judgeShowCurrent(){
       document.getElementById('sw-disp').textContent=t;
       document.getElementById('sw-disp').classList.add('sw-stop');
     }else if(h.status==='dns'||h.status==='dsq'){
-      const lbl=h.status==='dns'?'Н/С':'Д/К';
+      const lbl={dns:'Н/С',dsq:'Д/К',dnf:'Н/Ф'}[h.status]||'Д/К';
       document.getElementById('j-manual').value='';
       document.getElementById('sw-disp').textContent=lbl;
       document.getElementById('sw-disp').classList.add('sw-stop');
@@ -14961,19 +14981,25 @@ function _renderSplits(splitsArr){
 
 // ── Н/С та Д/К ────────────────────────────────────────────────
 async function submitSpecial(status){
-  const label=status==='dns'?'Н/С':'Д/К';
+  const label={dns:'Н/С',dsq:'Д/К',dnf:'Н/Ф'}[status]||status;
   if(!confirm(`Підтвердити: ${label} для цього учасника?`))return;
-  const heat=_judgeHeats[_judgeCurIdx]||{};
-  // Для Д/К — завжди передаємо час (якщо є), щоб організатор міг прийняти час незалежно від статусу
-  let cs=null;
+  let dsqReason='';
   if(status==='dsq'){
+    const r=prompt('Причина Д/К (фальстарт, техніка стилю, поворот, фініш, не торкнувся стінки…):','');
+    if(r===null)return;
+    dsqReason=r.trim();
+  }
+  const heat=_judgeHeats[_judgeCurIdx]||{};
+  // Для Д/К і Н/Ф — передаємо час (якщо є), щоб організатор міг прийняти час незалежно від статусу
+  let cs=null;
+  if(status==='dsq'||status==='dnf'){
     if(_swRunning){const ms=Date.now()-_swStartTs;cs=Math.floor(ms/10);}
     else if(_swElapsedMs>0){cs=Math.floor(_swElapsedMs/10);}
     if(!cs){const mv=document.getElementById('j-manual')?.value.trim();if(mv)cs=parseTime(mv)||null;}
   }
   const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,...(_judgeP.t?{token:_judgeP.t}:{}),
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
-    result_cs:cs,status,heat_type:_judgeP.r==='1'?'relay':'heat'};
+    result_cs:cs,status,heat_type:_judgeP.r==='1'?'relay':'heat',...(dsqReason?{dsq_reason:dsqReason}:{})};
   try{
     const{error}=await _supa.from('judge_inputs').insert(row);
     if(error)throw error;
@@ -15437,7 +15463,7 @@ function renderJudgeInputsPanel(){
         }
       }catch(_){}
     }
-    const timeDisp=r.result_cs?fmtTime(r.result_cs):(r.status==='dns'?'Н/С':r.status==='dsq'?'Д/К':'—');
+    const timeDisp=(r.result_cs?fmtTime(r.result_cs):({dns:'Н/С',dsq:'Д/К',dnf:'Н/Ф'}[r.status]||'—'))+(r.status==='dsq'&&r.dsq_reason?` <span style="font-size:.7rem;color:var(--danger)">${escapeHtml(r.dsq_reason)}</span>`:'');
     return `<div class="jinput-row">
       <span class="jinput-time">${timeDisp}</span>
       <span class="jinput-info">${escapeHtml(r.athlete_name||'—')} · ${heatDisp} · Д.${r.lane}<br><span style="font-size:.75rem;color:#5a9ab8">${escapeHtml(r.event_name||'')}</span>${splitsHtml}</span>
@@ -15542,13 +15568,16 @@ async function acceptJudgeTime(rowId,eid){
 async function acceptJudgeStatus(rowId,eid,statusCode){
   const comp=activeComp();if(!comp)return;
   const entry=(comp.entries||[]).find(e=>e.id===eid);if(!entry)return;
-  entry.result=statusCode==='dns'?'Н/С':'Д/К';
+  const code={dns:'Н/С',dsq:'Д/К',dnf:'Н/Ф'}[statusCode]||'Д/К';
+  entry.result=code;
   entry.confirmedBy='від судді';
+  const srcRow=_judgeInputsCache.find(r=>r.id==rowId);
+  if(code==='Д/К'&&srcRow?.dsq_reason)entry.dsqReason=srcRow.dsq_reason;else delete entry.dsqReason;
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
   const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
   if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
   saveDB();renderResults();_updateResultsBadge();
-  showToast('✅ Статус від судді прийнято: '+(statusCode==='dns'?'Н/С':'Д/К'));
+  showToast('✅ Статус від судді прийнято: '+code+(entry.dsqReason?' ('+entry.dsqReason+')':''));
 }
 
 // ── Generate relay judge links — one QR per lane ──────────────
