@@ -2466,6 +2466,7 @@ function saveDB(){
         // (or any older organizer save) is not re-applied over newer local state
         _lastDbUpdatedAt=db._savedAt;
         console.log('[AquaMeet] Saved to cloud, _savedAt:',db._savedAt);
+        _refreshPublicSnapshots(ownerId); // keep public pages live without exposing app_state
       }
     }catch(e){console.warn('[AquaMeet] Save exception:',e);showToast('⚠️ Виняток збереження: '+e.message,true);}
   },200);
@@ -10906,6 +10907,25 @@ function _getSelectedViews(){
 }
 
 // Generate token and store in Supabase
+// Self-contained snapshot of ONE competition for the public page: the competition object plus only
+// the athletes it references, with a whitelist of fields. The public viewer must never need the
+// organizer's whole app_state (every competition, every child, coaches) — that is what it got before.
+function _buildPublicSnapshot(comp,dbData){
+  const ids=new Set((comp.entries||[]).map(e=>e.athleteId));
+  const athletes=(dbData.athletes||[]).filter(a=>ids.has(a.id)).map(a=>({
+    id:a.id,surname:a.surname||'',name:a.name||'',gender:a.gender||'',
+    birthYear:a.birthYear||'',club:a.club||'',city:a.city||''
+  }));
+  return{comp:JSON.parse(JSON.stringify(comp)),athletes,builtAt:new Date().toISOString()};
+}
+// Re-publish snapshots for every competition that has a public link (fire-and-forget, after saveDB)
+function _refreshPublicSnapshots(ownerId){
+  (db.competitions||[]).filter(c=>c.publicLinked).forEach(c=>{
+    _supa.from('public_links').update({snapshot:_buildPublicSnapshot(c,db)})
+      .eq('owner_id',ownerId).eq('comp_id',c.id)
+      .then(({error})=>{if(error)console.warn('[AquaMeet] public snapshot:',error.message);});
+  });
+}
 async function generateShareLink(){
   const views=_getSelectedViews();
   if(!views.length){showToast('Оберіть хоча б один розділ',true);return;}
@@ -10928,10 +10948,13 @@ async function generateShareLink(){
     owner_id:_viewingOwnerId||_currentUser.id,
     comp_id:comp.id,
     comp_name:comp.name,
-    views
+    views,
+    snapshot:_buildPublicSnapshot(comp,db)
   });
   btn.disabled=false;btn.textContent='🔗 Генерувати посилання';
   if(error){showToast('❌ Помилка: '+error.message,true);return;}
+  // Remember that this competition is published so every later save refreshes its snapshot
+  if(!comp.publicLinked){comp.publicLinked=true;saveDB();}
 
   // Build URL
   const base=window.location.href.split('#')[0].split('?')[0];
@@ -11117,13 +11140,19 @@ async function checkPublicHash(){
       document.getElementById('pub-content').innerHTML='<div style="text-align:center;padding:3rem;color:#e63946">❌ Посилання недійсне або видалено.</div>';
       return true;
     }
-    // Fetch app_state
-    const{data:stateRow,error:se}=await _supa.from('app_state').select('data').eq('id',link.owner_id).maybeSingle();
-    if(se||!stateRow?.data){
-      document.getElementById('pub-content').innerHTML='<div style="text-align:center;padding:3rem;color:#e63946">❌ Дані змагання недоступні.</div>';
-      return true;
+    // Prefer the per-link snapshot (one competition, whitelisted athlete fields). Fall back to the
+    // organizer's app_state only for legacy links created before snapshots existed.
+    let pubDb=null;
+    if(link.snapshot?.comp){
+      pubDb={competitions:[link.snapshot.comp],athletes:link.snapshot.athletes||[]};
+    }else{
+      const{data:stateRow,error:se}=await _supa.from('app_state').select('data').eq('id',link.owner_id).maybeSingle();
+      if(se||!stateRow?.data){
+        document.getElementById('pub-content').innerHTML='<div style="text-align:center;padding:3rem;color:#e63946">❌ Дані змагання недоступні.</div>';
+        return true;
+      }
+      pubDb=stateRow.data;
     }
-    const pubDb=stateRow.data;
     const comp=(pubDb.competitions||[]).find(c=>c.id===link.comp_id);
     if(!comp){
       document.getElementById('pub-content').innerHTML='<div style="text-align:center;padding:3rem;color:#e63946">❌ Змагання не знайдено.</div>';
@@ -13781,7 +13810,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261113-2245'; // stamped by deploy.ps1
+const APP_BUILD='20261113-2300'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
