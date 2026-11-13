@@ -3988,6 +3988,27 @@ function buildMedalCalcHtml(comp){
 
 // ═══════════════════════════════════════════════════════════════
 // ── #6/#7 Athlete progress chart ─────────────────────────────────────────────
+// Personal best on one event: fastest recorded time across every competition in this db.
+// excludeEntryId skips the entry being saved, so "is this a new PB?" compares against the past only.
+// Returns {cs,result,compName,date} or null.
+function athletePB(athleteId,dist,style,excludeEntryId){
+  let best=null;
+  for(const comp of db.competitions||[]){
+    for(const e of comp.entries||[]){
+      if(e.athleteId!==athleteId||e.dist!==dist||e.style!==style||e.id===excludeEntryId)continue;
+      const cs=parseTime(e.result);if(cs===null)continue;
+      if(best===null||cs<best.cs)best={cs,result:e.result,compName:comp.name||'',date:comp.dateFrom||''};
+    }
+  }
+  return best;
+}
+// Compare a just-recorded time with the athlete's past PB and celebrate if it is a new one
+function _pbToast(entry,a,cs){
+  if(!a||cs===null)return;
+  const pb=athletePB(entry.athleteId,entry.dist,entry.style,entry.id);
+  if(pb&&cs>=pb.cs)return;
+  showToast(pb?`⭐ Особистий рекорд! ${a.surname} ${a.name}: ${fmtTime(cs)} (було ${pb.result})`:`⭐ Перший результат ${a.surname} ${a.name} на ${entry.dist}м ${entry.style}`);
+}
 function openAthleteChart(athleteId){
   const a=db.athletes.find(x=>x.id===athleteId);
   if(!a){return;}
@@ -5288,7 +5309,8 @@ function renderEntrySelected(){
       <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:.3rem">
           <span style="font-size:.72rem;color:var(--text-muted);font-weight:600">Заявл. час:</span>
-          <input class="t-inp" placeholder="00:00:00" value="${ent.seedTime||''}" style="width:108px;padding:.22rem .4rem;font-size:.8rem" inputmode="numeric" oninput="onSeedTimeInput(event);updateEntryField(${idx},'seedTime',this.value)">
+          <input class="t-inp" id="pa-seed-${idx}" placeholder="00:00:00" value="${ent.seedTime||''}" style="width:108px;padding:.22rem .4rem;font-size:.8rem" inputmode="numeric" oninput="onSeedTimeInput(event);updateEntryField(${idx},'seedTime',this.value)">
+          ${(()=>{const pb=editingAthId!=null?athletePB(editingAthId,ent.dist,ent.style):null;return pb?`<button class="btn-secondary btn-xs" style="font-size:.7rem;padding:.15rem .4rem" title="Найкращий результат: ${escapeHtml(pb.compName)} ${pb.date}" onclick="const i=document.getElementById('pa-seed-${idx}');i.value='${pb.result}';updateEntryField(${idx},'seedTime',i.value)">⭐ ${pb.result}</button>`:'';})()}
         </div>
         <label style="font-size:.78rem;display:flex;align-items:center;gap:.3rem;margin:0;font-weight:600;cursor:pointer">
           <input type="checkbox" ${ent.exhibition?'checked':''} style="width:auto;transform:scale(1.1)" onchange="updateEntryField(${idx},'exhibition',this.checked)">
@@ -5301,7 +5323,9 @@ function renderEntrySelected(){
 function toggleAthleteEntry(dist,style,add){
   if(add){
     if(!entryModalEntries.find(e=>e.dist===dist&&e.style===style)){
-      entryModalEntries.push({dist,style,seedTime:'',exhibition:false});
+      // Prefill the seed time with the athlete's personal best — the whole history is already in db
+      const pb=editingAthId!=null?athletePB(editingAthId,dist,style):null;
+      entryModalEntries.push({dist,style,seedTime:pb?pb.result:'',exhibition:false});
     }
   } else {
     entryModalEntries=entryModalEntries.filter(e=>!(e.dist===dist&&e.style===style));
@@ -6437,6 +6461,8 @@ function renderResults(){
         }
         statusColHtml=`<td class="res-status-col">${statusBadge}</td>`;
       }
+      const _rcs=parseTime(entry.result);
+      const _isPB=_rcs!==null&&athletePB(entry.athleteId,entry.dist,entry.style)?.cs===_rcs;
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
         <td style="white-space:nowrap"><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)} ${exhMark}<span class="mob-sub">${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span></td>
@@ -6449,6 +6475,7 @@ function renderResults(){
               <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Н/С')" title="Не стартував">Н/С</button>
               <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований">Д/К</button>`
             :`<span style="font-family:monospace;font-size:.82rem">${entry.result||'–'}</span>`}
+          ${_isPB?'<span class="badge" style="background:rgba(244,162,40,.18);color:#8a5a00;font-size:.66rem;padding:.1rem .35rem" title="Особистий рекорд">⭐ ОР</span>':''}
         </div></td>
         <td id="rank-${eid}" style="text-align:center">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
         ${judgeColHtml}${statusColHtml}
@@ -6602,6 +6629,7 @@ function saveResult(eid,val){
       entry.achievedRank=rk||null; // persist rank at time of entry
       if(rankCell)rankCell.innerHTML=rk?`<span class="ach-badge">${rk}</span>`:'<span style="color:var(--text-muted)">–</span>';
       if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}
+      _pbToast(entry,a,tc);
     }
   } else {
     // dns or dsq — store the normalized "Н/С" / "Д/К" string, no rank possible
@@ -7684,13 +7712,14 @@ function buildAthleteDirCard(a){
     const seedCs=parseTime(entry.seedTime);
     const resCs=parseTime(entry.result);
     const diff=seedCs!==null&&resCs!==null?resCs-seedCs:null;
+    const isPB=resCs!==null&&athletePB(a.id,entry.dist,entry.style)?.cs===resCs;
     const rk=entry.achievedRank!==undefined?entry.achievedRank:(resCs?checkRank(entry.style,entry.dist,a.gender,resCs):null);
     return`<tr>
       <td style="font-size:.82rem">${escapeHtml(comp.name)}</td>
       <td style="font-size:.78rem;color:var(--text-muted)">${comp.dateFrom||'–'}</td>
       <td><span class="badge badge-dist">${entry.dist}м</span> <span style="font-size:.8rem">${entry.style}</span></td>
       <td style="font-family:monospace;color:var(--text-muted);font-size:.82rem">${entry.seedTime||'–'}</td>
-      <td style="font-size:.82rem">${fmtResultDisplay(entry.result)}</td>
+      <td style="font-size:.82rem">${fmtResultDisplay(entry.result)}${isPB?' <span title="Особистий рекорд">⭐</span>':''}</td>
       <td style="text-align:center">${diff!==null?`<span style="font-size:.8rem;color:${diff<0?'var(--success)':'var(--danger)'}">${diff<0?'−':'+'}${fmtTime(Math.abs(diff))}</span>`:'–'}</td>
       <td style="text-align:center">${rk?`<span class="ach-badge">${rk}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
     </tr>`;
@@ -14018,7 +14047,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0024'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0025'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -15502,7 +15531,7 @@ async function acceptJudgeTime(rowId,eid){
   const cs=row.result_cs;const timeStr=fmtTime(cs);
   entry.result=timeStr;entry.resultCs=cs;entry.confirmedBy='від судді';
   const a=db.athletes?.find(x=>x.id===entry.athleteId);
-  if(a){const rk=checkRank(entry.style,entry.dist,a.gender,cs);entry.achievedRank=rk||null;if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}}
+  if(a){const rk=checkRank(entry.style,entry.dist,a.gender,cs);entry.achievedRank=rk||null;if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}_pbToast(entry,a,cs);}
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
   const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
   if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
