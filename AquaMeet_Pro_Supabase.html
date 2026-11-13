@@ -11125,6 +11125,10 @@ async function checkPublicHash(){
   const token=hash.slice(5);
   if(!token)return false;
 
+  // #public-view-overlay is declared AFTER the main <script>, and boot runs while the document is
+  // still being parsed — wait for the DOM, otherwise getElementById returns null here
+  if(document.readyState==='loading')await new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true}));
+
   // Show public overlay immediately
   document.getElementById('auth-overlay').style.display='none';
   document.getElementById('app').style.display='none';
@@ -13809,7 +13813,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261113-2310'; // stamped by deploy.ps1
+const APP_BUILD='20261113-2321'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
