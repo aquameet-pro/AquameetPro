@@ -399,7 +399,9 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 #offline-banner button{margin-left:auto;background:rgba(244,162,49,.18);border:1px solid rgba(244,162,49,.5);color:#7a4000;border-radius:6px;padding:.2rem .65rem;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap}
 #offline-banner button:hover{background:rgba(244,162,49,.35)}
 @media print{
-  @page{size:A4 portrait;margin:14mm 10mm 16mm}
+  @page{size:A4 portrait;margin:14mm 10mm 16mm;
+    @bottom-right{content:"Стор. " counter(page) " з " counter(pages);font-family:'Times New Roman',serif;font-size:8pt;color:#444}
+    @bottom-left{content:"AquaMeet Pro";font-family:'Times New Roman',serif;font-size:8pt;color:#888}}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   /* Official-document look: serif body, table headers repeated on every page, no on-screen min-widths */
   body.printing-tab{font-family:'Times New Roman',Times,serif;font-size:10pt}
@@ -7944,9 +7946,16 @@ function doPrint(){
 // ═══════════════════════════════════════════════════════════════
 // Inject a print-only title (competition name + scope) at the top of the given tab,
 // toggle `printing-tab` on <body>, call window.print(), then clean up.
-function printTab(tabId,scopeLabel){
+// opts.signatures — append the officials' signature block (official documents only)
+// opts.landscape — temporary @page override for wide tables
+function printTab(tabId,scopeLabel,opts={}){
   const comp=activeComp();if(!comp){alert('Оберіть змагання');return;}
   const tab=document.getElementById(tabId);if(!tab){alert('Вкладка не знайдена');return;}
+  // PDF file name = document title; restored after printing
+  const _prevTitle=document.title;
+  document.title=[scopeLabel,comp.name].filter(Boolean).join(' — ');
+  const signBlock=opts.signatures?(()=>{const d=document.createElement('div');d.className='print-sign-block';d.innerHTML=buildSignatureBlock(comp);tab.appendChild(d);return d;})():null;
+  const pageStyle=opts.landscape?(()=>{const s=document.createElement('style');s.textContent='@media print{@page{size:A4 landscape}}';document.head.appendChild(s);return s;})():null;
   // Safety: explicitly activate the target tab so print CSS .tab-panel.active matches.
   // If user clicked «Друк» from a different tab, we still print the intended one.
   const tabName=tabId.replace(/^tab-/,'');
@@ -7988,6 +7997,9 @@ function printTab(tabId,scopeLabel){
       });
       _heatRows=[];
       title.remove();
+      if(signBlock)signBlock.remove();
+      if(pageStyle)pageStyle.remove();
+      document.title=_prevTitle;
     },100);
   },300);
 }
@@ -8213,7 +8225,7 @@ function printProtocol(){
   }
   const dayId=document.getElementById('prf-day')?.value||'';
   const evKey=document.getElementById('prf-event')?.value||'';
-  printTab('tab-protocol',scopeFromSelects(dayId,evKey,kindLabel));
+  printTab('tab-protocol',scopeFromSelects(dayId,evKey,kindLabel),{signatures:!isPre});
   const prepend=document.getElementById('protocol-print-prepend');
   if(prepend)setTimeout(()=>prepend.remove(),1000);
 }
@@ -8272,11 +8284,34 @@ function buildProtocolTitlePage(comp){
     </div>`:''}
   </div>`;
 }
+// Signature lines for official documents: chief judge, chief secretary (+ referee if named),
+// each with a line, name and category; date and stamp placeholder. Names come from the
+// competition form — missing ones still get a blank line to sign.
+function buildSignatureBlock(comp){
+  const sig=(role,name,cat)=>`<tr>
+      <td style="padding:14pt 6pt 2pt 0;font-size:10pt;white-space:nowrap">${role}</td>
+      <td style="padding:14pt 6pt 2pt;width:38%;border-bottom:1px solid #000"></td>
+      <td style="padding:14pt 0 2pt 6pt;font-size:10pt">${escapeHtml(name||'')}${cat?`, <span style="font-size:9pt">${escapeHtml(cat)}</span>`:''}</td>
+    </tr>`;
+  const rows=[
+    sig('Головний суддя',comp.mainJudge,comp.mainJudgeCat),
+    sig('Головний секретар',comp.secretary,comp.secretaryCat),
+    comp.referee?sig('Рефері',comp.referee,comp.refereeCat):'',
+  ].join('');
+  const dt=comp.dateTo||comp.dateFrom;
+  return`<div style="page-break-inside:avoid;margin-top:18pt;font-family:'Times New Roman',Times,serif">
+    <table style="width:100%;border-collapse:collapse"><tbody>${rows}</tbody></table>
+    <div style="display:flex;justify-content:space-between;margin-top:12pt;font-size:9.5pt">
+      <span>${escapeHtml(comp.location||'')}${dt?`, ${fmtUkrDate(dt)}`:''}</span>
+      <span>М.П.</span>
+    </div>
+  </div>`;
+}
 function printStandings(){
   if(!(activeComp()?.entries||[]).length){alert('Немає даних');return;}
   if(!_confirmMissingResults('таблиці призерів'))return;
   const evKey=document.getElementById('stf-event')?.value||'';
-  printTab('tab-standings',scopeFromSelects('',evKey,'Призери'));
+  printTab('tab-standings',scopeFromSelects('',evKey,'Призери'),{signatures:true});
 }
 function printArchive(){
   printTab('tab-archive','Архів і Рейтинг'+(archiveFilterCompId!=null?` · ${escapeHtml(db.competitions.find(c=>c.id===archiveFilterCompId)?.name||'')}`:''));
@@ -14133,7 +14168,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0030'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0032'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
