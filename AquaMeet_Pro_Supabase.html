@@ -785,6 +785,9 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   .stat-label{font-size:.58rem;margin-top:.1rem}
   .modal{width:100%!important;max-width:100%!important;max-height:92dvh;border-radius:12px 12px 0 0;margin-top:auto} /* dvh: with the keyboard open 95vh pushed «Зберегти» off-screen */
   .modal-footer button{flex:1;min-height:44px}
+  /* Every modal (not only the 5 with .modal-flex): header and footer stay visible while the body scrolls */
+  .modal:not(.modal-flex) .modal-header{position:sticky;top:-1.5rem;z-index:2;background:var(--card);margin:-1.5rem -1.5rem .8rem;padding:1rem 1.5rem .6rem}
+  .modal:not(.modal-flex) .modal-footer{position:sticky;bottom:-1.5rem;z-index:2;background:var(--card);margin:1rem -1.5rem -1.5rem;padding:.7rem 1.5rem 1rem;box-shadow:0 -4px 12px rgba(0,0,0,.06)}
   .modal-overlay{align-items:flex-end;padding:0}
   .form-row{grid-template-columns:1fr!important}
   .org-comp-card{padding:.75rem}
@@ -1208,6 +1211,26 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <!-- Status -->
     <div id="st-status" style="margin-top:.65rem;text-align:center;font-size:.86rem;font-weight:700;min-height:1.4rem;color:#5a9ab8"></div>
   </div>
+</div>
+
+<!-- ══ BOARD (табло для великого екрана): ?board=1&oid=…&cid=…&t=<public token> ══ -->
+<div id="board-overlay">
+  <style>
+    #board-overlay{display:none;position:fixed;inset:0;background:#02263f;color:#fff;z-index:5000;overflow:auto;padding:2vh 3vw;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+    #board-overlay.active{display:block}
+    .bd-head{display:flex;justify-content:space-between;align-items:center;font-size:2.4vw;font-weight:800;margin-bottom:1vh}
+    .bd-now{background:rgba(255,255,255,.06);border-radius:1.5vw;padding:1.5vw;margin-bottom:2vh}
+    .bd-ev{font-size:2.6vw;font-weight:800;color:#48cae4;margin-bottom:1vh}
+    .bd-lane{display:grid;grid-template-columns:4vw 1fr 1fr 12vw;align-items:center;font-size:2.4vw;padding:.5vh 0;border-bottom:1px solid rgba(255,255,255,.08)}
+    .bd-ln{font-weight:800;color:#90e0ef}.bd-nm{font-weight:700}.bd-club{opacity:.7;font-size:1.8vw}
+    .bd-res{text-align:right;font-family:monospace;font-weight:800;color:#06d6a0}.bd-seed{color:rgba(255,255,255,.4);font-weight:500}
+    .bd-last{display:grid;grid-template-columns:repeat(auto-fit,minmax(30vw,1fr));gap:1.5vw}
+    .bd-card{background:rgba(255,255,255,.05);border-radius:1.2vw;padding:1.2vw}
+    .bd-card .bd-ev{font-size:1.9vw}.bd-card .bd-lane{font-size:1.8vw;grid-template-columns:3vw 1fr 1fr 10vw}
+  </style>
+  <div class="bd-head"><span id="board-title">AquaMeet Pro</span><span id="board-clock"></span></div>
+  <div class="bd-now" id="board-now"><div class="bd-ev">⏳ Завантаження…</div></div>
+  <div class="bd-last" id="board-last"></div>
 </div>
 
 <!-- ══ JUDGE LINKS MODAL ══ -->
@@ -3005,10 +3028,18 @@ function eventEtaMap(comp,dayId){
   let clock=(day.id===firstDayId&&day.openingMinutes)?day.openingMinutes*60:0;
   const heats=(comp.heats||[]).filter(h=>h.dayId===dayId).sort((a,b)=>(a.globalNum||0)-(b.globalNum||0));
   const FALLBACK=90;
+  const toSec=hhmm=>{const[h,m]=String(hhmm||'').split(':').map(Number);return(h*60+m)*60;};
+  const startSec=toSec(day.startTime);
+  let prevKey=null;out.lagMin=null;
   for(const h of heats){
-    const t=addSecToTime(day.startTime,clock);
-    out.heat[h.id]=t;
     const k=`${h.dist}|${h.style}`;
+    // Planned break after the previous event (awards, warm-up) — set in the day modal
+    if(prevKey&&prevKey!==k){const pe=(day.events||[]).find(e=>`${e.dist}|${e.style}`===prevKey);if(pe?.breakAfter)clock+=pe.breakAfter*60;}
+    prevKey=k;
+    // A heat that actually started re-anchors the clock: later heats shift by the real delay
+    if(h.actualStart){const act=toSec(h.actualStart)-startSec;if(act>=0){out.lagMin=Math.round((act-clock)/60);clock=act;}}
+    const t=h.actualStart||addSecToTime(day.startTime,clock);
+    out.heat[h.id]=t;
     if(!out.event[k])out.event[k]=t;
     let dur=heatDurationSec(h,comp);
     if(dur===null){dur=FALLBACK;out.unknown++;}
@@ -3088,7 +3119,8 @@ function estimateCompetitionTime(comp){
     d.start=day?.startTime||null;
     d.openingMin=(d.dayId===firstDayId&&day?.openingMinutes)?day.openingMinutes:0;
     d.relayMin=(day?.hasRelays&&day?.relayMinutes)?day.relayMinutes:0;
-    const daySec=d.sec+d.openingMin*60+d.relayMin*60;
+    d.breakMin=(day?.events||[]).reduce((a,e)=>a+(+e.breakAfter||0),0);
+    const daySec=d.sec+d.openingMin*60+d.relayMin*60+d.breakMin*60;
     d.totalDaySec=daySec;
     d.end=d.start?addSecToTime(d.start,daySec):null;
   }
@@ -4386,12 +4418,14 @@ function renderDayOrdered(){
       <span style="font-size:.72rem;color:var(--text-muted);font-weight:700;min-width:20px">${idx+1}.</span>
       <span class="badge badge-dist" style="font-size:.78rem">${ev.dist}м ${ev.style}</span>
       <div style="flex:1"></div>
+      <label style="margin:0;font-size:.68rem;color:var(--text-muted);display:flex;align-items:center;gap:.25rem;white-space:nowrap" title="Перерва після цієї події (нагородження, розминка) — враховується в орієнтовному часі й у програмі">⏸<input type="number" min="0" max="180" placeholder="хв" value="${ev.breakAfter||''}" style="width:52px;padding:.1rem .3rem;font-size:.72rem" onchange="setDayEventBreak(${idx},this.value)"></label>
       <button class="btn-icon btn-xs" ${upDis} onclick="moveDayEvent(${idx},-1)">▲</button>
       <button class="btn-icon btn-xs" ${dnDis} onclick="moveDayEvent(${idx},1)">▼</button>
       <button class="btn-icon btn-xs" style="color:var(--danger)" onclick="toggleDayEvent(${ev.dist},'${ev.style}',false)">✕</button>
     </div>`;
   }).join('');
 }
+function setDayEventBreak(idx,val){const ev=dayModalEvents[idx];if(!ev)return;const n=parseInt(val);ev.breakAfter=n>0?n:undefined;}
 function toggleDayEvent(dist,style,add){
   if(add){
     if(!dayModalEvents.find(e=>e.dist===dist&&e.style===style))dayModalEvents.push({dist,style});
@@ -4555,7 +4589,7 @@ function openEditDay(id){
   const comp=activeComp();if(!comp)return;
   const day=comp.days.find(d=>d.id===id);if(!day)return;
   editingDayId=id;
-  dayModalEvents=(day.events||[]).map(e=>({dist:e.dist,style:e.style}));
+  dayModalEvents=(day.events||[]).map(e=>({dist:e.dist,style:e.style,...(e.breakAfter?{breakAfter:e.breakAfter}:{})}));
   document.getElementById('day-modal-title').textContent='✏ Редагувати день';
   document.getElementById('day-date').value=day.date||'';
   // Set date constraints from competition dates
@@ -4587,7 +4621,7 @@ function saveDay(){
   const relayEvents=hasRelays?[..._dayRelayEvents]:[];
   if(!date){alert('Вкажіть дату');return;}
   if(!dayModalEvents.length){alert('Оберіть хоча б одну дистанцію');return;}
-  const events=dayModalEvents.map(e=>({dist:e.dist,style:e.style}));
+  const events=dayModalEvents.map(e=>({dist:e.dist,style:e.style,...(e.breakAfter?{breakAfter:e.breakAfter}:{})}));
   if(editingDayId){
     const d=comp.days.find(x=>x.id===editingDayId);
     if(d){
@@ -4620,7 +4654,8 @@ function renderSchedule(){
   el.innerHTML=days.map(d=>{
     const cnt=(comp.entries||[]).filter(e=>e.dayId===d.id).length;
     const eta=eventEtaMap(comp,d.id);
-    const etaBadge=eta.end?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовно, за заявленими часами${eta.unknown?` (${eta.unknown} запливів без часу — по 90 с)`:''}">⏱ ${d.startTime} → ~${eta.end}</span>`:'';
+    const lag=eta.lagMin==null?'':eta.lagMin>1?` · <span style="color:var(--danger)">відставання +${eta.lagMin} хв</span>`:eta.lagMin<-1?` · випередження ${-eta.lagMin} хв`:' · за графіком';
+    const etaBadge=eta.end?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовно, за заявленими часами${eta.unknown?` (${eta.unknown} запливів без часу — по 90 с)`:''}; після фактичного старту заплива графік зсувається">⏱ ${d.startTime} → ~${eta.end}${lag}</span>`:'';
     const relayBadge=d.hasRelays?`<span class="badge" style="background:rgba(0,180,216,.15);color:var(--accent)">🤝 Естафети${d.relayMinutes?` (~${d.relayMinutes} хв)`:''}</span>`:'';
     const relayEventBadges=(d.relayEvents||[]).map(e=>{const rt=RELAY_TYPES?.[e.type];const gl=e.gender==='F'?'Ж':e.gender==='M'?'Ч':'Мікст';return rt?`<span class="badge badge-dist" style="font-size:.78rem">${rt.label} · ${gl}</span>`:''}).join('');
     const relayEventsLine=d.hasRelays&&(d.relayEvents||[]).length?`<div style="padding:.4rem 1rem .5rem;display:flex;flex-wrap:wrap;gap:.3rem">${relayEventBadges}</div>`:'';
@@ -4635,6 +4670,7 @@ function renderSchedule(){
         ${relayBadge}
         <div style="margin-left:auto;display:flex;gap:.3rem">
           <button class="btn-secondary btn-xs" onclick="openEditDay(${d.id})">✏ Редагувати</button>
+          <button class="btn-secondary btn-xs" onclick="duplicateDay(${d.id})" title="Скопіювати програму цього дня на іншу дату">⧉</button>
           <button class="btn-icon btn-xs" style="color:var(--danger)" onclick="deleteDay(${d.id})">✕</button>
         </div>
       </div>
@@ -4659,7 +4695,8 @@ function printProgram(){
       progNum++;
       const hs=(comp.heats||[]).filter(h=>h.dayId===d.id&&h.dist===ev.dist&&h.style===ev.style);
       const t=eta.event[`${ev.dist}|${ev.style}`];
-      return`<tr><td class="c">${progNum}</td><td>${ev.dist} м ${escapeHtml(ev.style)}</td><td class="c">${hs.length||'—'}</td><td class="c time">${t?'~'+t:'—'}</td></tr>`;
+      return`<tr><td class="c">${progNum}</td><td>${ev.dist} м ${escapeHtml(ev.style)}</td><td class="c">${hs.length||'—'}</td><td class="c time">${t?'~'+t:'—'}</td></tr>`+
+        (ev.breakAfter?`<tr><td></td><td colspan="3" style="font-style:italic;color:#555;text-align:center">— перерва ${ev.breakAfter} хв —</td></tr>`:'');
     }).join('');
     const relays=(d.relayEvents||[]).map(e=>{const rt=RELAY_TYPES?.[e.type];const gl=e.gender==='F'?'Жінки':e.gender==='M'?'Чоловіки':'Змішана';return rt?`<tr><td class="c">${++progNum}</td><td>🤝 ${escapeHtml(rt.label)} · ${gl}</td><td class="c">—</td><td class="c time">—</td></tr>`:''}).join('');
     const opening=(d.id===days[0]?.id&&d.openingMinutes)?`<div class="note">Урочисте відкриття — ${d.openingMinutes} хв</div>`:'';
@@ -4696,6 +4733,19 @@ ${note}
 ${daysHtml}
 <div class="foot">Час старту орієнтовний — за заявленими часами учасників і паузами між запливами. Сформовано ${new Date().toLocaleDateString('uk-UA')}.</div>
 </body></html>`);
+}
+// Copy a day's programme (events, order, breaks, start time, relays) onto a new date
+function duplicateDay(id){
+  const comp=activeComp();if(!comp)return;
+  const src=(comp.days||[]).find(d=>d.id===id);if(!src)return;
+  const date=prompt('Дата нового дня (РРРР-ММ-ДД):',src.date||'');
+  if(date===null)return;
+  const copy=JSON.parse(JSON.stringify(src));
+  copy.id=db.nextId.day++;copy.date=date.trim();copy.label=`День ${comp.days.length+1}`;
+  delete copy.openingMinutes; // opening ceremony is day 1 only
+  comp.days.push(copy);
+  saveDB();renderSchedule();
+  showToast(`✅ ${copy.label} створено з програми «${src.label||src.date}»`,false,()=>{comp.days=comp.days.filter(d=>d.id!==copy.id);saveDB();renderSchedule();});
 }
 function deleteDay(id){
   const comp=activeComp();if(!comp)return;
@@ -6478,7 +6528,7 @@ function renderHeats(){
     return`<div class="heat-card" id="heat-card-${heat.id}">
       <div class="heat-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
-        ${_heatEta(heat)?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовний час старту за заявленими часами">⏱ ~${_heatEta(heat)}</span>`:''}
+        ${heat.actualStart?`<span class="badge" style="background:rgba(0,119,182,.12);color:var(--accent)" title="Фактичний час старту">🕐 ${heat.actualStart}</span>`:_heatEta(heat)?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовний час старту за заявленими часами">⏱ ~${_heatEta(heat)}</span>`:''}
         <span class="badge badge-heat">Підзаплив ${inEvent}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
         ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
@@ -11607,7 +11657,9 @@ async function generateShareLink(){
   const base=window.location.href.split('#')[0].split('?')[0];
   const url=base+'#pub='+token;
   document.getElementById('share-link-input').value=url;
-  document.getElementById('share-token-display').textContent='Токен: '+token+' | Розділи: '+views.join(', ');
+  const boardUrl=base+'?board=1&oid='+encodeURIComponent(_viewingOwnerId||_currentUser.id)+'&cid='+encodeURIComponent(comp.id)+'&t='+token;
+  document.getElementById('share-token-display').innerHTML='Токен: '+escapeHtml(token)+' | Розділи: '+escapeHtml(views.join(', '))+
+    `<div style="margin-top:.5rem">📺 <strong>Табло для залу</strong> (великий екран, оновлюється саме): <a href="${boardUrl}" target="_blank">відкрити</a> · <a href="#" onclick="navigator.clipboard.writeText('${boardUrl}').then(()=>showToast('Посилання на табло скопійовано'));return false">копіювати</a></div>`;
   document.getElementById('share-link-wrap').style.display='block';
 }
 
@@ -14525,7 +14577,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0056'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0147'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -14785,6 +14837,57 @@ async function _loadJudgeData(token,oid){
     return{data:{data:{competitions:[s.comp],athletes:s.athletes||[]}},error:null};
   }
   return _supa.from('app_state').select('data').eq('id',oid).maybeSingle();
+}
+// ── Board mode: a big screen in the hall. Reads the same public snapshot by token, refreshes every
+// 15 s, and jumps to the active heat instantly via the ctrl channel. No login, read-only.
+let _boardP=null,_boardData=null,_boardActive=-1;
+async function _initBoardMode(){
+  const p=new URLSearchParams(location.search);
+  if(!p.has('board'))return false;
+  _boardP={t:p.get('t')||'',oid:p.get('oid')||'',cid:p.get('cid')||''};
+  document.getElementById('auth-overlay').style.display='none';
+  document.getElementById('app').style.display='none';
+  if(document.readyState==='loading')await new Promise(r=>document.addEventListener('DOMContentLoaded',r,{once:true}));
+  document.getElementById('board-overlay').classList.add('active');
+  await _boardRefresh();
+  setInterval(_boardRefresh,15000);
+  if(_boardP.oid&&_boardP.cid){
+    _supa.channel('jctrl_'+_boardP.oid+'_'+_boardP.cid).on('broadcast',{event:'hctrl'},({payload})=>{
+      if(payload.type==='heat_active'){_boardActive=payload.heatIdx;_boardRender();}
+    }).subscribe();
+  }
+  _judgeKeepAwake();
+  return true;
+}
+async function _boardRefresh(){
+  try{
+    const{data,error}=await _loadJudgeData(_boardP.t,_boardP.oid);
+    if(error||!data?.data){document.getElementById('board-title').textContent='❌ '+(error?.message||'Дані недоступні');return;}
+    _boardData=data.data;_boardRender();
+  }catch(e){console.warn('[board]',e);}
+}
+function _boardRender(){
+  const d=_boardData;if(!d)return;
+  const comp=(d.competitions||[]).find(c=>!_boardP.cid||String(c.id)===String(_boardP.cid))||d.competitions?.[0];if(!comp)return;
+  const aths=d.athletes||[];const A=id=>aths.find(a=>a.id===id);const E=id=>(comp.entries||[]).find(e=>e.id===id);
+  const heats=comp.heats||[];
+  const idx=_boardActive>=0?_boardActive:(typeof comp.activeHeatIdx==='number'?comp.activeHeatIdx:-1);
+  const h=heats[idx];
+  document.getElementById('board-title').textContent=comp.name||'';
+  const laneRow=(ln,e,a,res)=>`<div class="bd-lane"><span class="bd-ln">${ln}</span><span class="bd-nm">${a?escapeHtml(a.surname+' '+a.name):'—'}</span><span class="bd-club">${a?escapeHtml(a.club||''):''}</span><span class="bd-res">${res}</span></div>`;
+  const gl=g=>g==='M'?'Хлопці':g==='F'?'Дівчата':'Змішаний';
+  document.getElementById('board-now').innerHTML=h
+    ?`<div class="bd-ev">Заплив №${h.globalNum} · ${h.dist}м ${escapeHtml(h.style)} · ${gl(h.gender)}</div>`+
+      Object.keys(h.lanes||{}).map(Number).sort((a,b)=>a-b).map(ln=>{const e=E(h.lanes[ln]);const a=e?A(e.athleteId):null;
+        return laneRow(ln,e,a,e?.result?escapeHtml(e.result):(e?.seedTime?`<span class="bd-seed">${escapeHtml(e.seedTime)}</span>`:''));}).join('')
+    :'<div class="bd-ev">Очікування активного запливу…</div>';
+  // Last finished heats (every occupied lane has a time), newest first
+  const done=heats.filter(x=>{const ids=Object.values(x.lanes||{});return ids.length&&ids.every(id=>parseTime(E(id)?.result)!==null);});
+  document.getElementById('board-last').innerHTML=done.slice(-3).reverse().map(x=>{
+    const rows=Object.values(x.lanes||{}).map(id=>E(id)).filter(Boolean).sort((p,q)=>parseTime(p.result)-parseTime(q.result));
+    return`<div class="bd-card"><div class="bd-ev">Заплив №${x.globalNum} · ${x.dist}м ${escapeHtml(x.style)}</div>${rows.map((e,i)=>laneRow(i+1,e,A(e.athleteId),escapeHtml(e.result))).join('')}</div>`;
+  }).join('')||'<div class="bd-ev" style="opacity:.6">Результатів ще немає</div>';
+  document.getElementById('board-clock').textContent=new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'});
 }
 async function _initJudgeMode(){
   const p=new URLSearchParams(location.search);
@@ -15817,6 +15920,7 @@ function _orgHandleStarterStart(heatIdx,startTs){
   _orgTimerHeatId=heat.id;_orgTimerStartTs=startTs;
   _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
   _orgReadyLanes[heatIdx]=new Set();
+  _recordActualStart(comp,heat.id,startTs);
   const rb=document.getElementById('rstart-'+heat.id);
   if(rb){rb.disabled=true;rb.style.background='var(--success)';rb.textContent='🟢 Іде...';}
   const jb=document.getElementById('jstart-'+heat.id);
@@ -15827,6 +15931,12 @@ async function rHeatReset(heatIdx,heatId){
   if(!confirm('Скинути таймер для всіх суддів цього запливу?'))return;
   await broadcastHeatReset(heatIdx,heatId);
 }
+// First real start of a heat is remembered (HH:MM) — the schedule then shows actual vs planned
+function _recordActualStart(comp,heatId,ts){
+  const h=(comp?.heats||[]).find(x=>x.id===heatId);if(!h||h.actualStart)return;
+  const d=new Date(ts);h.actualStart=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  if(_currentRole!=='trainer')saveDB();
+}
 async function broadcastHeatStart(heatIdx,heatId){
   const comp=activeComp();if(!comp)return;
   const ch=_ensureOrgCtrlChannel();if(!ch)return;
@@ -15835,6 +15945,7 @@ async function broadcastHeatStart(heatIdx,heatId){
   _orgTimerHeatId=heatId;_orgTimerStartTs=startTs;
   _orgTimerRaf=requestAnimationFrame(_tickOrgTimer);
   _orgReadyLanes[heatIdx]=new Set();
+  _recordActualStart(comp,heatId,startTs);
   // Reset readiness displays
   const rdy=document.getElementById('jrdy-'+heatIdx);if(rdy)rdy.innerHTML='';
   if(heatIdx===_orgCurrentHeatIdx){const pr=document.getElementById('hcp-ready');if(pr)pr.innerHTML='';}
@@ -16370,6 +16481,7 @@ async function _bootApp(user){
 
 (async()=>{
   // Judge mode — no auth needed, bypass everything
+  if(await _initBoardMode())return;
   if(await _initJudgeMode())return;
   // Starter judge mode — no auth needed, bypass everything
   if(await _initStarterMode())return;
