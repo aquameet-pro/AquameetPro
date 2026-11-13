@@ -13813,7 +13813,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261113-2321'; // stamped by deploy.ps1
+const APP_BUILD='20261113-2327'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
@@ -14021,12 +14021,42 @@ async function _jqFlush(){
   }
 }
 
+// ── Judge/starter links carry a per-competition secret token (`t`). The phone reads the competition
+// from the public_links snapshot by that token and tags every judge_inputs row with it, so anon RLS
+// can require a valid token instead of letting anyone who knows an organizer uuid read app_state
+// or push fake results. Links without `t` are legacy QR codes and fall back to the old path.
+async function _ensureJudgeToken(comp,ownerId,regen){
+  if(comp.judgeToken&&!regen)return comp.judgeToken;
+  const oldToken=comp.judgeToken||null;
+  const token=(crypto.randomUUID?crypto.randomUUID():
+    Math.random().toString(36).slice(2)+Date.now().toString(36)).replace(/-/g,'').slice(0,24);
+  const{error}=await _supa.from('public_links').upsert({
+    token,owner_id:ownerId,comp_id:comp.id,views:['judge'],snapshot:_buildPublicSnapshot(comp,db)
+  });
+  if(error){showToast('⚠️ Не вдалося створити токен суддів: '+error.message,true);return comp.judgeToken||'';}
+  if(oldToken)_supa.from('public_links').delete().eq('token',oldToken).eq('owner_id',ownerId).then(()=>{});
+  comp.judgeToken=token;
+  comp.publicLinked=true; // saveDB keeps the snapshot fresh from now on
+  saveDB();
+  return token;
+}
+// Returns the same {data:{data:<db-like>},error} shape the old app_state read produced
+async function _loadJudgeData(token,oid){
+  if(token){
+    const{data:link,error}=await _supa.from('public_links').select('snapshot').eq('token',token).maybeSingle();
+    if(error)return{data:null,error};
+    const s=link?.snapshot;
+    if(!s?.comp)return{data:null,error:{message:'Посилання судді недійсне або відкликане'}};
+    return{data:{data:{competitions:[s.comp],athletes:s.athletes||[]}},error:null};
+  }
+  return _supa.from('app_state').select('data').eq('id',oid).maybeSingle();
+}
 async function _initJudgeMode(){
   const p=new URLSearchParams(location.search);
   if(!p.has('judge'))return false;
   _judgeMode=true;
   _judgeP={oid:p.get('oid')||'',cid:p.get('cid')||'',l:p.get('l')||'1',r:p.get('r')||'0',
-    syn:p.get('syn')==='1',rdy:p.get('rdy')==='1',ts:p.get('ts')||'0'};
+    syn:p.get('syn')==='1',rdy:p.get('rdy')==='1',ts:p.get('ts')||'0',t:p.get('t')||''};
 
   // Show overlay immediately (before any async work)
   document.getElementById('auth-overlay').style.display='none';
@@ -14045,7 +14075,7 @@ async function _initJudgeMode(){
     _setJudgeStatus('⏳ Завантаження запливів…','');
     let _judgeLoadMsg='';
     try{
-      const{data,error}=await _supa.from('app_state').select('data').eq('id',_judgeP.oid).maybeSingle();
+      const{data,error}=await _loadJudgeData(_judgeP.t,_judgeP.oid);
       if(error){
         _judgeLoadMsg='❌ Supabase: '+error.message;
         console.error('Judge fetch error:',error);
@@ -14234,13 +14264,13 @@ async function _initStarterMode(){
   const p=new URLSearchParams(location.search);
   if(!p.has('starter'))return false;
   _starterMode=true;
-  _starterP={oid:p.get('oid')||'',cid:p.get('cid')||''};
+  _starterP={oid:p.get('oid')||'',cid:p.get('cid')||'',t:p.get('t')||''};
   document.getElementById('auth-overlay').style.display='none';
   document.getElementById('app').style.display='none';
   document.getElementById('starter-overlay').classList.add('active');
   _starterSetStatus('⏳ Завантаження змагання…');
   try{
-    const{data,error}=await _supa.from('app_state').select('data').eq('id',_starterP.oid).maybeSingle();
+    const{data,error}=await _loadJudgeData(_starterP.t,_starterP.oid);
     if(error||!data?.data){
       _starterSetStatus('❌ '+(error?.message||'Дані організатора не знайдено'));
     }else{
@@ -14683,7 +14713,7 @@ async function submitSpecial(status){
     else if(_swElapsedMs>0){cs=Math.floor(_swElapsedMs/10);}
     if(!cs){const mv=document.getElementById('j-manual')?.value.trim();if(mv)cs=parseTime(mv)||null;}
   }
-  const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
+  const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,...(_judgeP.t?{token:_judgeP.t}:{}),
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
     result_cs:cs,status,heat_type:_judgeP.r==='1'?'relay':'heat'};
   try{
@@ -14762,7 +14792,7 @@ async function submitJudgeResult(){
     const prevTotal=splitsSnap[splitsSnap.length-1].totalCs;
     splitsSnap.push({leg:RELAY_LEGS,legCs:cs-prevTotal,totalCs:cs});
   }
-  const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,
+  const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,...(_judgeP.t?{token:_judgeP.t}:{}),
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
     result_cs:cs,status:'pending',
     splits_json:splitsSnap.length?JSON.stringify(splitsSnap):null,
@@ -15264,13 +15294,14 @@ async function acceptJudgeStatus(rowId,eid,statusCode){
 }
 
 // ── Generate relay judge links — one QR per lane ──────────────
-function openRelayJudgeLinks(){
+async function openRelayJudgeLinks(regen){
   const comp=activeComp();if(!comp){showToast('Оберіть змагання',true);return;}
   const ownerId=_getTargetOwnerId();
   if(!ownerId){showToast('Немає даних організатора',true);return;}
   const base=location.href.split('?')[0].split('#')[0];
   const bodyEl=document.getElementById('modal-judge-links-body');
   if(!bodyEl)return;
+  await _ensureJudgeToken(comp,ownerId,!!regen);
 
   if(!comp.relayHeats||!comp.relayHeats.length){
     bodyEl.innerHTML='<p style="color:#5a9ab8;padding:1rem">Спочатку згенеруйте запливи естафет.</p>';
@@ -15298,7 +15329,7 @@ function openRelayJudgeLinks(){
 
     const syn=comp.syncTimerEnabled?'&syn=1':'';
     const rdy=comp.readinessEnabled?'&rdy=1':'';
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy+'&ts='+(comp.judgeQrTs||Date.now());
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+'&r=1'+syn+rdy+'&ts='+(comp.judgeQrTs||Date.now())+'&t='+encodeURIComponent(comp.judgeToken||'');
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
@@ -15332,13 +15363,14 @@ function openRelayJudgeLinks(){
 }
 
 // ── Generate judge links — one QR per lane for the whole day ──
-function openJudgeLinks(regen){
+async function openJudgeLinks(regen){
   const comp=activeComp();if(!comp){showToast('Оберіть змагання',true);return;}
   const ownerId=_getTargetOwnerId();
   if(!ownerId){showToast('Немає даних організатора',true);return;}
   const base=location.href.split('?')[0].split('#')[0];
   const bodyEl=document.getElementById('modal-judge-links-body');
   if(!bodyEl)return;
+  await _ensureJudgeToken(comp,ownerId,!!regen);
 
   if(!comp.heats||!comp.heats.length){
     bodyEl.innerHTML='<p style="color:#5a9ab8;padding:1rem">Спочатку згенеруйте запливи.</p>';
@@ -15350,7 +15382,7 @@ function openJudgeLinks(regen){
   comp.heats.forEach(h=>Object.keys(h.lanes||{}).forEach(l=>{const n=Number(l);if(n>maxLane)maxLane=n;}));
 
   // ── Starter QR (one per competition) ──────────────────────────
-  const starterUrl=base+'?starter=1&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id);
+  const starterUrl=base+'?starter=1&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&t='+encodeURIComponent(comp.judgeToken||'');
   const starterUrlEsc=starterUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   let html=`<div style="background:linear-gradient(135deg,rgba(230,57,70,.08),rgba(230,57,70,.03));border:1px solid rgba(230,57,70,.25);border-radius:14px;padding:.9rem;margin-bottom:1rem">
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem">
@@ -15383,7 +15415,7 @@ function openJudgeLinks(regen){
 
     const syn=comp.syncTimerEnabled?'&syn=1':'';
     const rdy=comp.readinessEnabled?'&rdy=1':'';
-    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy+'&ts='+(comp.judgeQrTs||Date.now());
+    const url=base+'?judge&oid='+encodeURIComponent(ownerId)+'&cid='+encodeURIComponent(comp.id)+'&l='+lane+syn+rdy+'&ts='+(comp.judgeQrTs||Date.now())+'&t='+encodeURIComponent(comp.judgeToken||'');
     const urlEsc=url.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     _qrUrls[lane]=url;
 
