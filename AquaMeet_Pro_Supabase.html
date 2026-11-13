@@ -3279,7 +3279,7 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 function refreshCompSelect(){
   const sel=document.getElementById('comp-select');
   sel.innerHTML='<option value="">— Оберіть змагання —</option>'+
-    db.competitions.map(c=>`<option value="${c.id}"${c.id===db.activeCompId?' selected':''}>${c.name}${c.dateFrom?' ('+c.dateFrom+')':''}</option>`).join('');
+    db.competitions.map(c=>`<option value="${c.id}"${c.id===db.activeCompId?' selected':''}>${escapeHtml(c.name)}${c.dateFrom?' ('+c.dateFrom+')':''}</option>`).join('');
   const comp=activeComp();
   const wrap=document.getElementById('comp-status-wrap');
   if(comp){
@@ -3538,7 +3538,7 @@ function _renderAssignHeatBody(athleteId,comp,unassigned){
   for(const entry of unassigned){
     const eGender=ath?.gender||'';
     const ag=ageGroup(ath,comp,entry.dist,entry.style);
-    const label=`${entry.dist}м ${entry.style} · ${GMAP[eGender]||eGender}${ag?' · '+ag.name:''}`;
+    const label=escapeHtml(`${entry.dist}м ${entry.style} · ${GMAP[eGender]||eGender}${ag?' · '+ag.name:''}`);
     const evHeats=_getEvHeats(comp,entry,eGender);
     html+=`<div class="ahm-event"><div class="ahm-ev-label">${label}</div>`;
     let hasAny=false;
@@ -3745,13 +3745,13 @@ function renderHome(){
     <div class="card-grid grid-2">
       <div class="card">
         <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem">
-          <div style="font-weight:800;color:var(--accent);flex:1">🏆 ${comp.name}</div>
+          <div style="font-weight:800;color:var(--accent);flex:1">🏆 ${escapeHtml(comp.name)}</div>
           ${isPriv?`<button class="btn-icon btn-xs" onclick="openEditComp(${comp.id})" title="Редагувати змагання">✏</button>`:''}
         </div>
         <table style="font-size:.85rem;width:100%">
           <tr><td style="color:var(--text-muted);padding:.3rem 0;width:110px">📅 Дати:</td><td>${comp.dateFrom||'?'}${comp.dateTo&&comp.dateTo!==comp.dateFrom?' — '+comp.dateTo:''}</td></tr>
-          <tr><td style="color:var(--text-muted);padding:.3rem 0">📍 Місце:</td><td>${comp.location||'—'}</td></tr>
-          <tr><td style="color:var(--text-muted);padding:.3rem 0">🏢 Орг-р:</td><td>${comp.organizer||'—'}</td></tr>
+          <tr><td style="color:var(--text-muted);padding:.3rem 0">📍 Місце:</td><td>${escapeHtml(comp.location||'—')}</td></tr>
+          <tr><td style="color:var(--text-muted);padding:.3rem 0">🏢 Орг-р:</td><td>${escapeHtml(comp.organizer||'—')}</td></tr>
           <tr><td style="color:var(--text-muted);padding:.3rem 0">📊 Статус:</td><td>
             ${(_currentRole==='organizer'||_currentRole==='secretary'||_currentRole==='admin')?`
             <select onchange="setCompStatus(this.value)" style="width:auto;font-size:.82rem;padding:.22rem .45rem">
@@ -4014,7 +4014,7 @@ function openAthleteChart(athleteId){
   }
   overlay.innerHTML=`<div style="background:var(--card);border-radius:12px;max-width:740px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3);padding:1.2rem">
     <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem">
-      <div style="font-size:1.05rem;font-weight:800;flex:1">📊 ${a.surname} ${a.name} — прогрес</div>
+      <div style="font-size:1.05rem;font-weight:800;flex:1">📊 ${escapeHtml(a.surname)} ${escapeHtml(a.name)} — прогрес</div>
       <button onclick="document.getElementById('athlete-chart-overlay').style.display='none'" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-muted)">✕</button>
     </div>
     <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:.7rem">${svg}</div>
@@ -4039,7 +4039,7 @@ function generateProtocolQR(){
     th{background:#e0f2fe;font-weight:700}.card{border:1px solid #ccc;border-radius:6px;padding:.7rem;margin-bottom:.7rem}</style>
     </head><body>
     <h2>${escapeHtml(comp.name)}</h2>
-    <p>${[comp.location,comp.dateFrom].filter(Boolean).join(' · ')}</p>
+    <p>${escapeHtml([comp.location,comp.dateFrom].filter(Boolean).join(' · '))}</p>
     ${protoEl.innerHTML}
     </body></html>`;
 
@@ -4479,7 +4479,7 @@ function updateAthFilters(){
   const comp=activeComp();
   const agSel=document.getElementById('af-ag');
   const cv=agSel.value;
-  agSel.innerHTML='<option value="">Всі (група)</option>'+(comp?.ageGroups||[]).map(g=>`<option value="${g.id}"${cv==g.id?' selected':''}>${g.name}</option>`).join('');
+  agSel.innerHTML='<option value="">Всі (група)</option>'+(comp?.ageGroups||[]).map(g=>`<option value="${g.id}"${cv==g.id?' selected':''}>${escapeHtml(g.name)}</option>`).join('');
   const distSel=document.getElementById('af-dist');
   const cd=distSel.value;
   const dists=[...new Set((comp?.entries||[]).map(e=>e.dist))].sort((a,b)=>a-b);
@@ -4562,8 +4562,8 @@ function openByTrainerModal(){
       });
       const rows=g.athletes.map(({a,entries})=>`
         <tr>
-          <td><strong>${a.surname}</strong> ${a.name}</td>
-          <td style="text-align:center">${a.birthYear||'—'}</td>
+          <td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}</td>
+          <td style="text-align:center">${escapeHtml(a.birthYear||'—')}</td>
           <td><span class="badge badge-${(a.gender||'m').toLowerCase()}">${a.gender==='F'?'Ж':'Ч'}</span></td>
           <td style="font-size:.78rem;color:var(--text-muted)">${entries.map(e=>`${e.dist}м ${e.style}`).join(', ')}</td>
           <td style="font-size:.75rem;color:var(--text-muted)">${entries.map(e=>e.seedTime||'—').join(', ')}</td>
@@ -4664,7 +4664,7 @@ async function openBulkAssignModal(){
           ${trainerOpts}
         </select>
       </div>
-      <div style="font-size:.76rem;color:var(--text-muted)">${athl.map(a=>`${a.surname} ${a.name} (${a.birthYear||'?'})`).join(' · ')}</div>
+      <div style="font-size:.76rem;color:var(--text-muted)">${escapeHtml(athl.map(a=>`${a.surname} ${a.name} (${a.birthYear||'?'})`).join(' · '))}</div>
     </div>`;
   }).join('');
   // Auto-select matched trainers
@@ -4910,10 +4910,10 @@ function renderAthletes(){
       const canAssign=comp&&comp.heats?.length&&['organizer','secretary','admin'].includes(_currentRole);
       const assignBtn=canAssign?`<button class="btn-secondary btn-xs" title="Додати до запливів" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)">📋 В заплив</button>`:'';
       const _gStr=a.gender==='M'?'Ч':'Ж';
-      return[`<tr><td>${n++}</td><td><strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${_gStr} · ${a.birthYear} · ${[a.city,a.club].filter(Boolean).join(' · ')}</span></td>
-      <td class="mob-hide"><span class="badge badge-${a.gender.toLowerCase()}">${_gStr}</span></td>
-      <td class="mob-hide">${a.birthYear}</td><td class="mob-hide">${a.city||'–'}</td><td class="mob-hide">${a.club||'–'}</td><td class="mob-hide">${a.coach||'–'}</td>
-      <td><span class="badge badge-rank">${a.currentRank||'–'}</span></td>
+      return[`<tr><td>${n++}</td><td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${testMark}<span class="mob-sub">${_gStr} · ${escapeHtml(a.birthYear)} · ${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span></td>
+      <td class="mob-hide"><span class="badge badge-${escapeHtml(a.gender).toLowerCase()}">${_gStr}</span></td>
+      <td class="mob-hide">${escapeHtml(a.birthYear)}</td><td class="mob-hide">${escapeHtml(a.city||'–')}</td><td class="mob-hide">${escapeHtml(a.club||'–')}</td><td class="mob-hide">${escapeHtml(a.coach||'–')}</td>
+      <td><span class="badge badge-rank">${escapeHtml(a.currentRank||'–')}</span></td>
       <td colspan="4" style="color:var(--text-muted);font-style:italic">немає заявок</td>
       <td><button class="btn-icon btn-xs" onclick="openEditAthlete(${a.id})">✏</button>${assignBtn}${['organizer','secretary','admin'].includes(_currentRole)&&!a._trainerOwned&&!a._assignedToTrainer&&!_orgTransferredLocalIds.has(a.id)?`<button class="btn-icon btn-xs" title="Передати тренеру" onclick="openAssignTrainer(${a.id})" style="color:var(--accent2)">📤</button>`:''}<button class="btn-icon btn-xs" style="color:var(--danger)" onclick="delAthlete(${a.id})">✕</button></td></tr>`];
     }
@@ -4921,11 +4921,11 @@ function renderAthletes(){
     return ent.map((e,idx)=>{
       const day=(comp?.days||[]).find(d=>d.id===e.dayId);
       return`<tr><td>${idx===0?n++:''}</td>
-        <td>${idx===0?`<strong>${a.surname}</strong> ${a.name}${testMark}<span class="mob-sub">${_gStrE} · ${a.birthYear} · ${[a.city,a.club].filter(Boolean).join(' · ')}</span>`:''}</td>
-        <td class="mob-hide">${idx===0?`<span class="badge badge-${a.gender.toLowerCase()}">${_gStrE}</span>`:''}</td>
-        <td class="mob-hide">${idx===0?a.birthYear:''}</td><td class="mob-hide">${idx===0?a.city||'–':''}</td><td class="mob-hide">${idx===0?a.club||'–':''}</td>
-        <td class="mob-hide">${idx===0?a.coach||'–':''}</td>
-        <td>${idx===0?`<span class="badge badge-rank">${a.currentRank||'–'}</span>`:''}</td>
+        <td>${idx===0?`<strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${testMark}<span class="mob-sub">${_gStrE} · ${escapeHtml(a.birthYear)} · ${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span>`:''}</td>
+        <td class="mob-hide">${idx===0?`<span class="badge badge-${escapeHtml(a.gender).toLowerCase()}">${_gStrE}</span>`:''}</td>
+        <td class="mob-hide">${idx===0?escapeHtml(a.birthYear):''}</td><td class="mob-hide">${idx===0?escapeHtml(a.city||'–'):''}</td><td class="mob-hide">${idx===0?escapeHtml(a.club||'–'):''}</td>
+        <td class="mob-hide">${idx===0?escapeHtml(a.coach||'–'):''}</td>
+        <td>${idx===0?`<span class="badge badge-rank">${escapeHtml(a.currentRank||'–')}</span>`:''}</td>
         <td><span class="badge badge-dist">${e.dist}м</span></td>
         <td><span class="badge badge-style">${e.style}</span></td>
         <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${day?day.label||day.date:'–'}</td>
@@ -4986,7 +4986,7 @@ function paAcInput(val){
     return (a.surname||'').toLowerCase().startsWith(q)||full.startsWith(q);
   }).slice(0,10);
   if(!list.length){drop.style.display='none';return;}
-  drop.innerHTML=list.map(a=>`<div data-tid="${a.id}" style="padding:.45rem .75rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid var(--border)" onmousedown="paAcSelect('${a.id}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><b>${escapeHtml(a.surname||'')}</b> ${escapeHtml(a.name||'')} <span style="color:var(--text-muted);font-size:.75rem">${a.birthYear||''} ${a.gender==='F'?'Ж':'Ч'} ${a.currentRank||''}</span></div>`).join('');
+  drop.innerHTML=list.map(a=>`<div data-tid="${a.id}" style="padding:.45rem .75rem;cursor:pointer;font-size:.85rem;border-bottom:1px solid var(--border)" onmousedown="paAcSelect('${a.id}')" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''"><b>${escapeHtml(a.surname||'')}</b> ${escapeHtml(a.name||'')} <span style="color:var(--text-muted);font-size:.75rem">${escapeHtml(a.birthYear||'')} ${a.gender==='F'?'Ж':'Ч'} ${escapeHtml(a.currentRank||'')}</span></div>`).join('');
   drop.style.display='block';
 }
 function paAcHide(){
@@ -5543,7 +5543,7 @@ async function _loadOrgTrainerAthletes(){
         const preservedId=localId||db.nextId.ath++;
         db.nextId.ath=Math.max(db.nextId.ath,preservedId+1);
         const athId=!db.athletes.find(a=>a.id===preservedId)?preservedId:db.nextId.ath++;
-        const ath={id:athId,...athData,isTest:false,_trainerOwned:true,
+        const ath={...athData,id:athId,isTest:false,_trainerOwned:true,
           _supaId:row.id,_trainerId:row.trainer_id,
           _compId:matchedComp?matchedComp.id:null,_orgId:row.organizer_id||orgId};
         db.athletes.push(ath);
@@ -5552,7 +5552,7 @@ async function _loadOrgTrainerAthletes(){
           entriesData.forEach(e=>{
             const exists=(matchedComp.entries||[]).find(x=>x.athleteId===ath.id&&x.dist===e.dist&&x.style===e.style);
             if(!exists)
-              matchedComp.entries.push({id:db.nextId.entry++,athleteId:ath.id,...e,result:null,_trainerSupaId:row.id});
+              matchedComp.entries.push({...e,id:db.nextId.entry++,athleteId:ath.id,result:null,_trainerSupaId:row.id});
           });
         }
         if(!row.local_id){
@@ -5609,14 +5609,14 @@ async function _loadOrgTrainerAthletes(){
         _supa.from('trainer_athletes').update({local_id:athId}).eq('id',row.id)
           .then(({error:ue})=>{if(ue)console.warn('[AquaMeet] local_id sync:',ue.message);});
       }
-      const ath={id:athId,...athData,isTest:false,_trainerOwned:true,
+      const ath={...athData,id:athId,isTest:false,_trainerOwned:true,
         _supaId:row.id,_trainerId:row.trainer_id,
         _compId:matchedComp?matchedComp.id:null,_orgId:row.organizer_id||orgId};
       db.athletes.push(ath);
       if(matchedComp&&entriesData.length){
         if(!matchedComp.entries)matchedComp.entries=[];
         entriesData.forEach(e=>{
-          matchedComp.entries.push({id:db.nextId.entry++,athleteId:ath.id,...e,result:null,_trainerSupaId:row.id});
+          matchedComp.entries.push({...e,id:db.nextId.entry++,athleteId:ath.id,result:null,_trainerSupaId:row.id});
         });
       }
     }
@@ -5718,7 +5718,7 @@ function syncEventFilters(){
       const ag=getRelayAg(comp,rh.agId);
       const gLabel=RL_GENDER[rh.gender]||rh.gender;
       const label=`🤝 ${rt?.label||rh.type} — ${gLabel}${ag?' · '+ag.name:''}`;
-      relayEventOpts.push(`<option value="relay:${rh.key}">${label}</option>`);
+      relayEventOpts.push(`<option value="relay:${rh.key}">${escapeHtml(label)}</option>`);
     }
   }
 
@@ -6080,8 +6080,8 @@ function renderHeats(){
       const isSwapTgt=swapActive&&_swapState.lane!==ln;
       return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}${isSwapSrc?' swap-source':isSwapTgt?' swap-target':''}" id="lc-${heat.id}-${ln}">
         <div class="lane-num">Д.${ln}</div>
-        <div class="lane-name">${a?a.surname+' '+a.name:'?'}</div>
-        <div class="lane-club">${a?[a.birthYear,a.coach,a.city&&a.club?a.city+' · '+a.club:a.city||a.club||null].filter(Boolean).join(' · '):''}</div>
+        <div class="lane-name">${a?escapeHtml(a.surname+' '+a.name):'?'}</div>
+        <div class="lane-club">${a?escapeHtml([a.birthYear,a.coach,a.city&&a.club?a.city+' · '+a.club:a.city||a.club||null].filter(Boolean).join(' · ')):''}</div>
         <div class="lane-time">${entry?.seedTime||'–'}</div>
         ${entry?.result?(parseTime(entry.result)!==null?`<div class="lane-result">✓ ${entry.result}</div>`:`<div class="lane-result" style="color:${entry.result==='Д/К'?'var(--danger)':'var(--text-muted)'}">${entry.result}</div>`):''}
         <button class="btn-icon btn-xs swap-btn" title="Поміняти доріжку" onclick="startSwap(${heat.id},${ln})">⇄</button>
@@ -6095,11 +6095,11 @@ function renderHeats(){
       const a=entry?db.athletes.find(x=>x.id===entry.athleteId):null;
       if(!a||!entry)return'';
       const exh=entry.exhibition?' ПК':'';
-      const club=[a.coach,a.city,a.club].filter(Boolean).join(' · ')||'–';
+      const club=escapeHtml([a.coach,a.city,a.club].filter(Boolean).join(' · '))||'–';
       const seed=entry.seedTime||'–';
       return`<tr>
         <td rowspan="2" style="text-align:center;font-weight:700;vertical-align:middle;border:1px solid #888;border-right:2px solid #444;border-bottom:none;padding:1px 3px;font-size:8pt;width:5mm">${ln}</td>
-        <td style="border:1px solid #888;border-bottom:none;padding:0 4px 0;font-size:8pt;white-space:nowrap;line-height:1.3"><strong>${a.surname}</strong> ${a.name}${a.birthYear?` (${a.birthYear})`:``}${exh}</td>
+        <td style="border:1px solid #888;border-bottom:none;padding:0 4px 0;font-size:8pt;white-space:nowrap;line-height:1.3"><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${a.birthYear?` (${escapeHtml(a.birthYear)})`:``}${exh}</td>
         <td style="border:1px solid #888;border-bottom:none;border-left:none;padding:0 4px 0;font-size:8pt;text-align:right;white-space:nowrap;color:#444;width:16mm">${seed}</td>
         <td rowspan="2" style="border:1px solid #888;border-left:2px solid #444;padding:1px 3px;text-align:center;vertical-align:middle;width:22mm">
           <div style="font-size:5.5pt;color:#999;text-transform:uppercase;letter-spacing:.3px;margin-bottom:1mm">Результат</div>
@@ -6230,9 +6230,9 @@ function renderResults(){
       }
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
-        <td style="white-space:nowrap"><strong>${a.surname}</strong> ${a.name} ${exhMark}<span class="mob-sub">${[a.city,a.club].filter(Boolean).join(' · ')}</span></td>
-        <td style="white-space:nowrap">${a.birthYear}</td>
-        <td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${a.city||'–'}</td><td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${a.club||'–'}</td><td class="mob-hide" style="white-space:nowrap;font-size:.78rem;color:var(--text-muted)">${a.coach||'–'}</td>
+        <td style="white-space:nowrap"><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)} ${exhMark}<span class="mob-sub">${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span></td>
+        <td style="white-space:nowrap">${escapeHtml(a.birthYear)}</td>
+        <td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${escapeHtml(a.city||'–')}</td><td class="mob-hide" style="white-space:nowrap;font-size:.8rem">${escapeHtml(a.club||'–')}</td><td class="mob-hide" style="white-space:nowrap;font-size:.78rem;color:var(--text-muted)">${escapeHtml(a.coach||'–')}</td>
         <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted);white-space:nowrap">${entry.seedTime||'–'}</td>
         <td><div style="white-space:nowrap;display:flex;align-items:center;gap:.25rem;flex-wrap:nowrap">
           ${isPriv
@@ -6467,8 +6467,8 @@ function renderProtocol(){
     });
     const fakeComp={...comp,relays:filtered};
     const header=`<div style="text-align:center;margin-bottom:1.25rem;padding:.9rem;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
-      <div style="font-size:1.2rem;font-weight:800">${comp.name}</div>
-      <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${[comp.location,comp.dateFrom].filter(Boolean).join(' · ')}</div>
+      <div style="font-size:1.2rem;font-weight:800">${escapeHtml(comp.name)}</div>
+      <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${escapeHtml([comp.location,comp.dateFrom].filter(Boolean).join(' · '))}</div>
     </div>`;
     el.innerHTML=header+buildRelayProtocolHtml(fakeComp);
     return;
@@ -6559,11 +6559,11 @@ function renderProtocol(){
       const exhMark=isExh?'<span class="exh-badge" title="Поза конкурсом">ПК</span>':'';
       return`<tr${isExh?' style="background:rgba(244,162,49,.06)"':''}>
         <td style="text-align:center;white-space:nowrap">${placeCell}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${item.a.birthYear} · ${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
-        <td class="mob-hide" style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
-        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
-        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
-        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${escapeHtml(item.a.surname)}</strong> ${escapeHtml(item.a.name)} ${exhMark}<span class="mob-sub">${escapeHtml(item.a.birthYear)} · ${escapeHtml([item.a.city,item.a.club].filter(Boolean).join(' · '))}</span></td>
+        <td class="mob-hide" style="text-align:center;white-space:nowrap">${escapeHtml(item.a.birthYear)}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.a.city||'–')}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.a.club||'–')}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${escapeHtml(item.a.coach||'–')}</td>
         <td style="text-align:center;white-space:nowrap">${fmtResultDisplay(item.entry.result)}</td>
         <td style="text-align:center;white-space:nowrap">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
       </tr>`;
@@ -6572,7 +6572,7 @@ function renderProtocol(){
       <div class="proto-header">
         <span style="font-weight:800;font-size:.95rem">${ev.dist}м · ${ev.style.toUpperCase()}</span>
         <span class="badge badge-${ev.gender.toLowerCase()}" style="margin-left:.25rem">${GMAP[ev.gender]||ev.gender}</span>
-        ${ag?`<span class="badge badge-heat">${ag.name}</span>`:''}
+        ${ag?`<span class="badge badge-heat">${escapeHtml(ag.name)}</span>`:''}
         ${buildNormsInline(ev.style,ev.dist,ev.gender,comp)}
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted);white-space:nowrap">${enriched.length} учасників</span>
       </div>
@@ -6592,10 +6592,10 @@ function renderProtocol(){
   const relayProtoHtml=eventFilt?'':buildRelayProtocolHtml(comp);
 
   el.innerHTML=`<div style="text-align:center;margin-bottom:1.25rem;padding:.9rem;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
-    <div style="font-size:1.2rem;font-weight:800">${comp.name}</div>
+    <div style="font-size:1.2rem;font-weight:800">${escapeHtml(comp.name)}</div>
     <div style="font-size:.95rem;color:var(--accent);margin-top:.25rem;font-weight:700">${headerScope}${dayMeta?` · ${dayMeta}`:''}</div>
-    <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${[comp.location,comp.dateFrom].filter(Boolean).join(' · ')}</div>
-    <div style="font-size:.8rem;color:var(--text-muted)">${comp.organizer||''}</div>
+    <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${escapeHtml([comp.location,comp.dateFrom].filter(Boolean).join(' · '))}</div>
+    <div style="font-size:.8rem;color:var(--text-muted)">${escapeHtml(comp.organizer||'')}</div>
   </div>`+sectionsHtml+relayProtoHtml;
 }
 
@@ -6622,8 +6622,8 @@ function renderPreProtocol(){
     });
     const fakeComp={...comp,relays:filtered};
     const header=`<div style="text-align:center;margin-bottom:1.25rem;padding:.9rem;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
-      <div style="font-size:1.2rem;font-weight:800">${comp.name}</div>
-      <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${[comp.location,comp.dateFrom].filter(Boolean).join(' · ')}</div>
+      <div style="font-size:1.2rem;font-weight:800">${escapeHtml(comp.name)}</div>
+      <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${escapeHtml([comp.location,comp.dateFrom].filter(Boolean).join(' · '))}</div>
     </div>`;
     el.innerHTML=header+buildRelayProtocolHtml(fakeComp);
     return;
@@ -6689,18 +6689,18 @@ function renderPreProtocol(){
       const numCell=isExh?'<span class="exh-badge">ПК</span>':rowNum;
       const exhMark=isExh?'<span class="exh-badge" title="Поза конкурсом">ПК</span>':'';
       const rankBadge=item.a.currentRank
-        ?`<span class="ach-badge">${item.a.currentRank}</span>`
+        ?`<span class="ach-badge">${escapeHtml(item.a.currentRank)}</span>`
         :'<span style="color:var(--text-muted)">–</span>';
       const seedDisp=item.seedCs!==null
         ?`<span style="font-family:monospace;font-weight:700;color:var(--accent)">${fmtTime(item.seedCs)}</span>`
         :'<span style="color:var(--text-muted)">–</span>';
       return`<tr${isExh?' style="background:rgba(244,162,49,.06)"':''}>
         <td style="text-align:center;white-space:nowrap">${numCell}</td>
-        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${item.a.surname}</strong> ${item.a.name} ${exhMark}<span class="mob-sub">${item.a.birthYear} · ${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
-        <td class="mob-hide" style="text-align:center;white-space:nowrap">${item.a.birthYear}</td>
-        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.city||'–'}</td>
-        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.a.club||'–'}</td>
-        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${item.a.coach||'–'}</td>
+        <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${escapeHtml(item.a.surname)}</strong> ${escapeHtml(item.a.name)} ${exhMark}<span class="mob-sub">${escapeHtml(item.a.birthYear)} · ${escapeHtml([item.a.city,item.a.club].filter(Boolean).join(' · '))}</span></td>
+        <td class="mob-hide" style="text-align:center;white-space:nowrap">${escapeHtml(item.a.birthYear)}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.a.city||'–')}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(item.a.club||'–')}</td>
+        <td class="mob-hide" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);font-size:.82rem">${escapeHtml(item.a.coach||'–')}</td>
         <td style="text-align:center;white-space:nowrap">${seedDisp}</td>
         <td style="text-align:center;white-space:nowrap">${rankBadge}</td>
       </tr>`;
@@ -6709,7 +6709,7 @@ function renderPreProtocol(){
       <div class="proto-header">
         <span style="font-weight:800;font-size:.95rem">${ev.dist}м · ${ev.style.toUpperCase()}</span>
         <span class="badge badge-${ev.gender.toLowerCase()}" style="margin-left:.25rem">${GMAP[ev.gender]||ev.gender}</span>
-        ${ag?`<span class="badge badge-heat">${ag.name}</span>`:''}
+        ${ag?`<span class="badge badge-heat">${escapeHtml(ag.name)}</span>`:''}
         ${buildNormsInline(ev.style,ev.dist,ev.gender,comp)}
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted);white-space:nowrap">${enriched.length} учасників</span>
       </div>
@@ -6727,10 +6727,10 @@ function renderPreProtocol(){
   const relayProtoHtml=eventFilt?'':buildRelayProtocolHtml(comp);
 
   el.innerHTML=`<div style="text-align:center;margin-bottom:1.25rem;padding:.9rem;background:var(--card);border:1px solid var(--border);border-radius:var(--radius)">
-    <div style="font-size:1.2rem;font-weight:800">${comp.name}</div>
+    <div style="font-size:1.2rem;font-weight:800">${escapeHtml(comp.name)}</div>
     <div style="font-size:.95rem;color:var(--accent);margin-top:.25rem;font-weight:700">${headerScope}${dayMeta?` · ${dayMeta}`:''}</div>
-    <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${[comp.location,comp.dateFrom].filter(Boolean).join(' · ')}</div>
-    <div style="font-size:.8rem;color:var(--text-muted)">${comp.organizer||''}</div>
+    <div style="font-size:.85rem;color:var(--text-muted);margin-top:.3rem">${escapeHtml([comp.location,comp.dateFrom].filter(Boolean).join(' · '))}</div>
+    <div style="font-size:.8rem;color:var(--text-muted)">${escapeHtml(comp.organizer||'')}</div>
   </div>`+sectionsHtml+relayProtoHtml;
 }
 
@@ -6808,11 +6808,11 @@ function renderStandings(){
       const ln=heat?Object.entries(heat.lanes).find(([l,id])=>id===item.entry.id)?.[0]:'–';
       return`<tr class="rank-${place}">
         <td style="font-size:1.15rem;text-align:center">${medal}</td>
-        <td style="overflow-wrap:anywhere"><strong>${item.a.surname}</strong> ${item.a.name}<span class="mob-sub">${[item.a.city,item.a.club].filter(Boolean).join(' · ')}</span></td>
-        <td style="text-align:center">${item.a.birthYear}</td>
-        <td class="mob-hide" style="overflow-wrap:anywhere">${item.a.city||'–'}</td>
-        <td class="mob-hide" style="overflow-wrap:anywhere">${item.a.club||'–'}</td>
-        <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${item.a.coach||'–'}</td>
+        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(item.a.surname)}</strong> ${escapeHtml(item.a.name)}<span class="mob-sub">${escapeHtml([item.a.city,item.a.club].filter(Boolean).join(' · '))}</span></td>
+        <td style="text-align:center">${escapeHtml(item.a.birthYear)}</td>
+        <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(item.a.city||'–')}</td>
+        <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(item.a.club||'–')}</td>
+        <td class="mob-hide" style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(item.a.coach||'–')}</td>
         <td style="font-family:monospace;font-weight:700;color:var(--success)">${item.entry.result}</td>
         <td style="text-align:center">${newRk?`<span class="ach-badge">${newRk}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
       </tr>`;
@@ -6821,7 +6821,7 @@ function renderStandings(){
       <div class="proto-header">
         <span style="font-weight:800;font-size:.95rem">${ev.dist}м · ${ev.style.toUpperCase()}</span>
         <span class="badge badge-${ev.gender.toLowerCase()}" style="margin-left:.25rem">${GMAP[ev.gender]}</span>
-        ${ag?`<span class="badge badge-heat">${ag.name}</span>`:''}
+        ${ag?`<span class="badge badge-heat">${escapeHtml(ag.name)}</span>`:''}
         <span style="margin-left:auto;font-size:.78rem;color:var(--text-muted)">${ev.items.length} учасників · ${sorted.length} призер${sorted.length===1?'':'ів'}</span>
       </div>
       <div class="tbl-wrap scrollable" style="border-radius:0 0 8px 8px"><table style="table-layout:fixed;min-width:740px">
@@ -7024,8 +7024,8 @@ function renderArchive(){
       return`<div class="archive-comp-card${selected?' archive-comp-selected':''}" onclick="setArchiveFilter(${c.id})">
         <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
           <div style="flex:1;min-width:180px">
-            <div style="font-weight:700;font-size:.88rem">${c.name}</div>
-            <div style="font-size:.75rem;color:var(--text-muted)">${c.dateFrom||'?'} · ${c.location||'–'}</div>
+            <div style="font-weight:700;font-size:.88rem">${escapeHtml(c.name)}</div>
+            <div style="font-size:.75rem;color:var(--text-muted)">${c.dateFrom||'?'} · ${escapeHtml(c.location||'–')}</div>
           </div>
           <span class="badge badge-rank">${total} рез.</span>
           <button class="btn-secondary btn-xs" onclick="event.stopPropagation();db.activeCompId=${c.id};saveDB();refreshCompSelect();switchTab('home')">Відкрити</button>
@@ -7055,8 +7055,8 @@ function renderArchive(){
         <thead><tr><th>#</th><th>Клуб</th><th class="mob-hide">Місто</th><th>🥇</th><th>🥈</th><th>🥉</th><th>∑</th></tr></thead>
         <tbody>${clubRank.map((c,i)=>`<tr>
           <td style="text-align:center;font-weight:700">${i+1}</td>
-          <td><strong>${c.club}</strong><span class="mob-sub">${c.city||'–'}</span></td>
-          <td class="mob-hide" style="font-size:.85rem">${c.city||'–'}</td>
+          <td><strong>${escapeHtml(c.club)}</strong><span class="mob-sub">${escapeHtml(c.city||'–')}</span></td>
+          <td class="mob-hide" style="font-size:.85rem">${escapeHtml(c.city||'–')}</td>
           <td style="color:var(--gold);font-weight:800;text-align:center">${c.g}</td>
           <td style="color:var(--silver);font-weight:700;text-align:center">${c.s}</td>
           <td style="color:var(--bronze);font-weight:700;text-align:center">${c.b}</td>
@@ -7089,12 +7089,12 @@ function renderArchive(){
           const cityClub=[x.a.city,x.a.club].filter(Boolean).join(' · ');
           return`<tr>
           <td style="text-align:center">${i+1}</td>
-          <td><strong>${x.a.surname}</strong> ${x.a.name}<span class="mob-sub">${escapeHtml(cityClub)}</span></td>
-          <td class="mob-hide">${x.a.birthYear}</td>
-          <td class="mob-hide" style="text-align:center"><span class="badge badge-${x.a.gender.toLowerCase()}">${x.a.gender==='M'?'Ч':'Ж'}</span></td>
-          <td class="mob-hide">${x.a.city||'–'}</td>
-          <td class="mob-hide">${x.a.club||'–'}</td>
-          <td class="mob-hide" style="font-size:.8rem">${x.a.coach||'–'}</td>
+          <td><strong>${escapeHtml(x.a.surname)}</strong> ${escapeHtml(x.a.name)}<span class="mob-sub">${escapeHtml(cityClub)}</span></td>
+          <td class="mob-hide">${escapeHtml(x.a.birthYear)}</td>
+          <td class="mob-hide" style="text-align:center"><span class="badge badge-${escapeHtml(x.a.gender).toLowerCase()}">${x.a.gender==='M'?'Ч':'Ж'}</span></td>
+          <td class="mob-hide">${escapeHtml(x.a.city||'–')}</td>
+          <td class="mob-hide">${escapeHtml(x.a.club||'–')}</td>
+          <td class="mob-hide" style="font-size:.8rem">${escapeHtml(x.a.coach||'–')}</td>
           <td style="font-size:.82rem">${x.dist}м ${x.style}</td>
           <td class="mob-hide" style="font-family:monospace;color:var(--text-muted);font-size:.82rem">${x.seedTime||'–'}</td>
           <td style="font-family:monospace;color:var(--success);font-weight:700">${x.result}</td>
@@ -7173,7 +7173,7 @@ function openTrainerAthleteEdit(id){
       <label style="grid-column:1/-1">Прізвище *<input id="ta-surname" value="${escapeHtml(v.surname)}" placeholder="Іванов" autocomplete="off"></label>
       <label>Ім'я *<input id="ta-name" value="${escapeHtml(v.name)}" placeholder="Іван" autocomplete="off"></label>
       <label>Стать<select id="ta-gender"><option value="M"${v.gender==='M'?' selected':''}>Чоловіча</option><option value="F"${v.gender==='F'?' selected':''}>Жіноча</option></select></label>
-      <label>Рік народження<input id="ta-year" type="number" min="1980" max="2020" value="${v.birthYear||''}"></label>
+      <label>Рік народження<input id="ta-year" type="number" min="1980" max="2020" value="${escapeHtml(v.birthYear||'')}"></label>
       <label>Місто<input id="ta-city" value="${escapeHtml(v.city||'')}"></label>
       <label style="grid-column:1/-1">Клуб<input id="ta-club" value="${escapeHtml(v.club||'')}"></label>
       <label style="grid-column:1/-1">Тренер<input id="ta-coach" value="${escapeHtml(v.coach||'')}"></label>
@@ -7387,7 +7387,7 @@ function renderTrainerAthletes(){
     return`<tr style="cursor:pointer" onclick="openTrainerAthleteStats('${a.id}')">
       <td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${hint}<span class="mob-sub">${escapeHtml(cityClub)}</span></td>
       <td class="mob-hide">${gBadge}</td>
-      <td class="mob-hide" style="text-align:center">${a.birthYear||'–'}</td>
+      <td class="mob-hide" style="text-align:center">${escapeHtml(a.birthYear||'–')}</td>
       <td class="mob-hide" style="font-size:.82rem">${escapeHtml(a.city||'–')}</td>
       <td class="mob-hide" style="font-size:.82rem">${escapeHtml(a.club||'–')}</td>
       <td class="mob-hide" style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(a.coach||'–')}</td>
@@ -7474,7 +7474,7 @@ function buildAthleteDirCard(a){
     const diff=seedCs!==null&&resCs!==null?resCs-seedCs:null;
     const rk=entry.achievedRank!==undefined?entry.achievedRank:(resCs?checkRank(entry.style,entry.dist,a.gender,resCs):null);
     return`<tr>
-      <td style="font-size:.82rem">${comp.name}</td>
+      <td style="font-size:.82rem">${escapeHtml(comp.name)}</td>
       <td style="font-size:.78rem;color:var(--text-muted)">${comp.dateFrom||'–'}</td>
       <td><span class="badge badge-dist">${entry.dist}м</span> <span style="font-size:.8rem">${entry.style}</span></td>
       <td style="font-family:monospace;color:var(--text-muted);font-size:.82rem">${entry.seedTime||'–'}</td>
@@ -7498,18 +7498,18 @@ function buildAthleteDirCard(a){
   return`<div class="adir-card">
     <div class="adir-card-head">
       <div style="flex:1;min-width:240px">
-        <div class="adir-name">${a.surname} ${a.name}${testMark}</div>
+        <div class="adir-name">${escapeHtml(a.surname)} ${escapeHtml(a.name)}${testMark}</div>
         <div class="adir-meta">
-          <span class="badge badge-${a.gender.toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span>
-          <span>${a.birthYear} р.н.</span>
-          ${a.currentRank?`<span class="badge badge-rank">Поточний: ${a.currentRank}</span>`:''}
+          <span class="badge badge-${escapeHtml(a.gender).toLowerCase()}">${a.gender==='M'?'Ч':'Ж'}</span>
+          <span>${escapeHtml(a.birthYear)} р.н.</span>
+          ${a.currentRank?`<span class="badge badge-rank">Поточний: ${escapeHtml(a.currentRank)}</span>`:''}
           ${bestRank?`<span class="ach-badge">Найкращий: ${bestRank}</span>`:''}
         </div>
       </div>
       <div class="adir-info">
-        <div><strong>Клуб:</strong> ${a.club||'–'}</div>
-        <div><strong>Тренер:</strong> ${a.coach||'–'}</div>
-        <div><strong>Місто:</strong> ${a.city||'–'}</div>
+        <div><strong>Клуб:</strong> ${escapeHtml(a.club||'–')}</div>
+        <div><strong>Тренер:</strong> ${escapeHtml(a.coach||'–')}</div>
+        <div><strong>Місто:</strong> ${escapeHtml(a.city||'–')}</div>
         <div style="margin-top:.25rem;color:var(--text-muted);font-size:.75rem">${compsCount} змагань · ${resultsCount} результатів</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:.35rem;align-items:flex-end">
@@ -7531,7 +7531,7 @@ function renderPrint(){
   document.getElementById('pr-dist').innerHTML=dists.map(d=>`<div class="chip sel" data-t="dist" data-v="${d}" onclick="this.classList.toggle('sel');updatePrintPreview()">${d}м</div>`).join('');
   document.getElementById('pr-style').innerHTML=styles.map(s=>`<div class="chip sel" data-t="style" data-v="${s}" onclick="this.classList.toggle('sel');updatePrintPreview()">${s}</div>`).join('');
   document.getElementById('pr-gen').innerHTML=['M','F'].map(g=>`<div class="chip sel" data-t="gen" data-v="${g}" onclick="this.classList.toggle('sel');updatePrintPreview()">${GMAP[g]}</div>`).join('');
-  document.getElementById('pr-ag').innerHTML=ags.map(ag=>`<div class="chip sel" data-t="ag" data-v="${ag.id}" onclick="this.classList.toggle('sel');updatePrintPreview()">${ag.name}</div>`).join('');
+  document.getElementById('pr-ag').innerHTML=ags.map(ag=>`<div class="chip sel" data-t="ag" data-v="${ag.id}" onclick="this.classList.toggle('sel');updatePrintPreview()">${escapeHtml(ag.name)}</div>`).join('');
   const daySel=document.getElementById('pr-day');
   daySel.innerHTML='<option value="">Всі дні</option>'+(comp?.days||[]).map(d=>`<option value="${d.id}">${d.label||d.date}</option>`).join('');
   updatePrintPreview();
@@ -7577,13 +7577,13 @@ function buildA6Card(card){
   // Деталі в один рядок: рік · клуб · тренер
   const det=[a.birthYear,a.club,a.coach].filter(Boolean).join(' · ');
   return`<div class="a6-card">
-    <div class="ch"><div class="cn">${comp.name}${dt?' · '+dt:''}</div></div>
+    <div class="ch"><div class="cn">${escapeHtml(comp.name)}${dt?' · '+dt:''}</div></div>
     <div class="hi">
       <div class="hb"><div class="hl">Заплив №</div><div class="hv">${heat.globalNum}</div></div>
       <div class="hb"><div class="hl">Доріжка</div><div class="hv">${ln}</div></div>
     </div>
-    <div class="ev"><div class="em">${heat.dist}м ${heat.style.toUpperCase()}</div><div class="es">${GMAP[heat.gender]||heat.gender}${ag?' · '+ag.name:''}</div></div>
-    <div class="pib">${a.surname} ${a.name}</div>
+    <div class="ev"><div class="em">${heat.dist}м ${heat.style.toUpperCase()}</div><div class="es">${GMAP[heat.gender]||heat.gender}${ag?' · '+escapeHtml(ag.name):''}</div></div>
+    <div class="pib">${escapeHtml(a.surname)} ${escapeHtml(a.name)}</div>
     <div class="det">${det}</div>
     <div class="ct">
       <div class="tb"><div class="tl">Заявлений час</div><div class="tv">${entry.seedTime||''}</div></div>
@@ -7735,7 +7735,7 @@ function printRelays(mode='heats'){
             const leg=(t.legs||[])[i];
             const a=leg?.athleteId?db.athletes.find(x=>x.id===leg.athleteId):null;
             const name=a?`${a.surname} ${a.name[0]}.`:leg?.guestName||'—';
-            const yr=a?`(${a.birthYear})`:'';
+            const yr=a?`(${escapeHtml(a.birthYear)})`:'';
             const lbl=rtype.style==='вільний'?`${i+1} ет.`:`${i+1}. ${style.slice(0,5)}`;
             return`<td><span class="leg-style">${lbl}</span><br>${escapeHtml(name)} ${yr}</td>`;
           }).join('');
@@ -7791,7 +7791,7 @@ function printRelays(mode='heats'){
           const leg=(t.legs||[])[i];
           const a=leg?.athleteId?db.athletes.find(x=>x.id===leg.athleteId):null;
           const name=a?`${a.surname} ${a.name[0]}.`:leg?.guestName||'—';
-          const yr=a?`(${a.birthYear})`:'';
+          const yr=a?`(${escapeHtml(a.birthYear)})`:'';
           const sp=t.splits?.[i];
           const splitTime=sp?.legCs?`<br><b>${fmtTime(sp.legCs)}</b>`:leg?.legTime?`<br><b>${leg.legTime}</b>`:'';
           const lbl=rtype.style==='вільний'?`${i+1} ет.`:`${i+1}. ${style.slice(0,5)}`;
@@ -7846,7 +7846,7 @@ function printRelays(mode='heats'){
 </style></head><body>
 <div class="print-hint">${printHint}</div>
 <h1>${docTitle}</h1>
-<div class="meta">${[comp.location,comp.dateFrom].filter(Boolean).join(' · ')} · Друк ${today}</div>
+<div class="meta">${escapeHtml([comp.location,comp.dateFrom].filter(Boolean).join(' · '))} · Друк ${today}</div>
 ${sections}
 </body></html>`;
 
@@ -8001,7 +8001,7 @@ function printRankAchievements(){
   const rows=rankAchs.map((x,i)=>`<tr>
     <td class="c">${i+1}</td>
     <td><strong>${escapeHtml(x.a.surname)}</strong> ${escapeHtml(x.a.name)}</td>
-    <td class="c">${x.a.birthYear||'–'}</td>
+    <td class="c">${escapeHtml(x.a.birthYear||'–')}</td>
     <td class="c">${x.a.gender==='M'?'Ч':'Ж'}</td>
     <td>${escapeHtml(x.a.city||'–')}</td>
     <td>${escapeHtml(x.a.club||'–')}</td>
@@ -8164,7 +8164,7 @@ function renderRelays(){
         const leg=legs[i];
         const a=leg?.athleteId?db.athletes.find(x=>x.id===leg.athleteId):null;
         const guest=leg?.guestName;
-        const name=a?`${a.surname} ${a.name}`:guest?`👤 ${guest}`:'<span style="color:var(--text-muted)">—</span>';
+        const name=a?escapeHtml(`${a.surname} ${a.name}`):guest?`👤 ${escapeHtml(guest)}`:'<span style="color:var(--text-muted)">—</span>';
         const year=a?a.birthYear:'';
         const styleLabel=rtype.style==='вільний'?`${i+1} етап`:`${i+1}. ${style}`;
         return`<td class="mob-hide" style="vertical-align:top;padding:.3rem .5rem;font-size:.8rem">
@@ -8177,7 +8177,7 @@ function renderRelays(){
       const legListMob=rtype.legs.map((style,i)=>{
         const leg=legs[i];
         const a=leg?.athleteId?db.athletes.find(x=>x.id===leg.athleteId):null;
-        const name=a?`${a.surname} ${a.name}`:leg?.guestName||'—';
+        const name=escapeHtml(a?`${a.surname} ${a.name}`:leg?.guestName||'—');
         const styleLabel=rtype.style==='вільний'?`${i+1}.`:`${i+1}. ${style.slice(0,3)}.`;
         return`<div style="font-size:.72rem;line-height:1.5"><span style="color:var(--text-muted)">${styleLabel}</span> ${name}${leg?.legTime?` <span style="font-family:monospace;color:var(--accent);font-size:.68rem">${leg.legTime}</span>`:''}</div>`;
       }).join('');
@@ -8191,7 +8191,7 @@ function renderRelays(){
 
       const canEdit=!hasResult;
       return`<tr>
-        <td style="padding:.3rem .5rem;font-weight:700">${exhMark}${escapeHtml(t.name)}<span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td style="padding:.3rem .5rem;font-weight:700">${exhMark}${escapeHtml(t.name)}<span class="mob-sub">${escapeHtml([t.club,t.city].filter(Boolean).join(' · '))}</span></td>
         <td class="mob-hide" style="padding:.3rem .5rem;font-size:.85rem;color:var(--text-muted)">${escapeHtml(t.club||'')}</td>
         <td class="mob-hide" style="padding:.3rem .5rem;font-size:.85rem;color:var(--text-muted)">${escapeHtml(t.city||'')}</td>
         ${legCells}
@@ -8393,7 +8393,7 @@ function populateRelayAgSelect(selectedId){
   const comp=activeComp();
   const sel=document.getElementById('rl-agegroup');
   sel.innerHTML='<option value="">Без групи</option>'+
-    (comp?.relayAgeGroups||[]).map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    (comp?.relayAgeGroups||[]).map(g=>`<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
   if(selectedId)sel.value=String(selectedId);
 }
 
@@ -8458,16 +8458,16 @@ function renderRelayLegs(existingLegs=[]){
   },[]).sort((a,b)=>(a.surname||'').localeCompare(b.surname||'','uk'));
 
   const athleteOptsAll='<option value="">— Обрати спортсмена —</option>'+
-    athletes.map(a=>`<option value="${a.id}">${a.surname} ${a.name} (${a.birthYear}, ${a.gender==='M'?'Ч':'Ж'}${a.city?', '+a.city:''}${a.club?', '+a.club:''})</option>`).join('')+
+    athletes.map(a=>`<option value="${a.id}">${escapeHtml(a.surname)} ${escapeHtml(a.name)} (${escapeHtml(a.birthYear)}, ${a.gender==='M'?'Ч':'Ж'}${a.city?', '+escapeHtml(a.city):''}${a.club?', '+escapeHtml(a.club):''})</option>`).join('')+
     '<option value="guest">👤 Гість (не в списку учасників)</option>';
 
   const maleAthletes=athletes.filter(a=>a.gender==='M');
   const femaleAthletes=athletes.filter(a=>a.gender==='F');
   const athleteOptsM='<option value="">— Обрати спортсмена —</option>'+
-    maleAthletes.map(a=>`<option value="${a.id}">${a.surname} ${a.name} (${a.birthYear}${a.city?', '+a.city:''}${a.club?', '+a.club:''})</option>`).join('')+
+    maleAthletes.map(a=>`<option value="${a.id}">${escapeHtml(a.surname)} ${escapeHtml(a.name)} (${escapeHtml(a.birthYear)}${a.city?', '+escapeHtml(a.city):''}${a.club?', '+escapeHtml(a.club):''})</option>`).join('')+
     '<option value="guest">👤 Гість</option>';
   const athleteOptsF='<option value="">— Обрати спортсменку —</option>'+
-    femaleAthletes.map(a=>`<option value="${a.id}">${a.surname} ${a.name} (${a.birthYear}${a.city?', '+a.city:''}${a.club?', '+a.club:''})</option>`).join('')+
+    femaleAthletes.map(a=>`<option value="${a.id}">${escapeHtml(a.surname)} ${escapeHtml(a.name)} (${escapeHtml(a.birthYear)}${a.city?', '+escapeHtml(a.city):''}${a.club?', '+escapeHtml(a.club):''})</option>`).join('')+
     '<option value="guest">👤 Гостя</option>';
 
   // For mixed: legs 0,2 = one gender pairing, legs 1,3 = other.
@@ -8729,7 +8729,7 @@ function renderRelayHeats(){
         if(!t)return`<tr><td style="text-align:center;color:var(--text-muted)">${ln}</td><td colspan="6" style="color:var(--text-muted);font-size:.82rem">вільна</td></tr>`;
         const legList=(t.legs||[]).map((l,i)=>{
           const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-          const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+          const name=escapeHtml(a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–');
           const sp=t.splits?.[i];
           const splitStr=sp?.legCs?` <span style="color:var(--accent);font-size:.72rem;font-weight:700">${fmtTime(sp.legCs)}</span>`:'';
           return`<span style="white-space:nowrap">${i+1}. ${name}${splitStr}</span>`;
@@ -8752,7 +8752,7 @@ function renderRelayHeats(){
         }
         return`<tr>
           <td style="text-align:center;font-weight:700">${ln}</td>
-          <td><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+          <td><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${escapeHtml([t.club,t.city].filter(Boolean).join(' · '))}</span></td>
           <td class="mob-hide">${escapeHtml(t.club||'–')}</td>
           <td class="mob-hide" style="font-size:.82rem;color:var(--text-muted)">${escapeHtml(t.city||'–')}</td>
           <td style="font-size:.78rem;color:var(--text-muted)">${legList}</td>
@@ -8812,7 +8812,7 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
       if(!t)return`<tr><td style="text-align:center;font-weight:700;color:var(--text-muted)">${ln}</td><td colspan="4" style="color:var(--text-muted)">вільна</td><td></td><td></td></tr>`;
       const legList=(t.legs||[]).map((l,i)=>{
         const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-        const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+        const name=escapeHtml(a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–');
         const sp=t.splits?.[i];
         const splitStr=sp?.legCs?` (${fmtTime(sp.legCs)})`:'';
         return`${i+1}. ${name}${splitStr}`;
@@ -8820,7 +8820,7 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
       const exh=t.exhibition?'<span class="badge" style="background:rgba(244,162,49,.18);color:#b45309;font-size:.68rem;margin-left:.3rem">ПК</span>':'';
       return`<tr>
         <td style="text-align:center;font-weight:700">${ln}</td>
-        <td><strong>${escapeHtml(t.name)}</strong>${exh}<span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td><strong>${escapeHtml(t.name)}</strong>${exh}<span class="mob-sub">${escapeHtml([t.club,t.city].filter(Boolean).join(' · '))}</span></td>
         <td class="mob-hide">${escapeHtml(t.club||'–')}</td>
         <td style="font-size:.78rem;color:var(--text-muted)">${legList}</td>
         <td style="font-family:monospace;color:var(--text-muted)">${t.seedTime||'–'}</td>
@@ -8926,7 +8926,7 @@ function buildRelayProtocolHtml(comp){
 
       const legSummary=(t.legs||[]).map((l,i)=>{
         const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-        const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+        const name=escapeHtml(a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–');
         return`<div style="font-size:.72rem">${i+1}. ${name}</div>`;
       }).join('');
 
@@ -8936,7 +8936,7 @@ function buildRelayProtocolHtml(comp){
 
       return`<tr${t.exhibition?' style="background:rgba(244,162,49,.04)"':''}>
         <td style="text-align:center">${placeCell}</td>
-        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${escapeHtml([t.club,t.city].filter(Boolean).join(' · '))}</span></td>
         <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
         <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
         <td style="font-size:.75rem">${legSummary}</td>
@@ -9013,14 +9013,14 @@ function buildRelayStandingsHtml(comp){
       const medal=t.place===1?'🥇':t.place===2?'🥈':'🥉';
       const legSummary=(t.legs||[]).map((l,i)=>{
         const a=l?.athleteId?db.athletes.find(x=>x.id===l.athleteId):null;
-        const name=a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–';
+        const name=escapeHtml(a?`${a.surname} ${a.name[0]}.`:l?.guestName||'–');
         const sp=t.splits?.[i];
         const splitStr=sp?.legCs?` <span style="font-family:monospace;color:var(--accent);font-weight:600;font-size:.68rem">${fmtTime(sp.legCs)}</span>`:'';
         return`<span style="white-space:nowrap">${i+1}. ${name}${splitStr}</span>`;
       }).join('<br>');
       return`<tr class="rank-${t.place}">
         <td style="font-size:1.1rem;text-align:center">${medal}</td>
-        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${[t.club,t.city].filter(Boolean).join(' · ')}</span></td>
+        <td style="overflow-wrap:anywhere"><strong>${escapeHtml(t.name)}</strong><span class="mob-sub">${escapeHtml([t.club,t.city].filter(Boolean).join(' · '))}</span></td>
         <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.club||'–')}</td>
         <td class="mob-hide" style="overflow-wrap:anywhere">${escapeHtml(t.city||'–')}</td>
         <td style="font-size:.75rem;line-height:1.6">${legSummary}</td>
@@ -9066,7 +9066,7 @@ function renderRelayAgList(){
         <button class="btn-icon btn-xs" ${upDis} onclick="moveRelayAg(${g.id},-1)">▲</button>
         <button class="btn-icon btn-xs" ${dnDis} onclick="moveRelayAg(${g.id},1)">▼</button>
       </div>
-      <div style="flex:1;font-weight:700">🤝 ${g.name}</div>
+      <div style="flex:1;font-weight:700">🤝 ${escapeHtml(g.name)}</div>
       <div style="font-size:.8rem;color:var(--text-muted)">${g.yearFrom}–${g.yearTo}</div>
       <button class="btn-icon btn-sm" onclick="openEditRelayAg(${g.id})">✏</button>
       <button class="btn-icon btn-sm" style="color:var(--danger)" onclick="delRelayAg(${g.id})">✕</button>
@@ -9261,7 +9261,7 @@ function buildClassicPreview(comp){
   // A simplified HTML preview — not the actual Word content, but representative
   const name=comp.name||'НАЗВА ЗМАГАНЬ';
   const dateRange=comp.dateFrom?fmtUkrDate(comp.dateFrom)+(comp.dateTo&&comp.dateTo!==comp.dateFrom?' – '+fmtUkrDate(comp.dateTo):''):'__________';
-  const venue=[comp.poolName,comp.location].filter(Boolean).join(', ')||'__________';
+  const venue=escapeHtml([comp.poolName,comp.location].filter(Boolean).join(', '))||'__________';
   const start=(comp.days||[])[0]?.startTime||'__:__';
   const sections=[
     ['1. МЕТА ТА ЗАВДАННЯ', comp.goals||'— Популяризація плавання як виду спорту<br>— Визначення рівня підготовки спортсменів<br>— Відбір спортсменів до подальших занять'],
@@ -9383,7 +9383,7 @@ function renderReglamentPreview(comp){
   const dateRange=dates.length===2&&dates[0]!==dates[1]
     ? `${fmtUkrDate(dates[0])} – ${fmtUkrDate(dates[1])}`
     : (dates[0]?fmtUkrDate(dates[0]):'—');
-  const poolLine=[comp.poolName,comp.poolLength?`(${comp.poolLength} м)`:'',comp.location?`, ${comp.location}`:''].filter(Boolean).join(' ');
+  const poolLine=[escapeHtml(comp.poolName),comp.poolLength?`(${comp.poolLength} м)`:'',comp.location?`, ${escapeHtml(comp.location)}`:''].filter(Boolean).join(' ');
   const startTime=(comp.days||[])[0]?.startTime;
   const warmup=(comp.warmupFrom||comp.warmupTo)?`Розминка: ${comp.warmupFrom||'?'} – ${comp.warmupTo||'?'}`:'';
   const dateBlock=[
@@ -9406,7 +9406,7 @@ function renderReglamentPreview(comp){
   // ── Block: Учасники ──
   const ags=[...(comp.ageGroups||[])].sort((a,b)=>b.yearFrom-a.yearFrom);
   const agBlock=ags.length
-    ? ags.map(g=>`<span class="badge badge-heat" style="margin:0 .3rem .3rem 0">${g.name}${g.gender==='M'?' <span style="color:#0055a0;font-size:.72em">Ч</span>':g.gender==='F'?' <span style="color:#7700b8;font-size:.72em">Ж</span>':''}</span>`).join('')
+    ? ags.map(g=>`<span class="badge badge-heat" style="margin:0 .3rem .3rem 0">${escapeHtml(g.name)}${g.gender==='M'?' <span style="color:#0055a0;font-size:.72em">Ч</span>':g.gender==='F'?' <span style="color:#7700b8;font-size:.72em">Ж</span>':''}</span>`).join('')
     : '<em style="color:var(--text-muted)">Не вказано</em>';
 
   // ── Block: Програма ──
@@ -9450,7 +9450,7 @@ function renderReglamentPreview(comp){
     <td style="background:var(--card);border:1px solid var(--border);padding:.5rem .65rem;font-weight:700;width:160px;vertical-align:top;color:var(--accent)">${label}</td>
     <td style="border:1px solid var(--border);padding:.5rem .65rem;vertical-align:top">${content}</td>
   </tr>`;
-  return `<div style="text-align:center;font-weight:800;font-size:1.05rem;margin-bottom:.7rem">${comp.name||'НАЗВА ЗМАГАНЬ'}</div>
+  return `<div style="text-align:center;font-weight:800;font-size:1.05rem;margin-bottom:.7rem">${escapeHtml(comp.name||'НАЗВА ЗМАГАНЬ')}</div>
     <table style="width:100%;border-collapse:collapse;font-size:.85rem">
       ${row('Дата / місце',dateBlock)}
       ${row('Характер',charBlock)}
@@ -9523,7 +9523,7 @@ function buildReglamentPrintHtml(comp){
   const dateRange=dates.length===2&&dates[0]!==dates[1]
     ? `${fmtUkrDate(dates[0])} – ${fmtUkrDate(dates[1])}`
     : (dates[0]?fmtUkrDate(dates[0]):'');
-  const poolLine=[comp.poolName,comp.poolLength?`(${comp.poolLength} м)`:'',comp.location?`, ${comp.location}`:''].filter(Boolean).join(' ');
+  const poolLine=[escapeHtml(comp.poolName),comp.poolLength?`(${comp.poolLength} м)`:'',comp.location?`, ${escapeHtml(comp.location)}`:''].filter(Boolean).join(' ');
   const startTime=(comp.days||[])[0]?.startTime;
 
   // ── Block content as raw HTML strings (kept minimal so print CSS is predictable) ──
@@ -10071,7 +10071,7 @@ function renderSettings(){
         <button class="btn-icon btn-xs" ${upDis} onclick="moveAg(${g.id},-1)" title="Вгору">▲</button>
         <button class="btn-icon btn-xs" ${dnDis} onclick="moveAg(${g.id},1)" title="Вниз">▼</button>
       </div>
-      <div style="flex:1;font-weight:700">${g.name}
+      <div style="flex:1;font-weight:700">${escapeHtml(g.name)}
         ${g.gender==='M'?`<span class="badge badge-m" style="margin-left:.4rem;font-size:.7rem">Ч</span>`:
           g.gender==='F'?`<span class="badge badge-f" style="margin-left:.4rem;font-size:.7rem">Ж</span>`:
           `<span class="badge badge-heat" style="margin-left:.4rem;font-size:.7rem">Спільна</span>`}
@@ -10189,7 +10189,7 @@ function renderBufferMatrix(){
   for(const g of rows){
     const cur=getBuffer(comp,g.id);
     const gBadge=g.gender==='M'?`<span class="badge badge-m" style="font-size:.72rem;margin-left:.3rem">Ч</span>`:g.gender==='F'?`<span class="badge badge-f" style="font-size:.72rem;margin-left:.3rem">Ж</span>`:'';
-    html+=`<div style="font-size:.85rem;font-weight:600">${g.name}${gBadge}</div>`;
+    html+=`<div style="font-size:.85rem;font-weight:600">${escapeHtml(g.name)}${gBadge}</div>`;
     html+=`<div style="display:flex;align-items:center;gap:.3rem"><input type="number" min="0" max="600" value="${cur}" data-ag="${g.id}" onchange="setBuffer(this)" style="width:70px;text-align:center;padding:.25rem .4rem;font-size:.85rem"><span style="font-size:.78rem;color:var(--text-muted)">сек</span></div>`;
   }
   html+='</div>';
@@ -10330,7 +10330,7 @@ function renderEventAgSection(){
   el.innerHTML=allEvents.map(ev=>{
     const groups=egs[ev.key]||[];
     const hasCustom=groups.length>0;
-    const gBadges=hasCustom?groups.map(g=>`<span class="badge badge-heat" style="font-size:.7rem">${g.name}${g.gender==='M'?' <span style="color:#0055a0">Ч</span>':g.gender==='F'?' <span style="color:#7700b8">Ж</span>':''}</span>`).join(' '):'';
+    const gBadges=hasCustom?groups.map(g=>`<span class="badge badge-heat" style="font-size:.7rem">${escapeHtml(g.name)}${g.gender==='M'?' <span style="color:#0055a0">Ч</span>':g.gender==='F'?' <span style="color:#7700b8">Ж</span>':''}</span>`).join(' '):'';
     return`<div style="display:flex;align-items:center;gap:.5rem;padding:.45rem 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <span style="font-size:.85rem;font-weight:600;min-width:100px">${ev.dist}м ${ev.style}</span>
       <span style="flex:1;font-size:.78rem">${hasCustom?gBadges:'<span style="color:var(--text-muted)">дефолт (глобальні групи)</span>'}</span>
@@ -10356,7 +10356,7 @@ function _renderEventAgConfigList(key){
     return;
   }
   el.innerHTML=groups.map((g,idx)=>`<div class="ag-item">
-    <div style="flex:1;font-weight:700">${g.name}
+    <div style="flex:1;font-weight:700">${escapeHtml(g.name)}
       ${g.gender==='M'?`<span class="badge badge-m" style="margin-left:.4rem;font-size:.7rem">Ч</span>`:
         g.gender==='F'?`<span class="badge badge-f" style="margin-left:.4rem;font-size:.7rem">Ж</span>`:
         `<span class="badge badge-heat" style="margin-left:.4rem;font-size:.7rem">Спільна</span>`}
@@ -10967,7 +10967,7 @@ function _buildPublicHTML(comp,dbData,views){
 
   return`<!DOCTYPE html><html lang="uk"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${comp.name||'Змагання'} — AquaMeet Pro</title>
+<title>${escapeHtml(comp.name||'Змагання')} — AquaMeet Pro</title>
 <!-- Inline SVG icon: the public page is also downloaded as a standalone file, so it cannot reference icon-192.png -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230077b6'/><path d='M0 46c8 0 8-5 16-5s8 5 16 5 8-5 16-5 8 5 16 5v18H0z' fill='%2300b4d8' opacity='.85'/><text x='32' y='38' font-family='Arial,Helvetica,sans-serif' font-size='31' font-weight='bold' fill='%23ffffff' text-anchor='middle'>AM</text></svg>">
 <style>
@@ -10991,8 +10991,8 @@ h4{color:#0055a0;font-size:.83rem;margin:.8rem 0 .3rem}
 @media print{.tabs{display:none}.content{padding:.5rem}}
 </style></head><body>
 <div class="hdr">
-  <h1>🏊 ${comp.name||'Змагання'}</h1>
-  <p>${comp.dateFrom||''}${comp.dateTo&&comp.dateTo!==comp.dateFrom?' — '+comp.dateTo:''}${comp.location?' · '+comp.location:''}</p>
+  <h1>🏊 ${escapeHtml(comp.name||'Змагання')}</h1>
+  <p>${comp.dateFrom||''}${comp.dateTo&&comp.dateTo!==comp.dateFrom?' — '+comp.dateTo:''}${comp.location?' · '+escapeHtml(comp.location):''}</p>
 </div>
 <div class="tabs">${tabs}</div>
 <div class="content">${panels}</div>
@@ -11013,7 +11013,7 @@ function _buildPubProtocol(comp,athletes,entries,heats){
   if(orphans.length)buckets.push({title:'📅 Поза розкладом',list:orphans});
   let html='';
   buckets.forEach(b=>{
-    html+=`<h3>${b.title}</h3>`;
+    html+=`<h3>${escapeHtml(b.title)}</h3>`;
     if(!b.list.length){html+='<p style="color:#5a9ab8;font-size:.82rem">Запливів немає.</p>';return;}
     b.list.forEach(heat=>{
       const gl=heat.gender==='M'?'Чоловіки':heat.gender==='F'?'Жінки':'Змішаний';
@@ -11026,7 +11026,7 @@ function _buildPubProtocol(comp,athletes,entries,heats){
         const club=[a.city,a.club].filter(Boolean).join(' · ');
         html+=`<tr><td><strong>${ln}</strong></td>`+
           `<td>${escapeHtml(a.surname||'')} ${escapeHtml(a.name||'')}${e.exhibition?' <span style="color:#5a9ab8;font-size:.78rem">(поза заліком)</span>':''}</td>`+
-          `<td>${a.birthYear||''}</td><td>${escapeHtml(club)}</td>`+
+          `<td>${escapeHtml(a.birthYear||'')}</td><td>${escapeHtml(club)}</td>`+
           `<td>${escapeHtml(e.seedTime||'—')}</td><td>${escapeHtml(e.result||'')}</td></tr>`;
       });
       html+=`</tbody></table>`;
@@ -11053,7 +11053,7 @@ function _buildPubResults(comp,athletes,entries){
       const club=[item.a.city,item.a.club].filter(Boolean).join(' · ');
       html+=`<tr><td class="${medal}">${label}</td>`+
         `<td>${escapeHtml(item.a.surname||'')} ${escapeHtml(item.a.name||'')}</td>`+
-        `<td>${item.a.birthYear||''}</td><td>${escapeHtml(club)}</td>`+
+        `<td>${escapeHtml(item.a.birthYear||'')}</td><td>${escapeHtml(club)}</td>`+
         `<td><strong>${escapeHtml(item.entry.result||'')}</strong></td><td>${escapeHtml(rk||'')}</td></tr>`;
     });
     html+=`</tbody></table>`;
@@ -11203,7 +11203,7 @@ function _renderAdminUsers(){
     return;
   }
   const organizers=_adminUsers.filter(u=>u.role==='organizer'||u.role==='admin');
-  const orgOptions=organizers.map(o=>`<option value="${o.id}">${o.full_name||o.email}</option>`).join('');
+  const orgOptions=organizers.map(o=>`<option value="${o.id}">${escapeHtml(o.full_name||o.email)}</option>`).join('');
 
   const rows=_adminUsers.map(u=>{
     const roleBadge=`<span class="user-row-role role-${u.role}">${ROLE_LABELS[u.role]||u.role}</span>`;
@@ -11220,9 +11220,9 @@ function _renderAdminUsers(){
     // Pre-select current organizer for secretary
     const regDate=u.created_at?new Date(u.created_at).toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric'}):'—';
     const row=`<tr id="urow-${u.id}">
-      <td><strong>${u.full_name||'—'}</strong><br><span style="font-size:.73rem;color:var(--text-muted)">${u.email||''}</span></td>
-      <td>${u.city||'—'}</td>
-      <td>${u.club||'—'}</td>
+      <td><strong>${escapeHtml(u.full_name||'—')}</strong><br><span style="font-size:.73rem;color:var(--text-muted)">${escapeHtml(u.email||'')}</span></td>
+      <td>${escapeHtml(u.city||'—')}</td>
+      <td>${escapeHtml(u.club||'—')}</td>
       <td style="font-size:.75rem;color:var(--text-muted);white-space:nowrap">${regDate}</td>
       <td>${roleBadge}</td>
       <td>
@@ -11237,7 +11237,7 @@ function _renderAdminUsers(){
       <td>${clubAppr}</td>
       <td style="white-space:nowrap">
         <button class="btn-secondary btn-xs" onclick="adminEditUser('${u.id}')" title="Редагувати">✏</button>
-        <button class="btn-danger btn-xs" onclick="adminDeleteUser('${u.id}','${(u.full_name||u.email||'').replace(/'/g,'')}')">🗑</button>
+        <button class="btn-danger btn-xs" onclick="adminDeleteUser('${u.id}')">🗑</button>
       </td>
     </tr>`;
     return row;
@@ -11458,6 +11458,8 @@ async function doAdminSaveUser(){
 }
 
 async function adminDeleteUser(userId,name){
+  // Name is resolved from the cached list by id — never passed through an onclick string (XSS via profile name)
+  if(name===undefined){const u=(_adminUsers||[]).find(x=>x.id===userId);name=u?(u.full_name||u.email||userId):userId;}
   if(!confirm(`Видалити користувача «${name}»? Цю дію не можна скасувати.`))return;
   if(userId===_currentUser?.id){showToast('❌ Не можна видалити власний акаунт',true);return;}
   // Delete profile (auth user remains but has no profile — harmless)
@@ -12020,7 +12022,7 @@ async function _populateOrgSwitcher(){
   const options=data.map(u=>{
     const label=(u.full_name||u.email||u.id)+' ['+ROLE_LABELS[u.role]+']';
     const sel2=u.id===(_viewingOwnerId||_currentUser?.id)?'selected':'';
-    return `<option value="${u.id}" ${sel2}>${label}</option>`;
+    return `<option value="${u.id}" ${sel2}>${escapeHtml(label)}</option>`;
   }).join('');
   sel.innerHTML='<option value="">— оберіть —</option>'+options;
 }
@@ -12209,11 +12211,11 @@ function renderCompBrowser(){
       const athletes=[...new Set((c.entries||[]).map(e=>e.athleteId))].length;
       html+=`<div class="cbp-card${isActive?' selected':''}" onclick="selectCompFromBrowser(${c.id})">
         <div>
-          <div class="cbp-card-name">${c.name||'Без назви'}</div>
+          <div class="cbp-card-name">${escapeHtml(c.name||'Без назви')}</div>
           <div class="cbp-card-meta">
             ${c.dateFrom?`<span>📅 ${c.dateFrom}${c.dateTo&&c.dateTo!==c.dateFrom?' — '+c.dateTo:''}</span>`:''}
             ${moLabel?`<span>📆 ${moLabel}</span>`:''}
-            ${c.location?`<span>📍 ${c.location}</span>`:''}
+            ${c.location?`<span>📍 ${escapeHtml(c.location)}</span>`:''}
           </div>
         </div>
         <div class="cbp-card-right">
@@ -12330,7 +12332,7 @@ function _setTrainerOrgFromData(data){
     const wrap=document.getElementById('trainer-org-switcher-wrap');
     const sel=document.getElementById('trainer-org-select');
     if(wrap&&sel){
-      sel.innerHTML=data.map(r=>`<option value="${r.organizer_id}">${r.profiles?.full_name||r.profiles?.email||r.organizer_id}</option>`).join('');
+      sel.innerHTML=data.map(r=>`<option value="${r.organizer_id}">${escapeHtml(r.profiles?.full_name||r.profiles?.email||r.organizer_id)}</option>`).join('');
       wrap.style.display='flex';
     }
   }
@@ -12403,9 +12405,9 @@ async function openOrganizerRequestsModal(){
   list.innerHTML=`<div class="tbl-wrap"><table>
     <thead><tr><th>Тренер</th><th>Місто / Клуб</th><th>Статус</th><th>Дата</th><th>Дії</th></tr></thead>
     <tbody>${data.map(r=>`<tr id="org-req-row-${r.id}">
-      <td><strong>${r.profiles?.full_name||'—'}</strong><br>
-        <span style="font-size:.73rem;color:var(--text-muted)">${r.profiles?.email||''}</span></td>
-      <td>${r.profiles?.city||'—'} / ${r.profiles?.club||'—'}</td>
+      <td><strong>${escapeHtml(r.profiles?.full_name||'—')}</strong><br>
+        <span style="font-size:.73rem;color:var(--text-muted)">${escapeHtml(r.profiles?.email||'')}</span></td>
+      <td>${escapeHtml(r.profiles?.city||'—')} / ${escapeHtml(r.profiles?.club||'—')}</td>
       <td id="org-req-status-${r.id}">${statusBadge(r.status)}</td>
       <td style="font-size:.75rem;color:var(--text-muted)">${r.created_at?new Date(r.created_at).toLocaleDateString('uk-UA'):''}</td>
       <td><div style="display:flex;gap:.4rem;flex-wrap:wrap">
@@ -12611,7 +12613,7 @@ async function renderOrgPanel({silent=false}={}){
   const _metaHTML=(cities,label)=>{
     const cityStr=cities.length?cities.slice(0,6).map(([c,n])=>`<span class="city-tag">📍 ${c}${n>1?' <strong>'+n+'</strong>':''}</span>`).join(''):'<span style="color:var(--text-muted);font-size:.7rem">— немає міст</span>';
     const secStr=_orgSecretaries.length
-      ?_orgSecretaries.map(s=>`<span style="font-weight:700;color:var(--accent)">${s.full_name||s.email}</span>${s.city?' <span style="color:var(--text-muted)">· '+s.city+'</span>':''}`).join(' ')
+      ?_orgSecretaries.map(s=>`<span style="font-weight:700;color:var(--accent)">${escapeHtml(s.full_name||s.email)}</span>${s.city?' <span style="color:var(--text-muted)">· '+escapeHtml(s.city)+'</span>':''}`).join(' ')
       :'<span style="color:var(--text-muted);font-size:.72rem">не призначено</span>';
     const filterPill=label?`<div class="org-dash-filter">📊 ${label}<button onclick="selectOrgComp(null)" title="Показати всі">✕</button></div>`:'';
     return`<div class="org-dash-meta" id="org-dash-meta">
@@ -12650,15 +12652,15 @@ async function renderOrgPanel({silent=false}={}){
     const invRows=compInvs.length?compInvs.map(inv=>{
       const t=_invTrainers.find(x=>x.id===inv.trainer_id)||{};
       const athCnt=_trainerAthStats.filter(r=>r.trainer_id===inv.trainer_id&&(r.comp_id===comp.id||r.comp_id===String(comp.id))).length;
-      const tname=(getName(inv.trainer_id)||'').replace(/'/g,'&#39;');
-      const clearAthBtn=athCnt?`<button class="btn-secondary btn-xs" style="margin-left:.25rem" title="Видалити ${athCnt} учасників цього тренера" onclick="orgClearTrainerAthletes('${inv.trainer_id}',${comp.id},'${tname}')">👥 ${athCnt} 🗑</button>`:'';
+      
+      const clearAthBtn=athCnt?`<button class="btn-secondary btn-xs" style="margin-left:.25rem" title="Видалити ${athCnt} учасників цього тренера" onclick="orgClearTrainerAthletes('${inv.trainer_id}',${comp.id})">👥 ${athCnt} 🗑</button>`:'';
       const confirmBtn=inv.trainer_response==='pending'?`<button class="btn-success btn-xs" style="margin-left:.25rem" title="Підтвердити участь тренера" onclick="orgConfirmTrainerAttendance('${inv.id}','${inv.trainer_id}',${comp.id})">✅</button>`:'';
       const requestedTag=inv.comp_snapshot?.trainer_requested?`<span title="Тренер сам надіслав запит" style="font-size:.7rem;color:var(--accent);margin-left:.25rem">📨</span>`:'';
       return`<tr>
-        <td style="font-size:.82rem;font-weight:600">${getName(inv.trainer_id)}${requestedTag}</td>
-        <td style="font-size:.78rem;color:var(--text-muted)">${t.city||'—'}</td>
-        <td style="font-size:.78rem;color:var(--text-muted)">${t.club||'—'}</td>
-        <td style="font-size:.78rem;color:var(--text-muted)">${t.category||'—'}</td>
+        <td style="font-size:.82rem;font-weight:600">${escapeHtml(getName(inv.trainer_id))}${requestedTag}</td>
+        <td style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(t.city||'—')}</td>
+        <td style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(t.club||'—')}</td>
+        <td style="font-size:.78rem;color:var(--text-muted)">${escapeHtml(t.category||'—')}</td>
         <td><span class="inv-status ${respClass[inv.trainer_response]||'inv-s-pending'}">${respLabel[inv.trainer_response]||'🕐 Без відповіді'}</span></td>
         <td style="font-size:.75rem;color:var(--text-muted)">${inv.created_at?new Date(inv.created_at).toLocaleDateString('uk-UA'):''}</td>
         <td style="white-space:nowrap"><button class="btn-danger btn-xs" onclick="cancelInvitation('${inv.id}',${comp.id})">🗑 Запр.</button>${confirmBtn}${clearAthBtn}</td>
@@ -12682,13 +12684,13 @@ async function renderOrgPanel({silent=false}={}){
 
     return`<div class="org-comp-card" id="org-comp-card-${comp.id}">
       <div class="org-comp-card-hdr" onclick="selectOrgComp(${comp.id})" title="Натисніть щоб показати статистику по цьому змаганню">
-        <div class="org-comp-name">${comp.name||'Без назви'}</div>
+        <div class="org-comp-name">${escapeHtml(comp.name||'Без назви')}</div>
         ${statusBadge(comp.status)}
         <button class="btn-primary btn-sm" onclick="event.stopPropagation();db.activeCompId=${comp.id};saveDB();refreshCompSelect();renderHome();switchTab('home')" style="margin-left:auto">📂 Відкрити</button>
       </div>
       <div class="org-comp-meta">
         ${comp.dateFrom?`📅 ${comp.dateFrom}${comp.dateTo&&comp.dateTo!==comp.dateFrom?' — '+comp.dateTo:''}`:''}
-        ${comp.location?`📍 ${comp.location}`:''}
+        ${comp.location?`📍 ${escapeHtml(comp.location)}`:''}
         ${athletes?`👥 ${athletes} уч.`:''}
         ${results?`🏆 ${results} рез.`:''}
       </div>
@@ -12703,7 +12705,7 @@ async function renderOrgPanel({silent=false}={}){
         </div>
       </details>
       <div class="org-comp-actions">
-        <button class="btn-primary btn-sm" onclick="openBulkInvite(${comp.id},'${(comp.name||'').replace(/'/g,'').replace(/"/g,'')}')">📩 Запросити тренерів</button>
+        <button class="btn-primary btn-sm" onclick="openBulkInvite(${comp.id})">📩 Запросити тренерів</button>
         <button class="btn-secondary btn-sm" onclick="copyTrainerInviteLink()" title="Посилання для тренерів, які ще не зареєстровані">🔗 Нових тренерів</button>
         <button class="btn-secondary btn-sm" onclick="openReminderModal(${comp.id})">⏰ Нагадування</button>
         <button class="btn-danger btn-sm" onclick="orgDeleteComp(${comp.id})" style="margin-left:auto" title="${comp.status==='planning'?'Видалити змагання':'Видалити (є дані — буде подвійне підтвердження)'}">🗑 Видалити</button>
@@ -12779,16 +12781,18 @@ function selectOrgComp(compId){
       ?cities.slice(0,6).map(([c,n])=>`<span class="city-tag">📍 ${c}${n>1?' <strong>'+n+'</strong>':''}</span>`).join('')
       :'<span style="color:var(--text-muted);font-size:.7rem">— немає міст</span>';
     const secStr=_orgSecretaries.length
-      ?_orgSecretaries.map(s=>`<span style="font-weight:700;color:var(--accent)">${s.full_name||s.email}</span>${s.city?' <span style="color:var(--text-muted)">· '+s.city+'</span>':''}`).join(' ')
+      ?_orgSecretaries.map(s=>`<span style="font-weight:700;color:var(--accent)">${escapeHtml(s.full_name||s.email)}</span>${s.city?' <span style="color:var(--text-muted)">· '+escapeHtml(s.city)+'</span>':''}`).join(' ')
       :'<span style="color:var(--text-muted);font-size:.72rem">не призначено</span>';
     const filterPill=compId
-      ?`<div class="org-dash-filter">📊 ${filterComps[0]?.name||compId}<button onclick="selectOrgComp(null)" title="Показати всі">✕</button></div>`:'';
+      ?`<div class="org-dash-filter">📊 ${escapeHtml(filterComps[0]?.name||compId)}<button onclick="selectOrgComp(null)" title="Показати всі">✕</button></div>`:'';
     meta.innerHTML=`<span class="odm-label">🗺</span>${cityStr}<span class="odm-sep">|</span><span class="odm-label">📋</span>${secStr}${filterPill}`;
   }
 }
 
 // ── Bulk invite modal ─────────────────────────────────────────
 async function openBulkInvite(compId,compName){
+  // Name is resolved by id — never passed through an onclick string (XSS via competition name)
+  if(compName===undefined){const c=(db.competitions||[]).find(x=>x.id===compId||x.id===+compId);compName=c?.name||'';}
   _bulkInvCompId=compId;
   _bulkInvCompName=compName;
 
@@ -12807,7 +12811,7 @@ async function openBulkInvite(compId,compName){
   // Populate city filter
   const cities=[...new Set(_invTrainers.map(t=>t.city).filter(Boolean))].sort();
   const citySel=document.getElementById('bi-city');
-  if(citySel)citySel.innerHTML='<option value="">Всі міста</option>'+cities.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(citySel)citySel.innerHTML='<option value="">Всі міста</option>'+cities.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   const clubSel=document.getElementById('bi-club');
   if(clubSel)clubSel.innerHTML='<option value="">Всі клуби</option>';
   const searchEl=document.getElementById('bi-search');
@@ -12837,7 +12841,7 @@ function renderBulkInviteList(){
   const clubs=[...new Set(sourceForClubs.map(t=>t.club).filter(Boolean))].sort();
   const clubSel=document.getElementById('bi-club');
   const curClub=clubSel.value;
-  clubSel.innerHTML='<option value="">Всі клуби</option>'+clubs.map(c=>`<option value="${c}">${c}</option>`).join('');
+  clubSel.innerHTML='<option value="">Всі клуби</option>'+clubs.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   // Restore selection if still valid
   if(curClub&&clubs.includes(curClub))clubSel.value=curClub;
 
@@ -12859,8 +12863,8 @@ function renderBulkInviteList(){
     return`<label class="inv-trainer-row">
       <input type="checkbox" class="bi-check" value="${t.id}" ${already?'disabled checked':''} onchange="_updateBiCount()">
       <div class="inv-trainer-info">
-        <div class="inv-trainer-name">${t.full_name||t.email||'—'}</div>
-        <div class="inv-trainer-meta">${[t.city,t.club,t.category,t.email].filter(Boolean).join(' · ')}</div>
+        <div class="inv-trainer-name">${escapeHtml(t.full_name||t.email||'—')}</div>
+        <div class="inv-trainer-meta">${escapeHtml([t.city,t.club,t.category,t.email].filter(Boolean).join(' · '))}</div>
       </div>
       ${already?'<span class="inv-status inv-s-attending" style="font-size:.68rem">вже запрошено</span>':''}
     </label>`;
@@ -13000,8 +13004,8 @@ async function renderAdminAllComps(){
         const gname=g.name.replace(/'/g,'&#39;').replace(/"/g,'&quot;');
         return`<div class="admin-comp-row">
           <span>${sBadge(comp.status)}</span>
-          <span class="admin-comp-name">${comp.name||'Без назви'}</span>
-          <span class="admin-comp-info">${comp.dateFrom||''}${comp.location?' · '+comp.location:''}${ath?' · '+ath+' уч.':''}${res?' · '+res+' рез.':''}</span>
+          <span class="admin-comp-name">${escapeHtml(comp.name||'Без назви')}</span>
+          <span class="admin-comp-info">${comp.dateFrom||''}${comp.location?' · '+escapeHtml(comp.location):''}${ath?' · '+ath+' уч.':''}${res?' · '+res+' рез.':''}</span>
           <button class="btn-primary btn-xs" onclick="adminOpenOrgComp('${g.orgId}',${comp.id})">📂 Відкрити</button>
           <button class="btn-danger btn-xs" onclick="adminDeleteOrgComp('${g.orgId}','${gname}',${comp.id},'${cname}','${comp.status||''}')">🗑</button>
         </div>`;
@@ -13009,7 +13013,7 @@ async function renderAdminAllComps(){
       return`<div class="admin-org-group">
         <div class="admin-org-group-header" onclick="const c=this.nextElementSibling;c.style.display=c.style.display==='none'?'block':'none'">
           <span style="font-size:1rem">🏢</span>
-          <span class="admin-org-name">${g.name}</span>
+          <span class="admin-org-name">${escapeHtml(g.name)}</span>
           <span class="admin-org-meta">${g.comps.length} змаг. · ${g.updatedAt}</span>
           <button class="btn-primary btn-xs" style="margin-left:auto" onclick="event.stopPropagation();adminSwitchAndCreate('${g.orgId}')">＋ Додати</button>
         </div>
@@ -13161,6 +13165,7 @@ async function orgConfirmTrainerAttendance(invId,trainerId,compId){
 }
 
 async function orgClearTrainerAthletes(trainerId,compId,trainerName){
+  if(trainerName===undefined){const t=(_invTrainers||[]).find(x=>x.id===trainerId);trainerName=t?(t.full_name||t.email||trainerId):trainerId;}
   if(!confirm(`Видалити всіх учасників тренера «${trainerName}» для цього змагання?\n\nДані будуть втрачені безповоротно.`))return;
   const{error}=await _supa.from('trainer_athletes')
     .delete().eq('trainer_id',trainerId).eq('comp_id',compId);
@@ -13464,10 +13469,10 @@ async function renderTrainerInvitations(){
       <div style="display:flex;align-items:flex-start;gap:.75rem;margin-bottom:.85rem">
         <div style="font-size:2rem;line-height:1">🏊</div>
         <div style="flex:1">
-          <div style="font-size:1rem;font-weight:900;color:var(--accent);margin-bottom:.2rem">${s.name||inv.comp_name||'Змагання'}</div>
-          ${dateStr?`<div style="font-size:.82rem;color:var(--text);margin-bottom:.15rem">📅 ${dateStr}</div>`:''}
-          ${location?`<div style="font-size:.82rem;color:var(--text);margin-bottom:.15rem">📍 ${location}${pool?' · '+pool:''}</div>`:''}
-          <div style="font-size:.78rem;color:var(--text-muted)">Організатор: ${orgName}</div>
+          <div style="font-size:1rem;font-weight:900;color:var(--accent);margin-bottom:.2rem">${escapeHtml(s.name||inv.comp_name||'Змагання')}</div>
+          ${dateStr?`<div style="font-size:.82rem;color:var(--text);margin-bottom:.15rem">📅 ${escapeHtml(dateStr)}</div>`:''}
+          ${location?`<div style="font-size:.82rem;color:var(--text);margin-bottom:.15rem">📍 ${escapeHtml(location)}${pool?' · '+escapeHtml(pool):''}</div>`:''}
+          <div style="font-size:.78rem;color:var(--text-muted)">Організатор: ${escapeHtml(orgName)}</div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.4rem">
           <div style="font-size:.75rem;color:var(--text-muted);white-space:nowrap">${inv.created_at?new Date(inv.created_at).toLocaleDateString('uk-UA'):''}</div>
@@ -13475,7 +13480,7 @@ async function renderTrainerInvitations(){
       </div>
       ${eventsStr?`<div style="background:#f0f8ff;border-radius:8px;padding:.6rem .85rem;margin-bottom:.75rem">
         <div style="font-size:.75rem;font-weight:700;color:var(--accent);margin-bottom:.35rem">🏁 Дистанції:</div>
-        <div style="font-size:.78rem;color:#1a6a9a;line-height:1.6">${eventsStr}</div>
+        <div style="font-size:.78rem;color:#1a6a9a;line-height:1.6">${escapeHtml(eventsStr)}</div>
       </div>`:''}
       ${reminderHtml}
       ${respBtn(inv)}
@@ -13640,8 +13645,8 @@ function _renderNotifList(){
     const dt=n.created_at?new Date(n.created_at).toLocaleString('uk-UA',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
     const tab=_notifActionTab[n.type]||'';
     return`<div class="notif-item${n.read?'':' unread'}${tab?' notif-clickable':''}"${tab?` data-ntab="${tab}"`:''}>
-      <div class="n-title">${n.title||'Сповіщення'}${tab?' <span style="font-size:.65rem;opacity:.6">↗</span>':''}</div>
-      <div class="n-body">${n.body||''}</div>
+      <div class="n-title">${escapeHtml(n.title||'Сповіщення')}${tab?' <span style="font-size:.65rem;opacity:.6">↗</span>':''}</div>
+      <div class="n-body">${escapeHtml(n.body||'')}</div>
       <div class="n-time">${dt}</div>
     </div>`;
   }).join('');
