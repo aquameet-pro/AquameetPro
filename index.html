@@ -1569,6 +1569,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
         <div style="font-weight:800;color:var(--accent);margin-bottom:.8rem;font-size:.95rem">📅 Вікові групи поточних змагань</div>
         <div id="ag-list"></div>
         <button class="btn-secondary btn-sm" onclick="openAddAg()" style="margin-top:.5rem">＋ Додати групу</button>
+        <button class="btn-secondary btn-sm" onclick="generateAgeGroups()" style="margin-top:.5rem" title="Створити групи по роках народження одним кроком">⚡ Згенерувати групи</button>
       </div>
       <div class="card" style="grid-column:1/-1">
         <div style="font-weight:800;color:var(--accent);margin-bottom:.8rem;font-size:.95rem">⚙️ Групи по подіях</div>
@@ -10618,6 +10619,33 @@ function moveAg(id,delta){
   [ags[i],ags[j]]=[ags[j],ags[i]];
   saveDB();renderSettings();
 }
+// Build the whole age-group ladder in one go: from the oldest to the youngest year in steps,
+// optionally split by gender. Replaces existing groups only after an explicit confirm.
+function generateAgeGroups(){
+  const comp=activeComp();if(!comp){alert('Оберіть змагання');return;}
+  const years=db.athletes.map(a=>+a.birthYear).filter(Boolean);
+  const defFrom=years.length?Math.min(...years):new Date().getFullYear()-16;
+  const defTo=years.length?Math.max(...years):new Date().getFullYear()-7;
+  const from=parseInt(prompt('Найстарший рік народження:',defFrom));if(!from)return;
+  const to=parseInt(prompt('Наймолодший рік народження:',defTo));if(!to)return;
+  if(from>to){alert('Найстарший рік має бути меншим за наймолодший');return;}
+  const step=parseInt(prompt('Скільки років в одній групі (1, 2, 3…):','2'));if(!step||step<1)return;
+  const byGender=confirm('Розділити кожну групу на дівчат і хлопців?\nOK — так (дві групи на діапазон), Скасувати — одна спільна група');
+  const groups=[];
+  for(let y=from;y<=to;y+=step){
+    const yTo=Math.min(y+step-1,to);
+    const label=y===yTo?String(y):`${y}–${yTo}`;
+    if(byGender){
+      groups.push({id:db.nextId.ag++,name:label+' (дівчата)',yearFrom:y,yearTo:yTo,gender:'F'});
+      groups.push({id:db.nextId.ag++,name:label+' (хлопці)',yearFrom:y,yearTo:yTo,gender:'M'});
+    }else groups.push({id:db.nextId.ag++,name:label,yearFrom:y,yearTo:yTo,gender:'all'});
+  }
+  if((comp.ageGroups||[]).length&&!confirm(`Зараз є ${comp.ageGroups.length} груп. Замінити їх на ${groups.length} згенерованих?`))return;
+  comp.ageGroups=groups;
+  saveDB();renderSettings();renderProtocol();renderStandings();
+  const noGroup=db.athletes.filter(a=>!groups.some(g=>+a.birthYear>=g.yearFrom&&+a.birthYear<=g.yearTo&&(g.gender==='all'||g.gender===a.gender))).length;
+  showToast(`✅ Створено ${groups.length} груп${noGroup?` · поза групами: ${noGroup} сп.`:''}`);
+}
 function openAddAg(){
   editingAgId=null;_editingAgEventKey=null;_editingEventAgId=null;
   ['ag-name','ag-from','ag-to'].forEach(id=>document.getElementById(id).value='');
@@ -14247,7 +14275,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0036'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0037'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -14405,6 +14433,8 @@ function _judgeResKey(hIdx){
 
 // ── Офлайн черга суддів ────────────────────────────────────────
 function _jqKey(){return 'aquameet_jq_'+_judgeP.oid+'_'+_judgeP.cid;}
+// Cached heat list for this lane — the phone can open the judge page with no network
+function _jhKey(){return 'aquameet_jh_'+_judgeP.oid+'_'+_judgeP.cid+'_l'+_judgeP.l+'_r'+_judgeP.r;}
 function _jqLoad(){try{return JSON.parse(localStorage.getItem(_jqKey())||'[]');}catch(_){return[];}}
 function _jqSave(arr){try{localStorage.setItem(_jqKey(),JSON.stringify(arr));}catch(_){}}
 function _jqAdd(row){
@@ -14564,6 +14594,7 @@ async function _initJudgeMode(){
           if(!_judgeHeats.length)
             _judgeLoadMsg='ℹ Для доріжки '+lane+' немає запливів (всього запливів: '+heatSource.length+', учасників: '+(comp.entries?.length||0)+')';
           _judgeComp=comp;
+          try{localStorage.setItem(_jhKey(),JSON.stringify({heats:_judgeHeats.map(h=>({h:h.h,an:h.an,ev:h.ev})),comp,ts:Date.now()}));}catch(_){}
           if(typeof comp.activeHeatIdx==='number')
             setTimeout(()=>_judgeOnActiveHeat(comp.activeHeatIdx,comp.heats[comp.activeHeatIdx]?.globalNum),200);
         }
@@ -14573,6 +14604,17 @@ async function _initJudgeMode(){
       console.error('Judge load exception:',e);
     }
     _setJudgeStatus('','');
+    // Network failed → fall back to the heat list cached on the last successful open
+    if(!_judgeHeats.length){
+      try{
+        const c=JSON.parse(localStorage.getItem(_jhKey())||'null');
+        if(c?.heats?.length){
+          _judgeHeats=c.heats.map(h=>({...h,submitted:false,resultCs:null}));
+          _judgeComp=c.comp||null;_judgeLoadMsg='';
+          _setJudgeStatus('📵 Офлайн — список запливів від '+new Date(c.ts).toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}),'warn');
+        }
+      }catch(_){}
+    }
     // Save load error message so _judgeShowCurrent can display it
     if(_judgeLoadMsg) window._judgeLoadMsg=_judgeLoadMsg;
   }
