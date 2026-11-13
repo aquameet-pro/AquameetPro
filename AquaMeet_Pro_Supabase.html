@@ -1280,7 +1280,10 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 <div class="tab-panel" id="tab-schedule">
   <div class="section-header">
     <div><div class="section-title">📅 Розклад по днях</div><div class="section-sub" id="sched-sub"></div></div>
-    <button class="btn-primary" id="btn-add-day" onclick="openAddDay()">＋ Додати день</button>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+      <button class="btn-secondary" onclick="printProgram()" title="Програма змагань з орієнтовним часом старту кожної події">🖨 Програма</button>
+      <button class="btn-primary" id="btn-add-day" onclick="openAddDay()">＋ Додати день</button>
+    </div>
   </div>
   <div id="schedule-content"></div>
 </div>
@@ -2933,6 +2936,29 @@ function addSecToTime(startHHMM,sec){
   const eh=Math.floor(total/60)%24,em=total%60;
   return`${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`;
 }
+// Cumulative start-time estimate for every heat of one day, walking comp.heats in globalNum order
+// from day.startTime (+ opening ceremony on the first day). Heats nobody has a seed time for count
+// as FALLBACK seconds. Returns {heat:{[heatId]:'HH:MM'}, event:{['dist|style']:'HH:MM'}, end, unknown}
+function eventEtaMap(comp,dayId){
+  const out={heat:{},event:{},end:null,unknown:0};
+  const day=(comp?.days||[]).find(d=>d.id===dayId);
+  if(!day?.startTime)return out;
+  const firstDayId=comp.days[0]?.id;
+  let clock=(day.id===firstDayId&&day.openingMinutes)?day.openingMinutes*60:0;
+  const heats=(comp.heats||[]).filter(h=>h.dayId===dayId).sort((a,b)=>(a.globalNum||0)-(b.globalNum||0));
+  const FALLBACK=90;
+  for(const h of heats){
+    const t=addSecToTime(day.startTime,clock);
+    out.heat[h.id]=t;
+    const k=`${h.dist}|${h.style}`;
+    if(!out.event[k])out.event[k]=t;
+    let dur=heatDurationSec(h,comp);
+    if(dur===null){dur=FALLBACK;out.unknown++;}
+    clock+=dur;
+  }
+  out.end=heats.length?addSecToTime(day.startTime,clock):null;
+  return out;
+}
 // Estimate per-day and total duration. Returns {byDay:[{dayId,sec,heats,start,end}], totalSec, missing}
 function estimateCompetitionTime(comp){
   const hasHeats=comp?.heats?.length>0;
@@ -4511,6 +4537,8 @@ function renderSchedule(){
   if(!days.length){el.innerHTML='<div class="alert alert-info">Натисніть «＋ Додати день» для налаштування розкладу змагань</div>';return;}
   el.innerHTML=days.map(d=>{
     const cnt=(comp.entries||[]).filter(e=>e.dayId===d.id).length;
+    const eta=eventEtaMap(comp,d.id);
+    const etaBadge=eta.end?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовно, за заявленими часами${eta.unknown?` (${eta.unknown} запливів без часу — по 90 с)`:''}">⏱ ${d.startTime} → ~${eta.end}</span>`:'';
     const relayBadge=d.hasRelays?`<span class="badge" style="background:rgba(0,180,216,.15);color:var(--accent)">🤝 Естафети${d.relayMinutes?` (~${d.relayMinutes} хв)`:''}</span>`:'';
     const relayEventBadges=(d.relayEvents||[]).map(e=>{const rt=RELAY_TYPES?.[e.type];const gl=e.gender==='F'?'Ж':e.gender==='M'?'Ч':'Мікст';return rt?`<span class="badge badge-dist" style="font-size:.78rem">${rt.label} · ${gl}</span>`:''}).join('');
     const relayEventsLine=d.hasRelays&&(d.relayEvents||[]).length?`<div style="padding:.4rem 1rem .5rem;display:flex;flex-wrap:wrap;gap:.3rem">${relayEventBadges}</div>`:'';
@@ -4521,6 +4549,7 @@ function renderSchedule(){
         <span style="color:var(--text-muted);font-size:.83rem">${d.date}</span>
         <span class="badge badge-heat">${(d.events||[]).length} подій</span>
         <span class="badge badge-dist">${cnt} заявок</span>
+        ${etaBadge}
         ${relayBadge}
         <div style="margin-left:auto;display:flex;gap:.3rem">
           <button class="btn-secondary btn-xs" onclick="openEditDay(${d.id})">✏ Редагувати</button>
@@ -4528,11 +4557,63 @@ function renderSchedule(){
         </div>
       </div>
       <div style="padding:.75rem 1rem;display:flex;flex-wrap:wrap;gap:.4rem">
-        ${(d.events||[]).map(ev=>`<span class="badge badge-dist" style="font-size:.82rem;padding:.3rem .7rem">${ev.dist}м ${ev.style}</span>`).join('')||'<span style="color:var(--text-muted);font-size:.83rem">Немає запланованих подій</span>'}
+        ${(d.events||[]).map((ev,i)=>{const t=eta.event[`${ev.dist}|${ev.style}`];return`<span class="badge badge-dist" style="font-size:.82rem;padding:.3rem .7rem"><span style="opacity:.55;margin-right:.3rem">${i+1}.</span>${ev.dist}м ${ev.style}${t?`<span style="margin-left:.45rem;font-weight:700;color:#0a7a5a">~${t}</span>`:''}</span>`}).join('')||'<span style="color:var(--text-muted);font-size:.83rem">Немає запланованих подій</span>'}
       </div>
       ${relayEventsLine}
       ${relayNote}
     </div>`;}).join('');
+}
+// Printed "Програма змагань": every day, its events in order with estimated start time and heat count.
+// This is what trainers and parents actually ask for — "о котрій наш заплив?"
+function printProgram(){
+  const comp=activeComp();if(!comp){alert('Оберіть змагання');return;}
+  const days=comp.days||[];
+  if(!days.length){alert('Спочатку додайте дні та події в розкладі');return;}
+  const hasHeats=(comp.heats||[]).length>0;
+  let progNum=0,unknownTotal=0;
+  const daysHtml=days.map(d=>{
+    const eta=eventEtaMap(comp,d.id);unknownTotal+=eta.unknown;
+    const rows=(d.events||[]).map(ev=>{
+      progNum++;
+      const hs=(comp.heats||[]).filter(h=>h.dayId===d.id&&h.dist===ev.dist&&h.style===ev.style);
+      const t=eta.event[`${ev.dist}|${ev.style}`];
+      return`<tr><td class="c">${progNum}</td><td>${ev.dist} м ${escapeHtml(ev.style)}</td><td class="c">${hs.length||'—'}</td><td class="c time">${t?'~'+t:'—'}</td></tr>`;
+    }).join('');
+    const relays=(d.relayEvents||[]).map(e=>{const rt=RELAY_TYPES?.[e.type];const gl=e.gender==='F'?'Жінки':e.gender==='M'?'Чоловіки':'Змішана';return rt?`<tr><td class="c">${++progNum}</td><td>🤝 ${escapeHtml(rt.label)} · ${gl}</td><td class="c">—</td><td class="c time">—</td></tr>`:''}).join('');
+    const opening=(d.id===days[0]?.id&&d.openingMinutes)?`<div class="note">Урочисте відкриття — ${d.openingMinutes} хв</div>`:'';
+    return`<h2>${escapeHtml(d.label||'День')} · ${escapeHtml(d.date||'')}${d.startTime?` · початок ${d.startTime}`:''}${eta.end?` · орієнтовне завершення ~${eta.end}`:''}</h2>
+      ${opening}
+      <table><thead><tr><th>№</th><th>Подія</th><th>Запливів</th><th>Орієнтовний час</th></tr></thead><tbody>${rows}${relays}</tbody></table>`;
+  }).join('');
+  const note=!hasHeats?'<div class="note warn">Запливи ще не згенеровані — час старту буде розраховано після генерації.</div>':
+    unknownTotal?`<div class="note">${unknownTotal} запливів без заявленого часу враховано по 90 с.</div>`:'';
+  const dates=(comp.dateFrom||'')+(comp.dateTo&&comp.dateTo!==comp.dateFrom?' — '+comp.dateTo:'');
+  _openPrintWindow(`<!DOCTYPE html><html lang="uk"><head><meta charset="UTF-8">
+<title>Програма — ${escapeHtml(comp.name||'')}</title>
+<style>
+  @page{size:A4 portrait;margin:15mm 12mm}
+  body{font-family:'Times New Roman',serif;font-size:11pt;color:#000;margin:0}
+  h1{text-align:center;font-size:15pt;font-weight:bold;margin:0 0 2pt}
+  .meta{text-align:center;font-size:9.5pt;color:#444;margin-bottom:12pt}
+  h2{font-size:12pt;margin:14pt 0 5pt;border-bottom:1px solid #999;padding-bottom:2pt}
+  table{width:100%;border-collapse:collapse;font-size:10.5pt;margin-bottom:6pt}
+  th,td{border:1px solid #888;padding:3.5pt 6pt;vertical-align:middle}
+  th{background:#e8f4fb;font-weight:bold;text-align:center}
+  td.c{text-align:center}
+  td.time{font-weight:700;white-space:nowrap}
+  .note{font-size:9.5pt;color:#444;margin:2pt 0 6pt}
+  .note.warn{color:#8a4b00}
+  .foot{margin-top:10pt;font-size:9pt;color:#555}
+  .print-hint{background:#fffbe6;border:1px solid #f59e0b;padding:6pt;margin-bottom:10pt;border-radius:3pt;font-size:9pt}
+  @media print{.print-hint{display:none}}
+</style></head><body>
+<div class="print-hint">Ctrl+P / ⌘P → «Зберегти як PDF» або друк</div>
+<h1>ПРОГРАМА ЗМАГАНЬ</h1>
+<div class="meta">${escapeHtml(comp.name||'')}${dates?' · '+escapeHtml(dates):''}${comp.location?' · '+escapeHtml(comp.location):''}</div>
+${note}
+${daysHtml}
+<div class="foot">Час старту орієнтовний — за заявленими часами учасників і паузами між запливами. Сформовано ${new Date().toLocaleDateString('uk-UA')}.</div>
+</body></html>`);
 }
 function deleteDay(id){
   const comp=activeComp();if(!comp)return;
@@ -6078,6 +6159,8 @@ function renderHeats(){
   const dayFilt=document.getElementById('hf-day')?.value||'';
   const alert_el=document.getElementById('heats-alert');
   const cont=document.getElementById('heats-content');
+  const _etaByDay={}; // estimated start per heat, computed once per day
+  const _heatEta=h=>{const d=h.dayId;if(!(d in _etaByDay))_etaByDay[d]=comp?eventEtaMap(comp,d):{heat:{}};return _etaByDay[d].heat[h.id]||'';};
   if(comp&&['organizer','secretary','admin'].includes(_currentRole))_ensureOrgCtrlChannel();
   if(!comp?.heats?.length){
     alert_el.innerHTML='<div class="alert alert-warn">⚡ Натисніть «Генерувати запливи» для автоматичного розподілу учасників</div>';
@@ -6199,6 +6282,7 @@ function renderHeats(){
     return`<div class="heat-card">
       <div class="heat-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
+        ${_heatEta(heat)?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовний час старту за заявленими часами">⏱ ~${_heatEta(heat)}</span>`:''}
         <span class="badge badge-heat">Підзаплив ${inEvent}</span>
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
         ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
@@ -7667,7 +7751,7 @@ function buildA6Card(card){
       <div class="hb"><div class="hl">Заплив №</div><div class="hv">${heat.globalNum}</div></div>
       <div class="hb"><div class="hl">Доріжка</div><div class="hv">${ln}</div></div>
     </div>
-    <div class="ev"><div class="em">${heat.dist}м ${heat.style.toUpperCase()}</div><div class="es">${GMAP[heat.gender]||heat.gender}${ag?' · '+escapeHtml(ag.name):''}</div></div>
+    <div class="ev"><div class="em">${heat.dist}м ${heat.style.toUpperCase()}</div><div class="es">${GMAP[heat.gender]||heat.gender}${ag?' · '+escapeHtml(ag.name):''}${card.eta?' · старт ~'+card.eta:''}</div></div>
     <div class="pib">${escapeHtml(a.surname)} ${escapeHtml(a.name)}</div>
     <div class="det">${det}</div>
     <div class="ct">
@@ -7679,6 +7763,9 @@ function buildA6Card(card){
 function doPrint(){
   if(!activeComp()?.heats?.length){alert('Спочатку згенеруйте запливи');return;}
   const cards=getPrintCards();if(!cards.length){alert('Немає карток за обраними фільтрами');return;}
+  // Estimated start time per heat (one ETA map per day, not one per card)
+  const comp=activeComp(),etaByDay={};
+  cards.forEach(c=>{const d=c.heat.dayId;if(!(d in etaByDay))etaByDay[d]=eventEtaMap(comp,d);c.eta=etaByDay[d].heat[c.heat.id]||'';});
   let html='';
   for(let i=0;i<cards.length;i+=12){
     const s=cards.slice(i,i+12);
@@ -13887,7 +13974,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0014'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0022'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
