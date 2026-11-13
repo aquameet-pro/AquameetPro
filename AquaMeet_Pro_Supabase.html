@@ -807,6 +807,11 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   }
   .tbl-wrap thead th:nth-child(2){background:rgba(0,119,182,.09);z-index:3}
   tr:hover .tbl-wrap td:nth-child(2){background:rgba(0,180,216,.06)}
+  /* Athletes table has a checkbox column first: hide it on phones and make the NAME (3rd) sticky */
+  #tab-athletes .ath-sel-col{display:none!important}
+  #tab-athletes .tbl-wrap th:nth-child(2),#tab-athletes .tbl-wrap td:nth-child(2){position:static;box-shadow:none;min-width:0;max-width:none}
+  #tab-athletes .tbl-wrap th:nth-child(3),#tab-athletes .tbl-wrap td:nth-child(3){position:sticky;left:0;z-index:2;background:var(--card);box-shadow:3px 0 6px rgba(0,0,0,.08);min-width:110px;max-width:150px}
+  #tab-athletes .tbl-wrap thead th:nth-child(3){background:rgba(0,119,182,.09);z-index:3}
   /* Hide/show mobile-only columns */
   .tbl-wrap th.mob-hide,.tbl-wrap td.mob-hide{display:none}
   .mob-only{display:table-cell!important}
