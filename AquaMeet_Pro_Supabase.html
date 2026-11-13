@@ -1189,6 +1189,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
       <div id="st-heat-name" style="font-size:1.05rem;font-weight:800;color:#023e8a">⏳ Очікування активного запливу…</div>
       <div id="st-heat-num" style="font-size:.82rem;color:#5a9ab8;margin-top:.15rem"></div>
     </div>
+    <!-- Prev / next heat — the starter can advance the meet without the organizer's laptop -->
+    <div style="display:flex;gap:.4rem;margin-bottom:.5rem">
+      <button class="btn-secondary" style="flex:1;padding:.55rem;font-weight:700" onclick="starterGoTo(-1)" title="Попередній заплив">‹ Попередній</button>
+      <button class="btn-secondary" style="flex:1;padding:.55rem;font-weight:700" onclick="starterGoTo(1)" title="Наступний заплив">Наступний ›</button>
+    </div>
     <!-- Lane athletes grid -->
     <div id="st-athletes" style="margin-bottom:.5rem"></div>
     <!-- Readiness strip (from lane judges) -->
@@ -1199,6 +1204,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <button id="st-start-btn" class="sw-main-btn" style="font-size:1.35rem;padding:1.25rem;background:#06d6a0;color:#003d2e;box-shadow:0 6px 24px rgba(6,214,160,.4)" onclick="starterDoStart()">▶▶ СТАРТ</button>
     <!-- RESET button -->
     <button id="st-reset-btn" style="width:100%;margin-top:.55rem;padding:.7rem;font-size:.92rem;font-weight:700;border:2px solid #b8dff0;background:transparent;color:#023e8a;border-radius:12px;cursor:pointer;transition:all .12s" onclick="starterDoReset()">↺ Скинути таймер</button>
+    <button style="width:100%;margin-top:.45rem;padding:.7rem;font-size:.92rem;font-weight:800;border:2px solid #e63946;background:rgba(230,57,70,.08);color:#9b1c28;border-radius:12px;cursor:pointer" onclick="starterFalseStart()">⚠ Фальстарт</button>
     <!-- Status -->
     <div id="st-status" style="margin-top:.65rem;text-align:center;font-size:.86rem;font-weight:700;min-height:1.4rem;color:#5a9ab8"></div>
   </div>
@@ -1207,7 +1213,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <!-- ══ JUDGE LINKS MODAL ══ -->
 <div class="modal-overlay" id="modal-judge-links" onclick="if(event.target===this)closeModal('modal-judge-links')">
   <div class="modal" style="max-width:600px">
-    <div class="modal-header"><span>📱 Посилання для суддів</span><button class="btn-icon" onclick="closeModal('modal-judge-links')">✕</button></div>
+    <div class="modal-header"><span>📱 Посилання для суддів</span><span id="qr-presence" style="display:none;font-size:.74rem;color:#0a7a5a;margin-left:auto;margin-right:.5rem"></span><button class="btn-icon" onclick="closeModal('modal-judge-links')">✕</button></div>
     <div class="modal-body" id="modal-judge-links-body" style="max-height:70vh;overflow-y:auto"></div>
   </div>
 </div>
@@ -1387,6 +1393,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
     </div>
   </div>
   <div id="heats-alert"></div>
+  <div id="judge-presence" class="print-hide" style="display:none;font-size:.8rem;color:#0a7a5a;background:rgba(6,214,160,.1);border:1px solid rgba(6,214,160,.35);border-radius:8px;padding:.35rem .7rem;margin-bottom:.6rem"></div>
   <div id="judge-qr-banner-wrap"></div>
   <div id="heats-content"></div>
 </div>
@@ -14474,7 +14481,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0043'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0053'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -14997,7 +15004,9 @@ function _starterSubscribeCtrl(){
       else if(payload.type==='heat_reset')_starterOnExternalReset(payload.heatIdx);
       else if(payload.type==='judge_ready')_starterOnJudgeReady(payload.lane,payload.heatIdx);
       else if(payload.type==='judge_cancel_ready')_starterOnJudgeCancelReady(payload.lane,payload.heatIdx);
-    }).subscribe();
+    }).subscribe(st=>{
+      if(st==='SUBSCRIBED')_starterCtrlChannel?.track({role:'starter',t:Date.now()}).catch(()=>{});
+    });
   if(_starterCtrlHeartbeat)clearInterval(_starterCtrlHeartbeat);
   _starterCtrlHeartbeat=setInterval(()=>{
     if(!_starterCtrlChannel)return;
@@ -15121,7 +15130,28 @@ async function starterDoStart(){
   }catch(e){_starterSetStatus('⚠️ Сигнал відправлено, але помилка каналу: '+e.message);}
 }
 
-async function starterDoReset(){
+// Move the active heat from the starter's phone; the organizer and every judge receive heat_active
+async function starterGoTo(delta){
+  if(!_starterComp||!_starterCtrlChannel){_starterSetStatus('⚠️ Немає даних змагання або зв\'язку');return;}
+  if(_starterTimerRunning){_starterSetStatus('⚠️ Спершу скиньте таймер');return;}
+  const n=(_starterComp.heats||[]).length;if(!n)return;
+  let idx=_starterHeatIdx<0?0:_starterHeatIdx+delta;
+  if(idx<0||idx>=n){_starterSetStatus(idx<0?'Це перший заплив':'Це останній заплив');return;}
+  const heat=_starterComp.heats[idx];
+  _starterOnActiveHeat(idx);
+  try{await _starterCtrlChannel.send({type:'broadcast',event:'hctrl',payload:{type:'heat_active',heatIdx:idx,globalNum:heat?.globalNum||idx+1}});
+    _starterSetStatus('Активний заплив №'+(heat?.globalNum||idx+1)+' — відправлено суддям');}
+  catch(e){_starterSetStatus('⚠️ Помилка каналу: '+e.message);}
+}
+// False start: same as reset but judges get an explicit, loud signal
+async function starterFalseStart(){
+  if(_starterHeatIdx<0)return;
+  if(!confirm('Фальстарт — скинути таймер і повернути суддів на старт?'))return;
+  await starterDoReset(true);
+  _starterSetStatus('⚠ ФАЛЬСТАРТ — заплив перезапускається');
+  _judgeBuzz([300,100,300]);
+}
+async function starterDoReset(falseStart=false){
   _starterStopTimer();
   const timerEl=document.getElementById('st-timer');
   if(timerEl){timerEl.textContent='00:00:00';timerEl.classList.remove('st-running');}
@@ -15130,10 +15160,10 @@ async function starterDoReset(){
   if(_starterHeatIdx>=0&&_starterCtrlChannel){
     try{
       await _starterCtrlChannel.send({type:'broadcast',event:'hctrl',
-        payload:{type:'heat_reset',heatIdx:_starterHeatIdx}});
+        payload:{type:'heat_reset',heatIdx:_starterHeatIdx,falseStart:!!falseStart}});
     }catch(_){}
   }
-  _starterSetStatus('↺ Таймер скинуто');
+  if(!falseStart)_starterSetStatus('↺ Таймер скинуто');
 }
 
 function _starterStopTimer(){
@@ -15158,10 +15188,13 @@ function _judgeSubscribeCtrl(){
   _judgeCtrlChannel=_supa.channel('jctrl_'+_judgeP.oid+'_'+_judgeP.cid)
     .on('broadcast',{event:'hctrl'},({payload})=>{
       if(payload.type==='heat_start')_judgeOnSyncStart(payload.heatIdx,payload.startTs);
-      else if(payload.type==='heat_reset')_judgeOnSyncReset(payload.heatIdx);
+      else if(payload.type==='heat_reset')_judgeOnSyncReset(payload.heatIdx,payload.falseStart);
       else if(payload.type==='heat_active')_judgeOnActiveHeat(payload.heatIdx,payload.globalNum);
       else if(payload.type==='result_ack')_judgeOnAck(payload);
-    }).subscribe();
+    }).subscribe(st=>{
+      // Presence: the organizer sees which lanes actually have a phone on the channel
+      if(st==='SUBSCRIBED')_judgeCtrlChannel?.track({role:'judge',lane:String(_judgeP.l),r:_judgeP.r,t:Date.now()}).catch(()=>{});
+    });
   if(_judgeCtrlHeartbeat)clearInterval(_judgeCtrlHeartbeat);
   _judgeCtrlHeartbeat=setInterval(()=>{
     if(!_judgeCtrlChannel)return;
@@ -15222,7 +15255,7 @@ function _judgeOnSyncStart(heatIdx,startTs){
   _swRaf=requestAnimationFrame(_swTick);
   if(ss){ss.textContent='🟢 Заплив розпочато!';ss.style.background='rgba(6,214,160,.15)';ss.style.borderColor='#06d6a0';ss.style.color='#004d2e';}
 }
-function _judgeOnSyncReset(heatIdx){
+function _judgeOnSyncReset(heatIdx,falseStart){
   const heat=_judgeHeats[_judgeCurIdx];
   // If reset is for a different heat — just clear the "інший заплив іде" banner
   if(!heat||heat.h!==heatIdx){
@@ -15236,6 +15269,10 @@ function _judgeOnSyncReset(heatIdx){
   swReset(true);
   const ss=document.getElementById('j-sync-status');
   if(ss&&_judgeP.syn){ss.style.display='block';ss.textContent='⏳ Очікування сигналу старту від Організатора...';ss.style.background='';ss.style.borderColor='';ss.style.color='';}
+  if(falseStart){
+    _setJudgeStatus('⚠ ФАЛЬСТАРТ — заплив перезапускається, чекайте новий сигнал','err');
+    _judgeBuzz([300,100,300]);
+  }
 }
 function _judgeOnActiveHeat(heatIdx,globalNum){
   const gn=globalNum||heatIdx+1;
@@ -15587,8 +15624,23 @@ function _ensureOrgCtrlChannel(){
       else if(payload.type==='heat_active')_orgHandleActiveHeat(payload.heatIdx);
       else if(payload.type==='heat_start')_orgHandleStarterStart(payload.heatIdx,payload.startTs);
       else if(payload.type==='heat_reset')_orgHandleStarterReset(payload.heatIdx);
-    }).subscribe();
+    })
+    .on('presence',{event:'sync'},()=>{_orgPresence=_orgCtrlChannel?.presenceState()||{};_renderJudgePresence();})
+    .subscribe();
   return _orgCtrlChannel;
+}
+// ── Who is actually online: judges' and starter's phones track themselves on the ctrl channel ──
+let _orgPresence={};
+function _presenceList(){return Object.values(_orgPresence).flat();}
+function _judgeOnlineLanes(){return[...new Set(_presenceList().filter(p=>p.role==='judge'&&p.r!=='1').map(p=>+p.lane).filter(Boolean))].sort((a,b)=>a-b);}
+function _renderJudgePresence(){
+  const comp=activeComp();
+  const lanes=_judgeOnlineLanes();
+  const relayLanes=[...new Set(_presenceList().filter(p=>p.role==='judge'&&p.r==='1').map(p=>+p.lane))].sort((a,b)=>a-b);
+  const starter=_presenceList().some(p=>p.role==='starter');
+  const total=comp?_getActiveLanes(comp).length:0;
+  const txt=`📱 На зв'язку: судді ${lanes.length}${total?' з '+total:''}${lanes.length?' (дор. '+lanes.join(', ')+')':''}${relayLanes.length?' · естафета: '+relayLanes.join(', '):''} · стартер ${starter?'✓':'—'}`;
+  ['judge-presence','qr-presence'].forEach(id=>{const el=document.getElementById(id);if(!el)return;el.textContent=txt;el.style.display=(lanes.length||relayLanes.length||starter)?'':'none';});
 }
 // Tell the judge's phone that the organizer accepted/rejected their row — until now «Відправлено»
 // was the final state and a rejection vanished silently
