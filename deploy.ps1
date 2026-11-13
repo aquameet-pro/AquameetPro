@@ -37,9 +37,17 @@ Copy-Item "AquaMeet_Pro_Supabase.html" "index.html" -Force
 Write-Host "index.html updated"
 
 # 3. Git commit & push
+# Message goes through a file: PowerShell 5.1 does not escape embedded double quotes when passing
+# arguments to native commands, so a multi-line -m with quotes was split into stray tokens.
 git add AquaMeet_Pro_Supabase.html index.html sw.js
-git commit -m $msg
+$msgFile = Join-Path $env:TEMP "aquameet_commit_msg.txt"
+[IO.File]::WriteAllText($msgFile, $msg, (New-Object System.Text.UTF8Encoding $false))
+git commit -F $msgFile
+$commitOk = $?
+Remove-Item $msgFile -ErrorAction SilentlyContinue
+if (-not $commitOk) { throw "git commit failed - nothing was pushed" }
 git push origin main
+if (-not $?) { throw "git push failed" }
 
 Write-Host ""
 Write-Host "Deployed successfully!" -ForegroundColor Green
