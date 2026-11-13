@@ -567,6 +567,8 @@ body.role-trainer #btn-gen-heats{ display:none!important }
 body.role-trainer #btn-gen-relay-heats{ display:none!important }
 /* Естафети — заборона без підтвердження */
 body.role-trainer #btn-add-relay{ display:none!important } /* relays are organizer-only: trainer data never reaches app_state */
+body.role-trainer #hf-mine-wrap{ display:flex!important }
+.lane-cell.lane-hit{ outline:2px solid var(--warning); outline-offset:-2px; background:rgba(244,162,97,.12) }
 body.role-trainer:not(.trainer-confirmed) button[onclick="openAddRelayAg()"]{ display:none!important }
 /* Банер «лише перегляд» — коли є доступ, але не підтверджено */
 body.role-trainer.trainer-has-access:not(.trainer-confirmed) #trainer-readonly-banner{ display:flex!important }
@@ -1333,6 +1335,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <select id="af-dist" onchange="renderAthletes()" style="width:130px"><option value="">Всі (дист.)</option></select>
     <select id="af-style" onchange="renderAthletes()" style="width:140px"><option value="">Всі (стиль)</option></select>
     <select id="af-day" onchange="renderAthletes()" style="width:150px"><option value="">Всі (день)</option></select>
+    <select id="af-coach" onchange="renderAthletes()" style="width:160px"><option value="">Всі (тренер)</option></select>
     <input id="af-q" placeholder="🔍 Пошук..." oninput="renderAthletes()" style="width:180px">
     <button id="af-sort-btn" class="btn-secondary btn-sm" onclick="toggleAthSort()" title="Сортування">↕ За прізвищем</button>
     <button class="btn-secondary btn-sm" onclick="exportAthletesExcel()" title="Завантажити Excel">📥 Excel</button>
@@ -1346,8 +1349,17 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <span style="font-size:1.2rem">🔒</span>
     <div><strong>Реєстрацію закрито організатором.</strong> Додавання та редагування учасників і дистанцій заборонено. Якщо потрібно внести зміни — зверніться до організатора.</div>
   </div>
+  <div id="ath-bulk-bar" class="print-hide" style="display:none;align-items:center;gap:.5rem;flex-wrap:wrap;background:rgba(0,119,182,.08);border:1px solid var(--border);border-radius:10px;padding:.5rem .8rem;margin-bottom:.6rem;font-size:.82rem">
+    <strong id="ath-bulk-count">0 вибрано</strong>
+    <button class="btn-secondary btn-xs" onclick="bulkSetAthField('club','Клуб')">🏷 Клуб</button>
+    <button class="btn-secondary btn-xs" onclick="bulkSetAthField('city','Місто')">🏷 Місто</button>
+    <button class="btn-secondary btn-xs" onclick="bulkSetAthField('coach','Тренер')">🏷 Тренер</button>
+    <button class="btn-secondary btn-xs" style="color:var(--danger)" onclick="bulkDeleteAthletes()">✕ Видалити</button>
+    <button class="btn-secondary btn-xs" style="margin-left:auto" onclick="athSelectAll(false)">Зняти вибір</button>
+  </div>
   <div class="tbl-wrap">
     <table><thead><tr>
+      <th class="print-hide ath-sel-col"><input type="checkbox" title="Вибрати всіх у списку" onchange="athSelectAll(this.checked)" style="width:auto"></th>
       <th>#</th><th>ПІБ</th><th class="mob-hide">Стать</th><th class="mob-hide">Рік</th><th class="mob-hide">Місто</th><th class="mob-hide">Клуб</th><th class="mob-hide">Тренер</th><th>Розряд</th>
       <th>Дист.</th><th>Стиль</th><th class="mob-hide">День</th><th>Заявл.</th><th>Дії</th>
     </tr></thead><tbody id="ath-tbody"></tbody></table>
@@ -1361,6 +1373,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <div style="display:flex;gap:.45rem;flex-wrap:wrap">
       <select id="hf-day" onchange="renderHeats()" style="width:200px"><option value="">Всі дні</option></select>
       <select id="hf-event" onchange="renderHeats()" style="width:250px"><option value="">Всі події</option></select>
+      <input id="hf-q" placeholder="🔍 Прізвище" oninput="renderHeats()" style="width:150px" title="Показати лише запливи, де є цей учасник">
+      <label id="hf-mine-wrap" style="display:none;align-items:center;gap:.3rem;margin:0;font-size:.8rem;white-space:nowrap"><input type="checkbox" id="hf-mine" onchange="renderHeats()" style="width:auto">Тільки мої</label>
+      <button class="btn-secondary btn-sm" onclick="scrollToActiveHeat()" title="Прокрутити до активного заплива">▶ Активний</button>
       <button class="btn-warn" id="btn-gen-heats" onclick="generateHeats()">⚡ Генерувати запливи</button>
       <button class="btn-secondary btn-sm" onclick="printHeats()">🖨 Друк запливів</button>
       <button class="btn-secondary btn-sm" id="btn-judge-links" onclick="openJudgeLinks()" style="display:none">📱 Посилання для суддів</button>
@@ -4683,7 +4698,13 @@ function updateAthFilters(){
   const comp=activeComp();
   const agSel=document.getElementById('af-ag');
   const cv=agSel.value;
-  agSel.innerHTML='<option value="">Всі (група)</option>'+(comp?.ageGroups||[]).map(g=>`<option value="${g.id}"${cv==g.id?' selected':''}>${escapeHtml(g.name)}</option>`).join('');
+  agSel.innerHTML='<option value="">Всі (група)</option>'+(comp?.ageGroups||[]).map(g=>`<option value="${g.id}"${cv==g.id?' selected':''}>${escapeHtml(g.name)}</option>`).join('')+`<option value="none"${cv==='none'?' selected':''}>⚠ Поза групами</option>`;
+  const coachSel=document.getElementById('af-coach');
+  if(coachSel){
+    const cc=coachSel.value;
+    const coaches=[...new Set(db.athletes.map(a=>(a.coach||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+    coachSel.innerHTML='<option value="">Всі (тренер)</option>'+coaches.map(c=>`<option value="${escapeHtml(c)}"${cc===c?' selected':''}>${escapeHtml(c)}</option>`).join('');
+  }
   const distSel=document.getElementById('af-dist');
   const cd=distSel.value;
   const dists=[...new Set((comp?.entries||[]).map(e=>e.dist))].sort((a,b)=>a-b);
@@ -4697,6 +4718,41 @@ function updateAthFilters(){
   daySel.innerHTML='<option value="">Всі (день)</option>'+(comp?.days||[]).map(d=>`<option value="${d.id}"${cdy==d.id?' selected':''}>${d.label||d.date}</option>`).join('');
 }
 
+// ── Bulk actions on the athletes list (organizer / secretary / admin) ──────────────────────────
+function _athSelectedIds(){return[...document.querySelectorAll('#ath-tbody .ath-sel:checked')].map(c=>+c.value);}
+function athSelChanged(){
+  const n=_athSelectedIds().length;
+  const bar=document.getElementById('ath-bulk-bar');if(!bar)return;
+  const priv=['organizer','secretary','admin'].includes(_currentRole);
+  bar.style.display=n&&priv?'flex':'none';
+  const c=document.getElementById('ath-bulk-count');if(c)c.textContent=n+' вибрано';
+}
+function athSelectAll(on){document.querySelectorAll('#ath-tbody .ath-sel').forEach(c=>{c.checked=!!on;});athSelChanged();}
+function bulkSetAthField(field,label){
+  const ids=_athSelectedIds();if(!ids.length)return;
+  const v=prompt(`${label} для ${ids.length} учасників:`,'');if(v===null)return;
+  let changed=0;
+  for(const id of ids){const a=db.athletes.find(x=>x.id===id);if(a&&!a._trainerOwned){a[field]=v.trim();changed++;}}
+  saveDB();renderAthletes();
+  showToast(`✅ ${label}: оновлено ${changed}${changed<ids.length?` (учасників тренерів пропущено: ${ids.length-changed})`:''}`);
+}
+function bulkDeleteAthletes(){
+  const ids=_athSelectedIds().filter(id=>{const a=db.athletes.find(x=>x.id===id);return a&&!a._trainerOwned;});
+  const skipped=_athSelectedIds().length-ids.length;
+  if(!ids.length){showToast('Учасників тренерів видаляє тренер у своєму кабінеті',true);return;}
+  const withResults=ids.filter(id=>(db.competitions||[]).some(c=>(c.entries||[]).some(e=>e.athleteId===id&&e.result)));
+  if(!confirm(`Видалити ${ids.length} учасників разом з їхніми заявками${withResults.length?` (у ${withResults.length} з них уже є результати!)`:''}?${skipped?`\n${skipped} учасників тренерів буде пропущено.`:''}\nЦе не можна скасувати.`))return;
+  const gone=new Set(ids);
+  db.athletes=db.athletes.filter(a=>!gone.has(a.id));
+  (db.competitions||[]).forEach(c=>{
+    const eids=new Set((c.entries||[]).filter(e=>gone.has(e.athleteId)).map(e=>e.id));
+    if(!eids.size)return;
+    c.entries=c.entries.filter(e=>!eids.has(e.id));
+    (c.heats||[]).forEach(h=>{for(const ln of Object.keys(h.lanes||{}))if(eids.has(h.lanes[ln]))delete h.lanes[ln];});
+  });
+  saveDB();renderAthletes();renderHome();
+  showToast(`✅ Видалено ${ids.length} учасників`);
+}
 let _athSortMode='name'; // 'name' | 'seed'
 function toggleAthSort(){
   _athSortMode=_athSortMode==='name'?'seed':'name';
@@ -5073,8 +5129,10 @@ function renderAthletes(){
     }
     const ag=ageGroup(a,comp);
     if(gf&&a.gender!==gf)continue;
-    if(agf&&(!ag||ag.id!=agf))continue;
-    if(qf&&!`${a.surname} ${a.name}`.toLowerCase().includes(qf)&&!(a.club||'').toLowerCase().includes(qf)&&!(a.city||'').toLowerCase().includes(qf))continue;
+    if(agf==='none'){if(ag)continue;}else if(agf&&(!ag||ag.id!=agf))continue;
+    const cf=document.getElementById('af-coach')?.value||'';
+    if(cf&&(a.coach||'').trim()!==cf)continue;
+    if(qf&&!`${a.surname} ${a.name}`.toLowerCase().includes(qf)&&!(a.club||'').toLowerCase().includes(qf)&&!(a.city||'').toLowerCase().includes(qf)&&!(a.coach||'').toLowerCase().includes(qf))continue;
     let ent=(comp?.entries||[]).filter(e=>e.athleteId===a.id)
       .sort((a,b)=>a.dist-b.dist||STYLES.indexOf(a.style)-STYLES.indexOf(b.style));
     if(df&&!ent.find(e=>e.dist==df))continue;
@@ -5114,7 +5172,7 @@ function renderAthletes(){
       const canAssign=comp&&comp.heats?.length&&['organizer','secretary','admin'].includes(_currentRole);
       const assignBtn=canAssign?`<button class="btn-secondary btn-xs" title="Додати до запливів" onclick="assignLateAthlete(${a.id})" style="font-size:.72rem;color:var(--accent)">📋 В заплив</button>`:'';
       const _gStr=a.gender==='M'?'Ч':'Ж';
-      return[`<tr><td>${n++}</td><td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${testMark}<span class="mob-sub">${_gStr} · ${escapeHtml(a.birthYear)} · ${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span></td>
+      return[`<tr><td class="print-hide ath-sel-col"><input type="checkbox" class="ath-sel" value="${a.id}" onchange="athSelChanged()" style="width:auto"></td><td>${n++}</td><td><strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${testMark}<span class="mob-sub">${_gStr} · ${escapeHtml(a.birthYear)} · ${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span></td>
       <td class="mob-hide"><span class="badge badge-${escapeHtml(a.gender).toLowerCase()}">${_gStr}</span></td>
       <td class="mob-hide">${escapeHtml(a.birthYear)}</td><td class="mob-hide">${escapeHtml(a.city||'–')}</td><td class="mob-hide">${escapeHtml(a.club||'–')}</td><td class="mob-hide">${escapeHtml(a.coach||'–')}</td>
       <td><span class="badge badge-rank">${escapeHtml(a.currentRank||'–')}</span></td>
@@ -5124,7 +5182,7 @@ function renderAthletes(){
     const _gStrE=a.gender==='M'?'Ч':'Ж';
     return ent.map((e,idx)=>{
       const day=(comp?.days||[]).find(d=>d.id===e.dayId);
-      return`<tr><td>${idx===0?n++:''}</td>
+      return`<tr><td class="print-hide ath-sel-col">${idx===0?`<input type="checkbox" class="ath-sel" value="${a.id}" onchange="athSelChanged()" style="width:auto">`:''}</td><td>${idx===0?n++:''}</td>
         <td>${idx===0?`<strong>${escapeHtml(a.surname)}</strong> ${escapeHtml(a.name)}${testMark}<span class="mob-sub">${_gStrE} · ${escapeHtml(a.birthYear)} · ${escapeHtml([a.city,a.club].filter(Boolean).join(' · '))}</span>`:''}</td>
         <td class="mob-hide">${idx===0?`<span class="badge badge-${escapeHtml(a.gender).toLowerCase()}">${_gStrE}</span>`:''}</td>
         <td class="mob-hide">${idx===0?escapeHtml(a.birthYear):''}</td><td class="mob-hide">${idx===0?escapeHtml(a.city||'–'):''}</td><td class="mob-hide">${idx===0?escapeHtml(a.club||'–'):''}</td>
@@ -6238,6 +6296,18 @@ function generateHeats(){
   const _gbtn=document.getElementById('btn-gen-heats');
   if(_gbtn){_gbtn.disabled=false;_gbtn.innerHTML='⚡ Генерувати запливи';}
 }
+// Jump to the heat the organizer marked active (long days: 150+ cards on screen)
+function scrollToActiveHeat(){
+  const comp=activeComp();if(!comp)return;
+  const idx=typeof comp.activeHeatIdx==='number'?comp.activeHeatIdx:_orgActiveHeatIdx;
+  const h=idx>=0?comp.heats?.[idx]:null;
+  if(!h){showToast('Активний заплив ще не вибрано',true);return;}
+  const el=document.getElementById('heat-card-'+h.id);
+  if(!el){showToast('Заплив №'+h.globalNum+' приховано поточним фільтром',true);return;}
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  el.style.transition='box-shadow .3s';el.style.boxShadow='0 0 0 3px var(--warning)';
+  setTimeout(()=>{el.style.boxShadow='';},1800);
+}
 function renderHeats(){
   syncEventFilters();
   const comp=activeComp();
@@ -6286,7 +6356,20 @@ function renderHeats(){
   if(filt)heats=heats.filter(h=>h.eventKey===filt);
   if(dayFilt==='none')heats=heats.filter(h=>h.dayId==null);
   else if(dayFilt)heats=heats.filter(h=>h.dayId===parseInt(dayFilt));
-  document.getElementById('heats-sub').textContent=`${comp.heats.length} запливів`;
+  // Surname search and (trainer) "only my swimmers": keep heats with a matching lane, highlight the lane
+  const hq=(document.getElementById('hf-q')?.value||'').trim().toLowerCase();
+  const mine=!!document.getElementById('hf-mine')?.checked&&_currentRole==='trainer';
+  const _hitEntry=eid=>{
+    if(!hq&&!mine)return false;
+    const e=(comp.entries||[]).find(x=>x.id===eid);const a=e?db.athletes.find(x=>x.id===e.athleteId):null;if(!a)return false;
+    if(mine&&!(a._trainerOwned&&(!a._trainerId||a._trainerId===_currentUser?.id)))return false;
+    return !hq||(a.surname+' '+a.name).toLowerCase().includes(hq);
+  };
+  if(hq||mine){
+    heats=heats.filter(h=>Object.values(h.lanes||{}).some(_hitEntry));
+    if(!heats.length&&comp.heats.length)alert_el.innerHTML+='<div class="alert alert-warn" style="margin-bottom:.6rem">🔍 За цим фільтром запливів немає</div>';
+  }
+  document.getElementById('heats-sub').textContent=`${comp.heats.length} запливів${heats.length!==comp.heats.length?` · показано ${heats.length}`:''}`;
   // Duration estimate banner (uses ALL heats, not the filtered subset, so it shows full-day picture)
   const est=estimateCompetitionTime(comp);
   let banner='';
@@ -6333,7 +6416,7 @@ function renderHeats(){
       const swapActive=_swapState&&_swapState.heatId===heat.id;
       const isSwapSrc=swapActive&&_swapState.lane===ln;
       const isSwapTgt=swapActive&&_swapState.lane!==ln;
-      return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}${isSwapSrc?' swap-source':isSwapTgt?' swap-target':''}" id="lc-${heat.id}-${ln}">
+      return`<div class="lane-cell ${centerLns.includes(ln)?'lane-center':'lane-edge'}${isSwapSrc?' swap-source':isSwapTgt?' swap-target':''}${_hitEntry(eid)?' lane-hit':''}" id="lc-${heat.id}-${ln}">
         <div class="lane-num">Д.${ln}</div>
         <div class="lane-name">${a?escapeHtml(a.surname+' '+a.name):'?'}</div>
         <div class="lane-club">${a?escapeHtml([a.birthYear,a.coach,a.city&&a.club?a.city+' · '+a.club:a.city||a.club||null].filter(Boolean).join(' · ')):''}</div>
@@ -6375,7 +6458,7 @@ function renderHeats(){
     const hIdx=comp.heats.indexOf(heat);
     const isPriv2=['organizer','secretary','admin'].includes(_currentRole);
     const showTimer=isPriv2;
-    return`<div class="heat-card">
+    return`<div class="heat-card" id="heat-card-${heat.id}">
       <div class="heat-header">
         <span class="heat-title">Заплив №${heat.globalNum}</span>
         ${_heatEta(heat)?`<span class="badge" style="background:rgba(6,214,160,.14);color:#0a7a5a" title="Орієнтовний час старту за заявленими часами">⏱ ~${_heatEta(heat)}</span>`:''}
@@ -14386,7 +14469,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0040'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0043'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
