@@ -1748,7 +1748,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
     <div class="admin-section">
       <div class="admin-section-title">
         👥 Користувачі системи
-        <div style="margin-left:auto;display:flex;gap:.5rem">
+        <div style="margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+          <input id="adm-q" placeholder="🔍 ПІБ, email, клуб, місто" oninput="_renderAdminUsers()" style="width:200px;font-size:.8rem;padding:.3rem .5rem">
+          <select id="adm-role" onchange="_renderAdminUsers()" style="width:auto;font-size:.8rem;padding:.3rem .5rem">
+            <option value="">Всі ролі</option><option value="trainer">Тренери</option><option value="secretary">Секретарі</option><option value="organizer">Організатори</option><option value="admin">Адміни</option><option value="new7">Нові за 7 днів</option>
+          </select>
+          <button class="btn-secondary btn-sm" onclick="adminExportCsv()" title="Завантажити список користувачів">📥 CSV</button>
           <button class="btn-primary btn-sm" onclick="openCreateUserModal()">＋ Створити користувача</button>
           <button class="btn-secondary btn-sm" onclick="renderAdmin()">↺ Оновити</button>
         </div>
@@ -11890,6 +11895,26 @@ function _renderAdminStats(){
   set('stat-trainers',count('trainer'));
 }
 
+// Users visible under the admin search / role filter, newest first
+function _adminVisible(){
+  const q=(document.getElementById('adm-q')?.value||'').trim().toLowerCase();
+  const rf=document.getElementById('adm-role')?.value||'';
+  const weekAgo=Date.now()-7*864e5;
+  return [..._adminUsers]
+    .filter(u=>!rf||(rf==='new7'?(u.created_at&&new Date(u.created_at).getTime()>=weekAgo):u.role===rf))
+    .filter(u=>!q||[u.full_name,u.email,u.club,u.city].some(v=>(v||'').toLowerCase().includes(q)))
+    .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+function adminExportCsv(){
+  const list=_adminVisible();
+  if(!list.length){showToast('Немає користувачів для експорту',true);return;}
+  const esc=v=>`"${String(v??'').replace(/"/g,'""')}"`;
+  const lines=[['ПІБ','Email','Роль','Місто','Клуб','Категорія','Клуб підтверджено','Зареєстрований'].map(esc).join(';')];
+  for(const u of list)lines.push([u.full_name,u.email,ROLE_LABELS[u.role]||u.role,u.city,u.club,u.category,u.club_approved?'так':'',u.created_at?new Date(u.created_at).toLocaleDateString('uk-UA'):''].map(esc).join(';'));
+  const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='aquameet_users_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(a.href);
+}
 function _renderAdminUsers(){
   const wrap=document.getElementById('admin-users-wrap');
   if(!_adminUsers.length){
@@ -11899,7 +11924,8 @@ function _renderAdminUsers(){
   const organizers=_adminUsers.filter(u=>u.role==='organizer'||u.role==='admin');
   const orgOptions=organizers.map(o=>`<option value="${o.id}">${escapeHtml(o.full_name||o.email)}</option>`).join('');
 
-  const rows=_adminUsers.map(u=>{
+  const _vis=_adminVisible();
+  const rows=_vis.map(u=>{
     const roleBadge=`<span class="user-row-role role-${u.role}">${ROLE_LABELS[u.role]||u.role}</span>`;
     const clubAppr=u.role==='trainer'?`
       <label class="club-approved-toggle">
@@ -12029,6 +12055,21 @@ async function adminChangeRole(userId,newRole){
   await renderAdmin();
 }
 
+// Organizer assigns their own secretary by email — reuses adminSetOrganizer (write + both notifications).
+// Needs the profiles trigger to allow an organizer to set organizer_id = self on a secretary row.
+async function orgAssignSecretary(){
+  const email=(prompt('Email зареєстрованого секретаря:')||'').trim().toLowerCase();
+  if(!email)return;
+  const{data:p,error}=await _supa.from('profiles').select('id,role,full_name,organizer_id').ilike('email',email).maybeSingle();
+  if(error){showToast('❌ '+error.message,true);return;}
+  if(!p){showToast('Користувача з таким email не знайдено — він має спершу зареєструватись',true);return;}
+  if(p.role!=='secretary'){showToast(`${p.full_name||email} має роль «${ROLE_LABELS[p.role]||p.role}». Роль «Секретар» ставить адміністратор.`,true);return;}
+  const orgId=_viewingOwnerId||_currentUser.id;
+  if(p.organizer_id&&p.organizer_id!==orgId&&!confirm(`${p.full_name||email} вже прив'язаний до іншого організатора. Перепризначити?`))return;
+  await adminSetOrganizer(p.id,orgId);
+  try{await _loadInvData();}catch(_){}
+  renderOrgPanel({silent:true});
+}
 async function adminSetOrganizer(userId,organizerId){
   const val=organizerId||null;
   const{error}=await _supa.from('profiles').update({organizer_id:val}).eq('id',userId);
@@ -13314,11 +13355,12 @@ async function renderOrgPanel({silent=false}={}){
     const secStr=_orgSecretaries.length
       ?_orgSecretaries.map(s=>`<span style="font-weight:700;color:var(--accent)">${escapeHtml(s.full_name||s.email)}</span>${s.city?' <span style="color:var(--text-muted)">· '+escapeHtml(s.city)+'</span>':''}`).join(' ')
       :'<span style="color:var(--text-muted);font-size:.72rem">не призначено</span>';
+    const secAdd=(_currentRole==='organizer'||_currentRole==='admin')?' <button class="btn-secondary btn-xs" style="font-size:.7rem;padding:.1rem .4rem" onclick="orgAssignSecretary()" title="Призначити секретаря за email (без адміністратора)">＋ секретар</button>':'';
     const filterPill=label?`<div class="org-dash-filter">📊 ${label}<button onclick="selectOrgComp(null)" title="Показати всі">✕</button></div>`:'';
     return`<div class="org-dash-meta" id="org-dash-meta">
       <span class="odm-label">🗺</span>${cityStr}
       <span class="odm-sep">|</span>
-      <span class="odm-label">📋</span>${secStr}
+      <span class="odm-label">📋</span>${secStr}${secAdd}
       ${filterPill}
     </div>`;
   };
@@ -13482,9 +13524,10 @@ function selectOrgComp(compId){
     const secStr=_orgSecretaries.length
       ?_orgSecretaries.map(s=>`<span style="font-weight:700;color:var(--accent)">${escapeHtml(s.full_name||s.email)}</span>${s.city?' <span style="color:var(--text-muted)">· '+escapeHtml(s.city)+'</span>':''}`).join(' ')
       :'<span style="color:var(--text-muted);font-size:.72rem">не призначено</span>';
+    const secAdd=(_currentRole==='organizer'||_currentRole==='admin')?' <button class="btn-secondary btn-xs" style="font-size:.7rem;padding:.1rem .4rem" onclick="orgAssignSecretary()" title="Призначити секретаря за email (без адміністратора)">＋ секретар</button>':'';
     const filterPill=compId
       ?`<div class="org-dash-filter">📊 ${escapeHtml(filterComps[0]?.name||compId)}<button onclick="selectOrgComp(null)" title="Показати всі">✕</button></div>`:'';
-    meta.innerHTML=`<span class="odm-label">🗺</span>${cityStr}<span class="odm-sep">|</span><span class="odm-label">📋</span>${secStr}${filterPill}`;
+    meta.innerHTML=`<span class="odm-label">🗺</span>${cityStr}<span class="odm-sep">|</span><span class="odm-label">📋</span>${secStr}${secAdd}${filterPill}`;
   }
 }
 
@@ -14482,7 +14525,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0055'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0056'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
