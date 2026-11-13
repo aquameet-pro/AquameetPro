@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>AquaMeet Pro — Система управління змаганнями з плавання</title>
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
@@ -23,7 +23,7 @@
 :root{
   --accent:#0077b6;--accent2:#00b4d8;--accent3:#48cae4;
   --success:#06d6a0;--warning:#f4a261;--danger:#e63946;
-  --text:#023e8a;--text-dim:#1a6a9a;--text-muted:#5a9ab8;
+  --text:#023e8a;--text-dim:#1a6a9a;--text-muted:#3d7390;--text-faint:#5a9ab8; /* muted: 5.2:1 on white — old #5a9ab8 (3.1:1) kept as --text-faint for decor ≥14px */
   --bg:#e0f2fe;--surface:rgba(255,255,255,0.93);--card:rgba(255,255,255,0.98);
   --border:#b8dff0;--shadow:0 2px 16px rgba(0,119,182,0.10);
   --gold:#f4a228;--silver:#9aacb8;--bronze:#c87941;
@@ -182,7 +182,8 @@ tr:hover td{background:rgba(0,180,216,.04)}
 .heat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:.7rem;box-shadow:var(--shadow)}
 .heat-header{background:rgba(0,119,182,.07);padding:.6rem 1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;border-bottom:1px solid var(--border)}
 .heat-title{font-weight:800;color:var(--accent);font-size:.9rem}
-.lanes-grid{display:grid;grid-template-columns:repeat(6,1fr)}
+.lanes-grid{display:grid;grid-template-columns:repeat(var(--lanes,6),minmax(0,1fr))}
+@media(max-width:1200px){.lanes-grid{grid-template-columns:repeat(auto-fit,minmax(118px,1fr))}}
 .lane-cell{padding:.6rem .35rem;text-align:center;border-right:1px solid var(--border);font-size:.8rem}
 .lane-cell.swap-source{outline:2.5px solid var(--accent);outline-offset:-2px;background:rgba(0,119,182,.10)}
 .lane-cell.swap-target{outline:2px dashed var(--accent2);outline-offset:-2px;background:rgba(0,180,216,.07);cursor:pointer}
@@ -261,6 +262,9 @@ tr:hover td{background:rgba(0,180,216,.04)}
 .ach-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:20px;font-size:.73rem;font-weight:700;background:rgba(0,119,182,.13);color:#004d90;border:1px solid rgba(0,119,182,.3)}
 /* TIME INPUT */
 input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing:1px}
+/* Make entered vs. empty results visible at a glance while timing a heat */
+#tab-results input.t-inp:placeholder-shown{background:#fffdf4;border-color:#ecd9a8}
+#tab-results input.t-inp:not(:placeholder-shown){background:#f4fffb;border-color:rgba(6,214,160,.55);font-weight:700}
 /* ═══ AUTH OVERLAY ═══ */
 #auth-overlay{
   position:fixed;inset:0;z-index:9999;
@@ -389,7 +393,13 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 #offline-banner button{margin-left:auto;background:rgba(244,162,49,.18);border:1px solid rgba(244,162,49,.5);color:#7a4000;border-radius:6px;padding:.2rem .65rem;font-size:.75rem;cursor:pointer;font-family:inherit;white-space:nowrap}
 #offline-banner button:hover{background:rgba(244,162,49,.35)}
 @media print{
+  @page{size:A4 portrait;margin:14mm 10mm 16mm}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  /* Official-document look: serif body, table headers repeated on every page, no on-screen min-widths */
+  body.printing-tab{font-family:'Times New Roman',Times,serif;font-size:10pt}
+  body.printing-tab .tbl-wrap table,body.printing-tab table{min-width:0!important;width:100%}
+  body.printing-tab thead{display:table-header-group}
+  body.printing-tab tr{page-break-inside:avoid}
   body,body::before{background:white!important}
   body::before{display:none!important}
   .app-header,.app-nav,.offline-banner,.nav-wrap,.nav-arrow{display:none!important}
@@ -735,6 +745,8 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
 .bnav-drawer-btn.active{background:rgba(0,119,182,.15);border-color:var(--accent);color:var(--accent)}
 /* ── Mobile ── */
 @media(max-width:640px){
+  /* <16px inputs make iOS Safari zoom the page on every tap */
+  input,select,textarea{font-size:16px!important}
   .app-header{padding:.4rem .65rem;gap:.4rem;flex-wrap:wrap}
   .app-logo{font-size:1.05rem}
   .comp-selector{flex:1;min-width:0;max-width:none}
@@ -3043,6 +3055,15 @@ function _applyTimeFormat(inp,raw){
   else if(v.length>2)out=v.slice(0,2)+':'+v.slice(2);
   if(inp.value!==out)inp.value=out;
 }
+// Enter in a result field commits it and jumps to the next result field (lane order on screen)
+function onResultKeydown(e){
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+  const all=[...document.querySelectorAll('#tab-results input.t-inp')];
+  const i=all.indexOf(e.target);
+  e.target.blur(); // fires onchange → saveResult
+  const next=all[i+1];if(next){next.focus();next.select?.();}
+}
 function onTimeInput(e){
   const inp=e.target;
   setTimeout(()=>{
@@ -4478,7 +4499,9 @@ function deleteDay(id){
   if(!confirm('Видалити день? Заявки цього дня втратять прив\'язку.'))return;
   comp.days=comp.days.filter(d=>d.id!==id);
   (comp.entries||[]).forEach(e=>{if(e.dayId===id)e.dayId=null;});
-  comp.heats=[];saveDB();renderSchedule();
+  // Drop only this day's heats — wiping the whole grid destroyed other days' (already printed) heats
+  comp.heats=(comp.heats||[]).filter(h=>h.dayId!==id);
+  saveDB();renderSchedule();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6080,7 +6103,7 @@ function renderHeats(){
   }
   const isPriv3=['organizer','secretary','admin'].includes(_currentRole);
   cont.innerHTML=banner+heats.map(heat=>{
-    const activeLns=(comp.activeLanes&&comp.activeLanes.length)?[...comp.activeLanes].sort((a,b)=>a-b):[1,2,3,4,5,6];
+    const activeLns=_getActiveLanes(comp).sort((a,b)=>a-b); // 50 m pool defaults to 10 lanes, not 6
     const centerLns=buildLaneOrder(activeLns).slice(0,Math.min(2,Math.floor(activeLns.length/2)));
     const cells=activeLns.map(ln=>{
       const eid=heat.lanes[ln];
@@ -6140,7 +6163,7 @@ function renderHeats(){
         <span style="font-size:.83rem;color:var(--text-muted)">${evLabel(heat.dist,heat.style,heat.gender)}</span>
         ${showTimer?`<span id="jtmr-${heat.id}" style="margin-left:auto;font-family:monospace;font-size:.85rem;font-weight:800;color:var(--accent);min-width:60px;text-align:right"></span>`:''}
       </div>
-      <div class="lanes-grid print-hide">${cells}</div>
+      <div class="lanes-grid print-hide" style="--lanes:${activeLns.length}">${cells}</div>
       <div class="heat-print-table" style="display:none">
         <div style="font-size:8pt;font-weight:600;background:#dde8f0;padding:2px 5px;border:1px solid #888;border-bottom:none">
           Заплив №${heat.globalNum} — ${evLabel(heat.dist,heat.style,heat.gender)} · Підзаплив ${inEvent}
@@ -6254,7 +6277,7 @@ function renderResults(){
         <td style="font-family:monospace;font-size:.82rem;color:var(--text-muted);white-space:nowrap">${entry.seedTime||'–'}</td>
         <td><div style="white-space:nowrap;display:flex;align-items:center;gap:.25rem;flex-wrap:nowrap">
           ${isPriv
-            ?`<input class="t-inp" id="res-${eid}" type="text" value="${entry.result||''}" placeholder="хх:хх:хх" style="width:90px;font-family:monospace;font-size:.82rem" oninput="onTimeInput(event)" onchange="saveResult(${eid},this.value)">
+            ?`<input class="t-inp" id="res-${eid}" type="text" value="${entry.result||''}" placeholder="хх:хх:хх" style="width:90px;font-family:monospace;font-size:.82rem" inputmode="decimal" oninput="onTimeInput(event)" onkeydown="onResultKeydown(event)" onchange="saveResult(${eid},this.value)">
               <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Н/С')" title="Не стартував">Н/С</button>
               <button class="btn-secondary btn-xs" style="font-size:.72rem;padding:.2rem .4rem;white-space:nowrap" onclick="setResultStatus(${eid},'Д/К')" title="Дискваліфікований">Д/К</button>`
             :`<span style="font-family:monospace;font-size:.82rem">${entry.result||'–'}</span>`}
@@ -6434,7 +6457,10 @@ function setResultStatus(eid,code){
 }
 function clearResult(eid){
   const comp=activeComp();if(!comp)return;
-  const e=(comp.entries||[]).find(x=>x.id===eid);if(e)e.result=null;
+  const e=(comp.entries||[]).find(x=>x.id===eid);
+  // A recorded time is not recoverable — confirm before wiping it (wet fingers on a tablet)
+  if(e?.result&&!confirm('Стерти результат '+e.result+'? Відновити його буде неможливо.'))return;
+  if(e)e.result=null;
   const el=document.getElementById('res-'+eid);if(el)el.value='';
   const rankCell=document.getElementById('rank-'+eid);if(rankCell)rankCell.innerHTML='<span style="color:var(--text-muted)">–</span>';
   saveDB();
@@ -7559,7 +7585,7 @@ function updatePrintPreview(){
   const comp=activeComp();
   if(!comp?.heats?.length){document.getElementById('pr-preview').innerHTML='<span style="color:var(--warning)">⚠ Запливи не згенеровані</span>';return;}
   const cards=getPrintCards();
-  document.getElementById('pr-preview').innerHTML=`Буде надруковано: <strong>${cards.length} карток</strong> на <strong>${Math.ceil(cards.length/4)} аркушах А4</strong> (4 картки А6 на аркуш)`;
+  document.getElementById('pr-preview').innerHTML=`Буде надруковано: <strong>${cards.length} карток</strong> на <strong>${Math.ceil(cards.length/12)} аркушах А4</strong> (12 карток на аркуш, 2×6 — як у doPrint)`;
 }
 function getPrintCards(){
   const comp=activeComp();if(!comp?.heats?.length)return[];
@@ -7573,7 +7599,8 @@ function getPrintCards(){
   for(const heat of comp.heats){
     if(!sd.includes(heat.dist))continue;
     if(!ss.includes(heat.style))continue;
-    for(let ln=1;ln<=6;ln++){
+    // Iterate the lanes the heat actually has — 50 m pools run 8–10, not 6
+    for(const ln of Object.keys(heat.lanes||{}).map(Number).sort((a,b)=>a-b)){
       const eid=heat.lanes[ln];if(!eid)continue;
       const entry=(comp.entries||[]).find(e=>e.id===eid);if(!entry)continue;
       if(dayFilt&&entry.dayId!=dayFilt)continue;
@@ -7874,10 +7901,16 @@ ${sections}
   w.document.close();
   setTimeout(()=>{try{w.focus();w.print();}catch(e){console.error(e);}},400);
 }
+function _confirmMissingResults(label){
+  const comp=activeComp();if(!comp)return true;
+  const missing=(comp.entries||[]).filter(e=>!e.exhibition&&(e.result==null||e.result==='')).length;
+  return !missing||confirm(`У ${label} ${missing} заявок без результату. Все одно друкувати?`);
+}
 function printProtocol(){
   if(!(activeComp()?.entries||[]).length){alert('Немає даних для протоколу');return;}
   const comp=activeComp();
   const isPre=_protoMode==='pre';
+  if(!isPre&&!_confirmMissingResults('протоколі'))return;
   const kindLabel=isPre?'Попередній протокол':'Протокол';
   // Title page only for official protocol
   if(!isPre){
@@ -7955,6 +7988,7 @@ function buildProtocolTitlePage(comp){
 }
 function printStandings(){
   if(!(activeComp()?.entries||[]).length){alert('Немає даних');return;}
+  if(!_confirmMissingResults('таблиці призерів'))return;
   const evKey=document.getElementById('stf-event')?.value||'';
   printTab('tab-standings',scopeFromSelects('',evKey,'Призери'));
 }
@@ -8844,7 +8878,7 @@ function buildRelayResultsHtml(comp,relayHeats,activeLns){
         <td style="font-family:monospace;color:var(--text-muted)">${t.seedTime||'–'}</td>
         <td style="padding:.3rem .4rem">
           ${isPriv
-            ?`<input class="t-inp" type="text" placeholder="хх:хх:хх"
+            ?`<input class="t-inp" type="text" placeholder="хх:хх:хх" inputmode="decimal"
                 value="${t.result||''}" style="width:108px;font-family:monospace"
                 oninput="autoFormatTime(this)"
                 onchange="saveRelayHeatResult('${t.id}',this.value)">
@@ -8884,7 +8918,7 @@ function saveRelayHeatResult(teamId,value){
   if(filt.startsWith('relay:')){
     const relayKey=filt.slice(6);
     const relayH=(comp.relayHeats||[]).filter(rh=>rh.key===relayKey);
-    const activeLns=(comp.activeLanes&&comp.activeLanes.length)?[...comp.activeLanes].sort((a,b)=>a-b):[1,2,3,4,5,6];
+    const activeLns=_getActiveLanes(comp).sort((a,b)=>a-b); // 50 m pool defaults to 10 lanes, not 6
     document.getElementById('results-content').innerHTML=buildRelayResultsHtml(comp,relayH,activeLns);
   }
 }
@@ -13813,7 +13847,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261113-2327'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0011'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
