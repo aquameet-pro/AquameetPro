@@ -385,6 +385,12 @@ input.t-inp{font-family:'Courier New',monospace;text-align:center;letter-spacing
 /* TOAST */
 #toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--accent);color:#fff;padding:.65rem 1.3rem;border-radius:9px;font-size:.86rem;font-weight:600;z-index:999;box-shadow:0 4px 20px rgba(0,119,182,.4);transition:opacity .3s;pointer-events:none;opacity:0;max-width:420px;white-space:pre-wrap;word-break:break-word}
 #toast.show{opacity:1}
+/* Toast stack: #toast is now a container, each message is its own item (max 3, errors linger) */
+#toast{background:none!important;padding:0!important;box-shadow:none!important;opacity:1!important;display:flex;flex-direction:column;gap:.4rem;align-items:flex-end}
+.toast-item{background:var(--accent);color:#fff;padding:.65rem 1.3rem;border-radius:9px;font-size:.86rem;font-weight:600;box-shadow:0 4px 20px rgba(0,119,182,.4);pointer-events:auto;max-width:420px;white-space:pre-wrap;word-break:break-word;animation:toastIn .2s ease-out}
+.toast-item.err{background:var(--danger);box-shadow:0 4px 20px rgba(230,57,70,.4)}
+.toast-item .toast-undo{margin-left:.8rem;background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:.15rem .6rem;font:inherit;font-size:.8rem;cursor:pointer}
+@keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 /* PRINT */
 .print-area{display:none}
 /* OFFLINE BANNER */
@@ -2459,6 +2465,7 @@ function saveDB(){
   if(!ownerId)return;
   if(_supaSavePending)return;
   _supaSavePending=true;
+  _setSyncIndicator('💾 збереження…');
   setTimeout(async()=>{
     _supaSavePending=false;
     try{
@@ -2472,15 +2479,23 @@ function saveDB(){
       if(error){
         console.warn('[AquaMeet] Save error:',error.message);
         showToast('⚠️ Помилка збереження в хмару: '+error.message,true);
+        _setSyncIndicator('⚠ не збережено');
+        // Network-type failure → flip the offline banner so "Перевірити зараз" / auto-resync kick in
+        if(/fetch|network|timeout|load failed/i.test(error.message||'')){_supaOffline=true;_updateOfflineBanner();}
       }else{
         _supaLastSaveTs=Date.now();
+        _setSyncIndicator('✅ збережено '+new Date().toLocaleTimeString('uk-UA',{hour:'2-digit',minute:'2-digit'}));
         // Remember our own save stamp so the realtime echo / next poll of this very save
         // (or any older organizer save) is not re-applied over newer local state
         _lastDbUpdatedAt=db._savedAt;
         console.log('[AquaMeet] Saved to cloud, _savedAt:',db._savedAt);
         _refreshPublicSnapshots(ownerId); // keep public pages live without exposing app_state
       }
-    }catch(e){console.warn('[AquaMeet] Save exception:',e);showToast('⚠️ Виняток збереження: '+e.message,true);}
+    }catch(e){
+      console.warn('[AquaMeet] Save exception:',e);showToast('⚠️ Виняток збереження: '+e.message,true);
+      _setSyncIndicator('⚠ не збережено');
+      _supaOffline=true;_updateOfflineBanner(); // a thrown fetch = no network
+    }
   },200);
 }
 
@@ -3151,13 +3166,22 @@ function betterRank(a,b){
 // TOAST
 // ═══════════════════════════════════════════════════════════════
 let toastTimer=null;
-function showToast(msg,isErr=false){
-  const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.style.background=isErr?'var(--danger)':'var(--accent)';
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>el.classList.remove('show'),isErr?5000:3000);
+// Stacked toasts: a new message no longer wipes the previous one (a cloud-save error used to vanish
+// under the next "розряд" toast). Optional undoFn adds a «Скасувати» button and keeps it 8 s.
+function showToast(msg,isErr=false,undoFn=null){
+  const box=document.getElementById('toast');if(!box)return;
+  const it=document.createElement('div');
+  it.className='toast-item'+(isErr?' err':'');
+  it.setAttribute('role','status');it.setAttribute('aria-live','polite');
+  it.textContent=msg;
+  if(typeof undoFn==='function'){
+    const b=document.createElement('button');b.className='toast-undo';b.textContent='Скасувати';
+    b.onclick=()=>{it.remove();try{undoFn();}catch(e){console.warn('undo:',e);}};
+    it.appendChild(b);
+  }
+  box.appendChild(it);
+  while(box.children.length>3)box.firstChild.remove();
+  setTimeout(()=>it.remove(),isErr?6000:(undoFn?8000:3000));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3245,8 +3269,11 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 function switchTab(name){document.querySelector(`.tab-btn[data-tab="${name}"]`)?.click();}
 
 // ── Bottom nav ──────────────────────────────────────────
-const _BNAV_MAIN=['home','schedule','heats','results'];
+// Main bar tabs come from the actual buttons — the hard-coded list had drifted from the markup
+// (it said 'schedule' where the bar shows 'athletes'), so highlighting was wrong on two tabs
+const _BNAV_MAIN=[...document.querySelectorAll('#bottom-nav .bnav-btn[data-bnav]')].map(b=>b.dataset.bnav);
 const _BNAV_ALL=[
+  {tab:'schedule',   icon:'📅', label:'Розклад'},
   {tab:'athletes',   icon:'👥', label:'Учасники'},
   {tab:'protocol',   icon:'📋', label:'Протокол'},
   {tab:'standings',  icon:'🏆', label:'Призери'},
@@ -3255,6 +3282,7 @@ const _BNAV_ALL=[
   {tab:'archive',    icon:'📚', label:'Архів/Рейтинг'},
   {tab:'news',       icon:'📰', label:'Новини'},
   {tab:'reglament',  icon:'📜', label:'Регламент'},
+  {tab:'print',      icon:'📇', label:'Картки А6'},
   {tab:'settings',   icon:'⚙️', label:'Налаштування'},
   {tab:'orgpanel',   icon:'🗂', label:'Мої змагання'},
   {tab:'invitations',icon:'📬', label:'Запрошення'},
@@ -3269,6 +3297,7 @@ function _buildBnavDrawer(activeTab){
   const grid=document.getElementById('bnav-drawer-grid');
   if(!grid)return;
   const items=_BNAV_ALL.filter(item=>{
+    if(_BNAV_MAIN.includes(item.tab))return false; // already on the bar — no duplicates in "Ще"
     if(item.tab==='settings'&&_currentRole==='trainer')return false;
     const topBtn=document.querySelector(`.tab-btn[data-tab="${item.tab}"]`);
     return topBtn&&topBtn.style.display!=='none'&&!topBtn.closest('[style*="display:none"]');
@@ -3298,10 +3327,21 @@ function closeBnavDrawer(){
 // ═══════════════════════════════════════════════════════════════
 // MODAL HELPERS
 // ═══════════════════════════════════════════════════════════════
-function openModal(id){document.getElementById(id)?.classList.add('open');}
+function openModal(id){
+  const el=document.getElementById(id);if(!el)return;
+  el.classList.add('open');
+  // Put the cursor in the first field so keyboard users (and the on-screen keyboard) are ready
+  setTimeout(()=>el.querySelector('input:not([type=hidden]):not([disabled]),select,textarea')?.focus(),60);
+}
 function closeModal(id){document.getElementById(id)?.classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');});
+});
+// Esc closes the top-most open modal (none of the 24 modals handled the keyboard at all)
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  const open=[...document.querySelectorAll('.modal-overlay.open')].pop();
+  if(open){open.classList.remove('open');e.preventDefault();}
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -13847,10 +13887,11 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0011'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0014'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
+  // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
-  if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
+  if(el){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
 }
 function _subscribeDataUpdates(){
   // Trainers, admins, and secretaries all need to watch the organizer's data in real-time
@@ -14059,6 +14100,26 @@ async function _jqFlush(){
 // from the public_links snapshot by that token and tags every judge_inputs row with it, so anon RLS
 // can require a valid token instead of letting anyone who knows an organizer uuid read app_state
 // or push fake results. Links without `t` are legacy QR codes and fall back to the old path.
+// ── Deck ergonomics: keep the screen on while judging, and make the start audible/tactile ──
+let _wakeLock=null,_judgeAC=null;
+async function _judgeKeepAwake(){
+  try{if('wakeLock'in navigator&&!document.hidden)_wakeLock=await navigator.wakeLock.request('screen');}catch(_){}
+  // AudioContext must be unlocked by a user gesture — do it on the first touch
+  document.addEventListener('touchstart',()=>{try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){_judgeAC=_judgeAC||new AC();_judgeAC.resume();}}catch(_){}},{once:true,passive:true});
+}
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&((typeof _judgeMode!=='undefined'&&_judgeMode)||(typeof _starterMode!=='undefined'&&_starterMode)))_judgeKeepAwake();
+});
+function _judgeBuzz(pattern){
+  try{if(navigator.vibrate)navigator.vibrate(pattern||[200]);}catch(_){}
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+    _judgeAC=_judgeAC||new AC();
+    const o=_judgeAC.createOscillator(),g=_judgeAC.createGain();
+    o.frequency.value=880;g.gain.value=.15;o.connect(g);g.connect(_judgeAC.destination);
+    o.start();o.stop(_judgeAC.currentTime+.18);
+  }catch(_){}
+}
 async function _ensureJudgeToken(comp,ownerId,regen){
   if(comp.judgeToken&&!regen)return comp.judgeToken;
   const oldToken=comp.judgeToken||null;
@@ -14187,6 +14248,7 @@ async function _initJudgeMode(){
   if(navigator.onLine)_jqFlush();
   _judgeSubscribeCtrl();
   if(_judgeP.rdy){const b=document.getElementById('j-ready-btn');if(b)b.style.display='';}
+  _judgeKeepAwake();
   return true;
 }
 
@@ -14321,6 +14383,7 @@ async function _initStarterMode(){
     }
   }catch(e){_starterSetStatus('❌ Помилка: '+e.message);}
   _starterSubscribeCtrl();
+  _judgeKeepAwake();
   return true;
 }
 
@@ -14527,6 +14590,7 @@ function _judgeOnSyncStart(heatIdx,startTs){
   _swElapsedMs=0;
   _swStartTs=startTs; // server timestamp → elapsed = Date.now()-startTs
   _swRunning=true;
+  _judgeBuzz([200,100,200]); // the start is otherwise only visual — phone is at arm's length on the deck
   const btn=document.getElementById('sw-btn');
   const disp=document.getElementById('sw-disp');
   if(btn){btn.innerHTML='⏹&nbsp;СТОП';btn.classList.add('run');}
