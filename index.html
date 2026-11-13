@@ -7045,6 +7045,72 @@ function _rankEntries(comp,athletes){
     return{...ev,items};
   });
 }
+// ── Team points (командний залік) ────────────────────────────────────────────────────────────────
+// comp.scoring = {system:'none'|'7-5-4-3-2-1'|'9-7-6-5-4-3-2-1'|'10-8-6-5-4-3-2-1'|'custom', custom:'9-7-…', relayX2:true}
+const SCORING_TABLES={'none':null,'7-5-4-3-2-1':[7,5,4,3,2,1],'9-7-6-5-4-3-2-1':[9,7,6,5,4,3,2,1],'10-8-6-5-4-3-2-1':[10,8,6,5,4,3,2,1]};
+function _scoringTable(comp){
+  const s=comp?.scoring||{};
+  if(s.system==='custom'){const t=(s.custom||'').split(/[^0-9]+/).map(Number).filter(n=>n>0);return t.length?t:null;}
+  return SCORING_TABLES[s.system||'none']||null;
+}
+// Points per club: individual events via _rankEntries (tied swimmers share the place's points),
+// relays ranked the same way and multiplied when scoring.relayX2 (default on).
+// Returns rows sorted by points, then gold/silver/bronze: [{club,city,points,ind,rel,g,s,b}] or null when off.
+function computeTeamPoints(comp){
+  const table=_scoringTable(comp);if(!table)return null;
+  const relayMul=comp.scoring?.relayX2===false?1:2;
+  const clubs={};
+  const bump=(club,city,pts,place,kind)=>{
+    const k=(club||'').trim()||'Без клубу';
+    if(!clubs[k])clubs[k]={club:k,city:city||'',points:0,ind:0,rel:0,g:0,s:0,b:0};
+    const c=clubs[k];c.points+=pts;c[kind]+=pts;
+    if(place===1)c.g++;else if(place===2)c.s++;else if(place===3)c.b++;
+  };
+  for(const ev of _rankEntries(comp,db.athletes))
+    for(const it of ev.items){const pts=table[it.place-1]||0;if(pts||it.place<=3)bump(it.a.club,it.a.city,pts,it.place,'ind');}
+  const eligible=(comp.relays||[]).filter(t=>t.result&&parseTime(t.result)!==null&&!t.exhibition);
+  const grouped={};
+  for(const t of eligible){const ag=relayAgeGroup(t,comp);const k=relayEvKey(t.type,t.gender,ag?ag.id:0);(grouped[k]=grouped[k]||[]).push(t);}
+  for(const teams of Object.values(grouped)){
+    const sorted=[...teams].sort((a,b)=>parseTime(a.result)-parseTime(b.result));
+    let lastCs=null,lastPlace=0;
+    sorted.forEach((t,i)=>{
+      const cs=parseTime(t.result);const place=cs===lastCs?lastPlace:i+1;lastCs=cs;lastPlace=place;
+      const pts=(table[place-1]||0)*relayMul;if(pts||place<=3)bump(t.club,t.city,pts,place,'rel');
+    });
+  }
+  return Object.values(clubs).sort((a,b)=>b.points-a.points||b.g-a.g||b.s-a.s||b.b-a.b||a.club.localeCompare(b.club,'uk'));
+}
+function setScoringSystem(system){
+  const comp=activeComp();if(!comp)return;
+  comp.scoring={...(comp.scoring||{}),system};
+  if(system==='custom'){
+    const v=prompt('Очки за місця через дефіс, починаючи з 1-го:',comp.scoring.custom||'9-7-6-5-4-3-2-1');
+    if(v===null)return;
+    comp.scoring.custom=v.trim();
+  }
+  saveDB();renderStandings();
+}
+function toggleRelayX2(on){const comp=activeComp();if(!comp)return;comp.scoring={...(comp.scoring||{}),relayX2:!!on};saveDB();renderStandings();}
+function _buildTeamPointsHtml(comp){
+  const isPriv=['organizer','secretary','admin'].includes(_currentRole);
+  const sys=comp.scoring?.system||'none';
+  const opts=[['none','— вимкнено —'],['7-5-4-3-2-1','7-5-4-3-2-1 (6 місць)'],['9-7-6-5-4-3-2-1','9-7-6-5-4-3-2-1 (8 місць)'],['10-8-6-5-4-3-2-1','10-8-6-5-4-3-2-1 (8 місць)'],['custom','Своя таблиця…']];
+  const sel=isPriv?`<div class="print-hide" style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem">
+      <label style="margin:0;font-size:.8rem;font-weight:600">Система нарахування:</label>
+      <select onchange="setScoringSystem(this.value)" style="width:auto">${opts.map(([v,l])=>`<option value="${v}"${v===sys?' selected':''}>${l}</option>`).join('')}</select>
+      ${sys!=='none'?`<label style="margin:0;font-size:.8rem;display:flex;align-items:center;gap:.3rem;cursor:pointer"><input type="checkbox" style="width:auto" ${comp.scoring?.relayX2===false?'':'checked'} onchange="toggleRelayX2(this.checked)">Естафети ×2</label>`:''}
+    </div>`:'';
+  const rows=computeTeamPoints(comp);
+  const card=(body)=>`<div class="heat-card" style="margin-top:1rem"><div class="heat-header"><span class="heat-title">🏅 Командний залік</span>${rows?`<span class="badge badge-dist">${escapeHtml(sys==='custom'?(comp.scoring.custom||''):sys)}${comp.scoring?.relayX2===false?'':' · естафети ×2'}</span>`:''}</div><div style="padding:.6rem 1rem">${sel}${body}</div></div>`;
+  if(!rows)return isPriv?card('<div style="font-size:.8rem;color:var(--text-muted)">Оберіть систему нарахування, щоб побачити очки по клубах.</div>'):'';
+  if(!rows.length)return card('<div style="font-size:.8rem;color:var(--text-muted)">Ще немає результатів із місцями.</div>');
+  const tbl=_scoringTable(comp);
+  return card(`<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Клуб</th><th>Місто</th><th>Очки</th><th>Індив.</th><th>Естаф.</th><th>🥇</th><th>🥈</th><th>🥉</th></tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr><td style="text-align:center;font-weight:700">${i+1}</td><td><strong>${escapeHtml(r.club)}</strong></td><td>${escapeHtml(r.city||'–')}</td><td style="text-align:center;font-weight:800;font-size:1rem">${r.points}</td><td style="text-align:center">${r.ind}</td><td style="text-align:center">${r.rel}</td><td style="text-align:center">${r.g}</td><td style="text-align:center">${r.s}</td><td style="text-align:center">${r.b}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div style="font-size:.74rem;color:var(--text-muted);margin-top:.4rem">Очки за місця: ${tbl.join(' · ')}. Рівні часи ділять місце й отримують однакові очки; «поза конкурсом» не рахується.</div>`);
+}
 function renderStandings(){
   syncEventFilters();
   const comp=activeComp();
@@ -7095,7 +7161,7 @@ function renderStandings(){
     </div>`;
   }).join(''):''; // end of indHtml
 
-  el.innerHTML=(indHtml||'')+buildRelayStandingsHtml(comp);
+  el.innerHTML=(indHtml||'')+buildRelayStandingsHtml(comp)+_buildTeamPointsHtml(comp);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -10400,7 +10466,7 @@ function saveCompTemplate(){
     ageGroups:JSON.parse(JSON.stringify(comp.ageGroups||[])),
     relayAgeGroups:JSON.parse(JSON.stringify(comp.relayAgeGroups||[])),
     days:(comp.days||[]).map(d=>({...d,date:'',label:d.label||''})),
-    poolLength:comp.poolLength,activeLanes:comp.activeLanes,
+    poolLength:comp.poolLength,activeLanes:comp.activeLanes,scoring:comp.scoring?{...comp.scoring}:undefined,
     mainJudge:comp.mainJudge||'',mainJudgeCat:comp.mainJudgeCat||'',
     secretary:comp.secretary||'',secretaryCat:comp.secretaryCat||'',
     director:comp.director||'',directorTitle:comp.directorTitle||'',
@@ -10424,7 +10490,7 @@ function applyCompTemplate(){
     ageGroups:JSON.parse(JSON.stringify(t.ageGroups||[])),
     relayAgeGroups:JSON.parse(JSON.stringify(t.relayAgeGroups||[])),
     days:(t.days||[]).map((d,i)=>({...d,id:i+1,date:''})),
-    poolLength:t.poolLength||'25',activeLanes:t.activeLanes||[1,2,3,4,5,6],
+    poolLength:t.poolLength||'25',activeLanes:t.activeLanes||[1,2,3,4,5,6],...(t.scoring?{scoring:{...t.scoring}}:{}),
     mainJudge:t.mainJudge,mainJudgeCat:t.mainJudgeCat,secretary:t.secretary,secretaryCat:t.secretaryCat,
     director:t.director,directorTitle:t.directorTitle,organizer:t.organizer,location:t.location,
     poolName:t.poolName,shelterAddress:t.shelterAddress,awardsText:t.awardsText,
@@ -14067,7 +14133,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0028'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0030'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
