@@ -10947,7 +10947,6 @@ async function generateShareLink(){
     token,
     owner_id:_viewingOwnerId||_currentUser.id,
     comp_id:comp.id,
-    comp_name:comp.name,
     views,
     snapshot:_buildPublicSnapshot(comp,db)
   });
@@ -13810,7 +13809,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261113-2300'; // stamped by deploy.ps1
+const APP_BUILD='20261113-2310'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   const el=document.getElementById('sync-indicator');
   if(el&&_currentRole==='trainer'){el.style.display='inline';el.textContent=text+' · v'+APP_BUILD;}
