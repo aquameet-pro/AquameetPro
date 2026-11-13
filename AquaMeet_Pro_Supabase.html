@@ -560,7 +560,7 @@ body.role-trainer #btn-add-day{ display:none!important }
 body.role-trainer #btn-gen-heats{ display:none!important }
 body.role-trainer #btn-gen-relay-heats{ display:none!important }
 /* Естафети — заборона без підтвердження */
-body.role-trainer:not(.trainer-confirmed) #btn-add-relay{ display:none!important }
+body.role-trainer #btn-add-relay{ display:none!important } /* relays are organizer-only: trainer data never reaches app_state */
 body.role-trainer:not(.trainer-confirmed) button[onclick="openAddRelayAg()"]{ display:none!important }
 /* Банер «лише перегляд» — коли є доступ, але не підтверджено */
 body.role-trainer.trainer-has-access:not(.trainer-confirmed) #trainer-readonly-banner{ display:flex!important }
@@ -1478,8 +1478,7 @@ body.role-trainer .stat-box.aqua{ display:none!important } /* заявки */
   </div>
   <div id="trainer-readonly-banner-relay" style="display:none;align-items:center;gap:.75rem;background:rgba(244,162,49,.1);border:1px solid rgba(244,162,49,.4);border-radius:10px;padding:.7rem 1rem;margin-bottom:.75rem;font-size:.84rem;color:#7a4000">
     <span style="font-size:1.2rem">👁</span>
-    <div><strong>Режим перегляду.</strong> Щоб додавати команди естафет — підтвердіть участь у вкладці <strong>📬 Запрошення</strong>.</div>
-    <button class="btn-warn btn-sm" style="margin-left:auto;white-space:nowrap" onclick="switchTab('invitations')">📬 Підтвердити</button>
+    <div><strong>Режим перегляду.</strong> Команди естафет вносить організатор — надішліть йому склад (назва, тип, учасники по етапах). Тут ви бачите склади, запливи й результати.</div>
   </div>
   <div id="trainer-regclosed-banner-relay" style="display:none;align-items:center;gap:.75rem;background:rgba(230,57,70,.07);border:1px solid rgba(230,57,70,.3);border-radius:10px;padding:.7rem 1rem;margin-bottom:.75rem;font-size:.84rem;color:#7a0010">
     <span style="font-size:1.2rem">🔒</span>
@@ -8706,6 +8705,8 @@ let editingRelayId=null;
 
 function canEditRelays(){
   const comp=activeComp();if(!comp)return false;
+  // Trainers never write app_state (saveDB is a no-op for them), so a team they "add" would vanish
+  // on the next sync — relays stay organizer-only and the UI must not pretend otherwise
   if(_currentRole==='trainer')return false;
   if(comp.status==='done')return false;
   if(comp.relaysLocked)return false;
@@ -8922,6 +8923,18 @@ function saveRelayTeam(){
     }
     return{athleteId:parseInt(sel.value),guestName:null,legTime:null};
   });
+
+  // One swimmer cannot swim two legs of the same team
+  const legIds=legs.filter(l=>l?.athleteId).map(l=>l.athleteId);
+  const dupId=legIds.find((id,i)=>legIds.indexOf(id)!==i);
+  if(dupId){const a=db.athletes.find(x=>x.id===dupId);alert(`${a?a.surname+' '+a.name:'Учасник'} стоїть на двох етапах однієї команди`);return;}
+  // …and normally not in two teams of the same event — warn, don't block (B-teams happen)
+  const clash=(comp.relays||[]).filter(t=>t.name!==name&&t.type===type&&t.gender===gender)
+    .flatMap(t=>(t.legs||[]).filter(l=>l?.athleteId&&legIds.includes(l.athleteId)).map(l=>({t,l})));
+  if(clash.length){
+    const who=clash.map(({t,l})=>{const a=db.athletes.find(x=>x.id===l.athleteId);return(a?a.surname+' '+a.name:'?')+' — вже в «'+t.name+'»';}).join('\n');
+    if(!confirm('Учасник уже заявлений в іншій команді цієї ж естафети:\n'+who+'\n\nЗберегти все одно?'))return;
+  }
 
   // Validate mixed: exactly 2 M and 2 F
   if(gender==='X'||(rtype.mixed)){
@@ -9163,6 +9176,7 @@ async function acceptRelayJudgeInput(rowId,heatIdx,lane){
     if(row.splits_json){try{team.splits=JSON.parse(row.splits_json);}catch(_){}}
   }
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+  _orgSendAck(_judgeInputsCache.find(r=>r.id==rowId),true);
   const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
   if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
   saveDB();renderRelayHeats();renderRelays();_updateResultsBadge();_updateRelayBadge();
@@ -14233,7 +14247,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0034'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0036'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -14567,7 +14581,7 @@ async function _initJudgeMode(){
   _judgeHeats.forEach(h=>{
     try{
       const s=JSON.parse(localStorage.getItem(_judgeResKey(h.h))||'null');
-      if(s){h.submitted=true;h.resultCs=s.cs||null;h.status=s.status||null;h.splits=s.splits||[];}
+      if(s){h.submitted=true;h.resultCs=s.cs||null;h.status=s.status||null;h.splits=s.splits||[];h.ack=s.ack||null;}
     }catch(_){}
   });
 
@@ -14607,7 +14621,7 @@ function _judgeRenderList(){
   el.innerHTML=_judgeHeats.map((h,i)=>{
     const isCur=i===_judgeCurIdx;
     const cls='jheat-item'+(h.submitted?' jhi-done':'')+(isCur?' jhi-cur':'');
-    const ico=h.submitted?(h.status==='dns'?'—':h.status==='dsq'?'✗':'✓'):isCur?'▶':'○';
+    const ico=h.ack==='rejected'&&!h.submitted?'❌':h.submitted?(h.ack==='ok'?'✓✓':h.status==='dns'?'—':h.status==='dsq'?'✗':'✓'):isCur?'▶':'○';
     const timeSpan=h.submitted?(h.resultCs?`<span class="jhi-time">${fmtTime(h.resultCs)}</span>`
       :(h.status==='dns'?'<span class="jhi-time" style="color:#ef9a9a">Н/С</span>'
       :h.status==='dsq'?'<span class="jhi-time" style="color:#ef9a9a">Д/К</span>':h.status==='dnf'?'<span class="jhi-time" style="color:#f4a261">Н/Ф</span>':'')):'';
@@ -14905,6 +14919,7 @@ function _judgeSubscribeCtrl(){
       if(payload.type==='heat_start')_judgeOnSyncStart(payload.heatIdx,payload.startTs);
       else if(payload.type==='heat_reset')_judgeOnSyncReset(payload.heatIdx);
       else if(payload.type==='heat_active')_judgeOnActiveHeat(payload.heatIdx,payload.globalNum);
+      else if(payload.type==='result_ack')_judgeOnAck(payload);
     }).subscribe();
   if(_judgeCtrlHeartbeat)clearInterval(_judgeCtrlHeartbeat);
   _judgeCtrlHeartbeat=setInterval(()=>{
@@ -14916,6 +14931,28 @@ function _judgeSubscribeCtrl(){
       _judgeSubscribeCtrl();
     }
   },30000);
+}
+// Organizer accepted or rejected one of our rows
+function _judgeOnAck(p){
+  if(String(p.lane)!==String(_judgeP.l))return;
+  if((p.heatType==='relay')!==(_judgeP.r==='1'))return;
+  const idx=_judgeHeats.findIndex(x=>x.h===p.heatIdx);if(idx<0)return;
+  const h=_judgeHeats[idx];
+  let saved={};try{saved=JSON.parse(localStorage.getItem(_judgeResKey(h.h))||'{}');}catch(_){}
+  if(p.ok){
+    h.ack='ok';
+    try{localStorage.setItem(_judgeResKey(h.h),JSON.stringify({...saved,ack:'ok'}));}catch(_){}
+    _setJudgeStatus('✅ Організатор прийняв результат З.'+(h.h+1),'ok');
+    _judgeBuzz([80]);
+  }else{
+    // Rejected → reopen the heat so the judge can resubmit
+    h.ack='rejected';h.submitted=false;h.resultCs=null;h.status=null;
+    try{localStorage.removeItem(_judgeResKey(h.h));}catch(_){}
+    _judgeCurIdx=idx;
+    _setJudgeStatus('❌ Організатор відхилив результат З.'+(h.h+1)+' — перевірте і відправте ще раз','err');
+    _judgeBuzz([200,80,200,80,200]);
+  }
+  _judgeRenderList();_judgeShowCurrent();
 }
 function _judgeOnSyncStart(heatIdx,startTs){
   if(!_judgeP.syn)return;
@@ -15312,6 +15349,13 @@ function _ensureOrgCtrlChannel(){
     }).subscribe();
   return _orgCtrlChannel;
 }
+// Tell the judge's phone that the organizer accepted/rejected their row — until now «Відправлено»
+// was the final state and a rejection vanished silently
+function _orgSendAck(row,ok){
+  if(!row)return;
+  const ch=_ensureOrgCtrlChannel();if(!ch)return;
+  try{ch.send({type:'broadcast',event:'hctrl',payload:{type:'result_ack',heatIdx:row.heat_idx,lane:row.lane,ok:!!ok,heatType:row.heat_type||'heat'}});}catch(_){}
+}
 function _orgHandleStarterReset(heatIdx){
   const comp=activeComp();if(!comp)return;
   const heat=comp.heats[heatIdx];if(!heat)return;
@@ -15706,12 +15750,14 @@ async function acceptJudgeInput(id,idx){
   }
   // Update status in Supabase
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',id);}catch(_){}
+  _orgSendAck(row,true);
   _judgeInputsCache[idx]={..._judgeInputsCache[idx],status:'accepted'};
   renderJudgeInputsPanel();
 }
 
 async function rejectJudgeInput(id,idx){
   try{await _supa.from('judge_inputs').update({status:'rejected'}).eq('id',id);}catch(_){}
+  _orgSendAck(_judgeInputsCache[idx],false);
   _judgeInputsCache[idx]={..._judgeInputsCache[idx],status:'rejected'};
   renderJudgeInputsPanel();
 }
@@ -15725,6 +15771,7 @@ async function acceptJudgeTime(rowId,eid){
   const a=db.athletes?.find(x=>x.id===entry.athleteId);
   if(a){const rk=checkRank(entry.style,entry.dist,a.gender,cs);entry.achievedRank=rk||null;if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}_pbToast(entry,a,cs);}
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+  _orgSendAck(_judgeInputsCache.find(r=>r.id==rowId),true);
   const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
   if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
   saveDB();renderResults();_updateResultsBadge();
@@ -15740,6 +15787,7 @@ async function acceptJudgeStatus(rowId,eid,statusCode){
   const srcRow=_judgeInputsCache.find(r=>r.id==rowId);
   if(code==='Д/К'&&srcRow?.dsq_reason)entry.dsqReason=srcRow.dsq_reason;else delete entry.dsqReason;
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
+  _orgSendAck(_judgeInputsCache.find(r=>r.id==rowId),true);
   const ci=_judgeInputsCache.findIndex(r=>r.id==rowId);
   if(ci>=0)_judgeInputsCache[ci]={..._judgeInputsCache[ci],status:'accepted'};
   saveDB();renderResults();_updateResultsBadge();
