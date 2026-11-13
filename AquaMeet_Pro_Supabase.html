@@ -6604,6 +6604,7 @@ function renderResults(){
             :`<span style="font-family:monospace;font-size:.82rem">${entry.result||'–'}</span>`}
           ${entry.result==='Д/К'&&entry.dsqReason?`<span style="font-size:.68rem;color:var(--danger);max-width:140px;white-space:normal" title="Причина Д/К">${escapeHtml(entry.dsqReason)}</span>`:''}
           ${_isPB?'<span class="badge" style="background:rgba(244,162,40,.18);color:#8a5a00;font-size:.66rem;padding:.1rem .35rem" title="Особистий рекорд">⭐ ОР</span>':''}
+          ${entry.splits?.length?`<span style="font-size:.64rem;color:var(--text-muted);white-space:nowrap" title="Проміжні відрізки від судді">${entry.splits.map(s=>fmtTime(s.totalCs)).join(' · ')}</span>`:''}
         </div></td>
         <td id="rank-${eid}" style="text-align:center">${achievedRank?`<span class="ach-badge">${achievedRank}</span>`:'<span style="color:var(--text-muted)">–</span>'}</td>
         ${judgeColHtml}${statusColHtml}
@@ -14481,7 +14482,7 @@ function _saveTrainerDeletedIds(){
   try{localStorage.setItem(_delIdsKey(),JSON.stringify([..._trainerDeletedSupaIds].slice(-200)));}catch(_){}
 }
 let _dataChannel=null,_trainerPollTimer=null,_lastDbUpdatedAt='';
-const APP_BUILD='20261114-0053'; // stamped by deploy.ps1
+const APP_BUILD='20261114-0055'; // stamped by deploy.ps1
 function _setSyncIndicator(text){
   // All roles: writers see "збереження… / збережено HH:MM", trainers see the poll state
   const el=document.getElementById('sync-indicator');
@@ -14794,13 +14795,13 @@ async function _initJudgeMode(){
               const ath=athletes.find(a=>a.id===entry.athleteId);
               const an=((ath?(ath.surname||'')+' '+(ath.name||''):'Спортсмен')).trim();
               const ev=((entry.dist?entry.dist+'м ':'')+(entry.style||heat.eventName||'')).trim();
-              return{h:hIdx,an,ev,submitted:false,resultCs:null};
+              return{h:hIdx,an,ev,dist:entry.dist||0,submitted:false,resultCs:null};
             }
           }).filter(Boolean);
           if(!_judgeHeats.length)
             _judgeLoadMsg='ℹ Для доріжки '+lane+' немає запливів (всього запливів: '+heatSource.length+', учасників: '+(comp.entries?.length||0)+')';
           _judgeComp=comp;
-          try{localStorage.setItem(_jhKey(),JSON.stringify({heats:_judgeHeats.map(h=>({h:h.h,an:h.an,ev:h.ev})),comp,ts:Date.now()}));}catch(_){}
+          try{localStorage.setItem(_jhKey(),JSON.stringify({heats:_judgeHeats.map(h=>({h:h.h,an:h.an,ev:h.ev,dist:h.dist||0})),comp,ts:Date.now()}));}catch(_){}
           if(typeof comp.activeHeatIdx==='number')
             setTimeout(()=>_judgeOnActiveHeat(comp.activeHeatIdx,comp.heats[comp.activeHeatIdx]?.globalNum),200);
         }
@@ -14890,6 +14891,8 @@ function judgeGoTo(idx){
 }
 
 function _judgeShowCurrent(){
+  // Lap button: relays always, individual events only when the distance has more than one pool length
+  if(!_relayMode){const lb=document.getElementById('sw-lap');if(lb)lb.style.display=_legCount()>1?'':'none';}
   const content=document.getElementById('j-content');
   const allDone=document.getElementById('j-all-done');
   if(_judgeCurIdx>=_judgeHeats.length){
@@ -15390,6 +15393,14 @@ function swReset(force=false){
 let _swSplits=[];      // [{leg, legCs, totalCs}]
 let _relayMode=false;
 const RELAY_LEGS=4;    // стандартна естафета — 4 етапи
+// How many segments the lap button expects for the current heat: 4 legs for a relay, one per pool
+// length for an individual event of 100 m and longer (100/25 → 4, 200/50 → 4), 0 = no splits
+function _legCount(){
+  if(_relayMode)return RELAY_LEGS;
+  const h=_judgeHeats[_judgeCurIdx];const d=+(h?.dist)||0;
+  const pl=+(_judgeComp?.poolLength)||25;
+  return d>pl?Math.round(d/pl):0;
+}
 
 function toggleRelayMode(){
   _relayMode=!_relayMode;
@@ -15412,7 +15423,8 @@ function _resetLapBtn(){
 function swLap(){
   if(!_swRunning&&_swElapsedMs===0)return;
   const doneLegs=_swSplits.length;
-  if(doneLegs>=RELAY_LEGS)return; // вже всі етапи записані
+  const LEGS=_legCount();
+  if(!LEGS||doneLegs>=LEGS)return; // всі відрізки записані (або дистанція без сплітів)
 
   const totalMs=_swRunning?(Date.now()-_swStartTs):_swElapsedMs;
   const totalCs=Math.floor(totalMs/10);
@@ -15420,8 +15432,8 @@ function swLap(){
   const prevTotal=doneLegs?_swSplits[doneLegs-1].totalCs:0;
   const legCs=totalCs-prevTotal;
 
-  if(leg===RELAY_LEGS){
-    // Останній (4-й) етап = ФІНІШ: зупиняємо секундомір
+  if(leg===LEGS){
+    // Останній відрізок = ФІНІШ: зупиняємо секундомір
     if(_swRunning) swToggle(); // зупиняє + заповнює j-manual
     _swSplits.push({leg,legCs,totalCs});
     _renderSplits();
@@ -15434,8 +15446,8 @@ function swLap(){
     _renderSplits();
     const lapBtn=document.getElementById('sw-lap');
     if(lapBtn){
-      // Після 3-го — кнопка стає "Фініш"
-      if(leg===RELAY_LEGS-1){
+      // Після передостаннього відрізка — кнопка стає "Фініш"
+      if(leg===LEGS-1){
         lapBtn.textContent='🏁 Фініш!';
         lapBtn.classList.add('finish');
       }
@@ -15552,10 +15564,11 @@ async function submitJudgeResult(){
 
   const heat=_judgeHeats[_judgeCurIdx]||{};
   const splitsSnap=[..._swSplits]; // знімок перед скиданням
-  // For relay: if judge stopped via main button instead of lap button, auto-add final split
-  if(_relayMode&&splitsSnap.length===RELAY_LEGS-1&&cs){
+  // If the judge stopped via the main button instead of the lap button, auto-add the final segment
+  const LEGS=_legCount();
+  if(LEGS>1&&splitsSnap.length===LEGS-1&&cs){
     const prevTotal=splitsSnap[splitsSnap.length-1].totalCs;
-    splitsSnap.push({leg:RELAY_LEGS,legCs:cs-prevTotal,totalCs:cs});
+    splitsSnap.push({leg:LEGS,legCs:cs-prevTotal,totalCs:cs});
   }
   const row={owner_id:_judgeP.oid,comp_id:String(_judgeP.cid),heat_idx:heat.h||0,...(_judgeP.t?{token:_judgeP.t}:{}),
     lane:parseInt(_judgeP.l),athlete_name:heat.an||'',event_name:heat.ev||'',
@@ -16061,6 +16074,7 @@ async function acceptJudgeTime(rowId,eid){
   const entry=(comp.entries||[]).find(e=>e.id===eid);if(!entry)return;
   const cs=row.result_cs;const timeStr=fmtTime(cs);
   entry.result=timeStr;entry.resultCs=cs;entry.confirmedBy='від судді';
+  if(row.splits_json){try{const sp=JSON.parse(row.splits_json);entry.splits=Array.isArray(sp)&&sp.length?sp:undefined;}catch(_){}}else delete entry.splits;
   const a=db.athletes?.find(x=>x.id===entry.athleteId);
   if(a){const rk=checkRank(entry.style,entry.dist,a.gender,cs);entry.achievedRank=rk||null;if(rk){const better=betterRank(a.currentRank,rk);if(better!==a.currentRank){a.currentRank=better;showToast(`🎖 ${a.surname} ${a.name} виконав ${rk}!`);}}_pbToast(entry,a,cs);}
   try{await _supa.from('judge_inputs').update({status:'accepted'}).eq('id',rowId);}catch(_){}
