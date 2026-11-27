@@ -157,6 +157,17 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
   .lane-name{display:none}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+/* ── форма зв'язку ── */
+.cform{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;max-width:760px;margin-top:22px}
+.cform label{display:flex;flex-direction:column;gap:6px;font-weight:500;font-size:.95rem}
+.cform .wide{grid-column:1/-1}
+.cform input,.cform textarea{font:400 1rem var(--body);color:var(--ink);background:#fff;border:1.5px solid #c5dfec;border-radius:6px;padding:.7rem .8rem;width:100%}
+.cform textarea{resize:vertical}
+.cform .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.crow{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+#cf-status{font-size:.95rem}#cf-status.ok{color:#0a7a3a;font-weight:700}#cf-status.err{color:var(--flag);font-weight:700}
+@media(max-width:640px){.cform{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -165,7 +176,7 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
   <div class="wrap">
     <nav class="nav" aria-label="Головна навігація">
       <a class="logo" href="#top">Aqua<b>Meet</b> Pro</a>
-      <span style="display:flex;gap:10px"><a class="btn btn-line" href="app.html?demo">Демо</a><a class="btn btn-go" href="app.html">Увійти</a></span>
+      <span style="display:flex;gap:10px"><a class="btn btn-line" href="#contact">Контакти</a><a class="btn btn-line" href="app.html?demo">Демо</a><a class="btn btn-go" href="app.html">Увійти</a></span>
     </nav>
 
     <header class="hero" id="top">
@@ -411,6 +422,20 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
   </div>
 </section>
 
+<section id="contact">
+  <div class="wrap">
+    <h2>Напишіть нам</h2>
+    <p class="lead">Питання, пропозиція або хочете провести змагання в системі — залиште повідомлення, ми відповімо.</p>
+    <form class="cform" id="cform" novalidate>
+      <label>Як до вас звертатись<input id="cf-name" name="name" maxlength="120" autocomplete="name"></label>
+      <label>Email або телефон для відповіді *<input id="cf-contact" name="contact" maxlength="200" required autocomplete="email"></label>
+      <label class="wide">Повідомлення *<textarea id="cf-msg" name="message" rows="5" maxlength="4000" required></textarea></label>
+      <label class="hp" aria-hidden="true">Не заповнюйте це поле<input id="cf-site" name="website" tabindex="-1" autocomplete="off"></label>
+      <div class="wide crow"><button class="btn btn-go" type="submit" id="cf-send">Надіслати</button><span id="cf-status" role="status"></span></div>
+    </form>
+  </div>
+</section>
+
 <footer><div class="wrap">© 2026 AquaMeet Pro. Система управління змаганнями з плавання. Усі права захищені.</div></footer>
 
 <script>
@@ -481,6 +506,28 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
     (function tick(){t.textContent=fmt(performance.now()-t0);raf=requestAnimationFrame(tick);})();
   });
   send.addEventListener('click',()=>{send.disabled=true;st.textContent='Відправлено: '+fmt(val)+'. Секретар бачить час на ноутбуці.';});
+})();
+</script>
+<script>
+// ── Форма зв'язку: повідомлення йде в адмін-панель застосунку (функція contact_submit у Supabase) ──
+(function(){
+  var f=document.getElementById('cform');if(!f)return;
+  var t0=Date.now(),st=document.getElementById('cf-status'),btn=document.getElementById('cf-send');
+  function say(m,c){st.textContent=m;st.className=c||'';}
+  f.addEventListener('submit',function(e){
+    e.preventDefault();
+    var name=document.getElementById('cf-name').value.trim(),contact=document.getElementById('cf-contact').value.trim(),msg=document.getElementById('cf-msg').value.trim();
+    if(contact.length<5){say('Вкажіть email або телефон, щоб ми могли відповісти','err');return;}
+    if(msg.length<10){say('Напишіть, будь ласка, трохи докладніше','err');return;}
+    // боти: заповнене приховане поле або відправка за 3 секунди після відкриття сторінки
+    if(document.getElementById('cf-site').value||Date.now()-t0<3000){say('Дякуємо! Повідомлення надіслано.','ok');f.reset();return;}
+    btn.disabled=true;say('Надсилаємо…');
+    fetch('https://nsyierctinrxltjzpwom.supabase.co/rest/v1/rpc/contact_submit',{method:'POST',headers:{'Content-Type':'application/json','apikey':'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zeWllcmN0aW5yeGx0anpwd29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MjA2NTksImV4cCI6MjA5NDA5NjY1OX0.zTOEtwMG4D_mJH_4Nk7nUEtCbnRKxh3iQ5NFGS7Smv8','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5zeWllcmN0aW5yeGx0anpwd29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MjA2NTksImV4cCI6MjA5NDA5NjY1OX0.zTOEtwMG4D_mJH_4Nk7nUEtCbnRKxh3iQ5NFGS7Smv8'},
+      body:JSON.stringify({p_name:name,p_contact:contact,p_message:msg,p_ua:navigator.userAgent.slice(0,180)})})
+    .then(function(r){if(!r.ok)throw new Error(r.status);say('Дякуємо! Повідомлення надіслано, ми відповімо.','ok');f.reset();})
+    .catch(function(){say('Не вдалося надіслати. Спробуйте, будь ласка, ще раз трохи пізніше.','err');})
+    .then(function(){btn.disabled=false;});
+  });
 })();
 </script>
 </body>
