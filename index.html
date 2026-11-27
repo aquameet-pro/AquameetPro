@@ -169,6 +169,10 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
 .crow{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 #cf-status{font-size:.95rem}#cf-status.ok{color:#0a7a3a;font-weight:700}#cf-status.err{color:var(--flag);font-weight:700}
 @media(max-width:640px){.cform{grid-template-columns:1fr}}
+.nav-links{display:flex;gap:10px}
+.logo{white-space:nowrap}
+/* phone: the logo stays on one line, «Довідка» and «Контакти» move out of the header (they are in the footer and below) */
+@media(max-width:640px){.nav{gap:10px;padding:14px 0}.nav-links{gap:8px}.nav-extra{display:none}.nav .btn{padding:.5rem .85rem;font-size:.9rem}.logo{font-size:1.3rem}}
 </style>
 </head>
 <body>
@@ -177,7 +181,7 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
   <div class="wrap">
     <nav class="nav" aria-label="Головна навігація">
       <a class="logo" href="#top">Aqua<b>Meet</b> Pro</a>
-      <span style="display:flex;gap:10px"><a class="btn btn-line" href="help.html">Довідка</a><a class="btn btn-line" href="#contact">Контакти</a><a class="btn btn-line" href="app.html?demo">Демо</a><a class="btn btn-go" href="app.html">Увійти</a></span>
+      <span class="nav-links"><a class="btn btn-line nav-extra" href="help.html">Довідка</a><a class="btn btn-line nav-extra" href="#contact">Контакти</a><a class="btn btn-line" href="app.html?demo">Демо</a><a class="btn btn-go" href="app.html">Увійти</a></span>
     </nav>
 
     <header class="hero" id="top">
@@ -438,7 +442,7 @@ footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
   </div>
 </section>
 
-<footer><div class="wrap">© 2026 AquaMeet Pro. Система управління змаганнями з плавання. Усі права захищені. <a href="help.html">Довідка</a> · <a href="privacy.html">Політика конфіденційності</a></div></footer>
+<footer><div class="wrap">© 2026 AquaMeet Pro. Система управління змаганнями з плавання. Усі права захищені. <a href="help.html">Довідка</a> · <a href="#contact">Контакти</a> · <a href="privacy.html">Політика конфіденційності</a></div></footer>
 
 <script>
 // ── Заплив у шапці: 50 м у 25-метровому басейні, туди й назад ──
