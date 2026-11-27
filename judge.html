@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Пам’ятка судді на доріжці — AquaMeet Pro</title>
+<meta name="description" content="Пам’ятка на один аркуш для судді-хронометриста: як фіксувати час з телефона в AquaMeet Pro.">
+<link rel="canonical" href="https://aquameet-pro.github.io/AquameetPro/judge.html">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+@page{size:A4;margin:12mm}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,'Segoe UI',system-ui,sans-serif;color:#0a2a43;background:#eef6fa;line-height:1.4;font-size:12.5pt}
+.sheet{background:#fff;max-width:186mm;margin:16px auto;padding:10mm 11mm;border-radius:8px;box-shadow:0 4px 24px rgba(4,33,58,.12)}
+.hd{display:flex;align-items:flex-end;justify-content:space-between;border-bottom:4px solid #0b7fc0;padding-bottom:5px;margin-bottom:9px}
+h1{font-size:21pt;line-height:1.1}
+.brand{font-weight:700;color:#0b7fc0;font-size:11pt;white-space:nowrap}
+.lane{display:flex;gap:10px;align-items:center;font-size:12pt;margin-bottom:9px}
+.lane b{display:inline-block;border:2px solid #0a2a43;border-radius:6px;min-width:22mm;height:12mm}
+ol{list-style:none;counter-reset:s}
+ol li{counter-increment:s;display:grid;grid-template-columns:11mm 1fr;gap:3mm;padding:5px 0;border-bottom:1px solid #d9e9f1;align-items:start}
+ol li::before{content:counter(s);font-weight:700;font-size:17pt;color:#fff;background:#0b7fc0;border-radius:50%;width:10mm;height:10mm;display:flex;align-items:center;justify-content:center}
+ol li strong{display:block;font-size:13pt}
+ol li span{font-size:11.5pt;color:#27455a}
+h2{font-size:13pt;margin:10px 0 5px;color:#0b7fc0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 14px;font-size:11.5pt}
+.grid div{border:1px solid #d9e9f1;border-radius:6px;padding:5px 8px}
+.grid b{display:block}
+.rule{background:#fff8e1;border:1.5px solid #f0c95a;border-radius:6px;padding:6px 10px;font-size:12pt;margin-top:9px}
+.ft{margin-top:8px;font-size:9.5pt;color:#5a7a90;display:flex;justify-content:space-between}
+.noprint{max-width:186mm;margin:14px auto 0;display:flex;gap:10px;justify-content:flex-end;font-size:11pt}
+.noprint a,.noprint button{font:inherit;color:#0b7fc0;background:#fff;border:1px solid #b9d9e8;border-radius:6px;padding:6px 12px;cursor:pointer;text-decoration:none}
+@media print{body{background:#fff}.sheet{box-shadow:none;margin:0;padding:0;max-width:none}.noprint{display:none}}
+</style>
+</head>
+<body>
+<div class="noprint"><a href="help.html#judge">← Довідка</a><button onclick="window.print()">🖨 Друк</button></div>
+<div class="sheet">
+  <div class="hd"><h1>Пам’ятка судді на доріжці</h1><span class="brand">AquaMeet Pro</span></div>
+  <div class="lane">Моя доріжка: <b></b> &nbsp; Якщо щось не так — кличте секретаря.</div>
+
+  <ol>
+    <li><div><strong>Відскануйте QR-код своєї доріжки</strong><span>Звичайною камерою телефона. Реєструватись не треба. Один код — на всі запливи дня.</span></div></li>
+    <li><div><strong>Перевірте номер доріжки на екрані</strong><span>Угорі — доріжка, прізвище учасника і дистанція. Чужа доріжка — відскануйте правильний код.</span></div></li>
+    <li><div><strong>Дочекайтесь свого запливу</strong><span>Коли секретар оголосить заплив, він стане активним на екрані. Якщо просять — натисніть «✅ Підтвердити готовність».</span></div></li>
+    <li><div><strong>Старт</strong><span>Секундомір запускається сам за сигналом стартера. Якщо не запустився — натисніть старт самі за сигналом.</span></div></li>
+    <li><div><strong>Зупиніть час, коли плавець торкнувся стінки</strong><span>Дивіться на стінку, а не на телефон. Палець тримайте над кнопкою заздалегідь.</span></div></li>
+    <li><div><strong>Перевірте час і натисніть «✓ Відправити результат»</strong><span>З’явиться «✅ Відправлено», і екран перейде до вашого наступного запливу.</span></div></li>
+  </ol>
+
+  <h2>Особливі випадки</h2>
+  <div class="grid">
+    <div><b>🚫 Н/С — не стартував</b>Учасник не вийшов на старт.</div>
+    <div><b>🏁 Н/Ф — не фінішував</b>Зійшов з дистанції.</div>
+    <div><b>⛔ Д/К — дискваліфікація</b>Лише за вказівкою рефері чи головного судді. Виберіть причину зі списку.</div>
+    <div><b>Помилились у часі</b>Нічого не виправляйте самі — скажіть секретарю.</div>
+    <div><b>Зник інтернет</b>Не закривайте сторінку. Коли зв’язок повернеться — «Спробувати знову».</div>
+    <div><b>Немає мого запливу чи фіналу</b>Оновіть сторінку (потягніть екран вниз).</div>
+  </div>
+
+  <div class="rule"><strong>Головне:</strong> не закривайте сторінку до кінця змагань, тримайте телефон зарядженим, екран — не в режимі сну.</div>
+  <div class="ft"><span>aquameet-pro.github.io/AquameetPro/help.html</span><span>© AquaMeet Pro</span></div>
+</div>
+</body>
+</html>
