@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaMeet Pro — змагання з плавання з ноутбука і телефонів суддів</title>
+<meta name="description" content="AquaMeet Pro збирає заявки від тренерів, розводить запливи, приймає час із телефонів суддів і друкує протокол. Батьки бачать результати одразу.">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="canonical" href="https://aquameet-pro.github.io/AquameetPro/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AquaMeet Pro">
+<meta property="og:locale" content="uk_UA">
+<meta property="og:url" content="https://aquameet-pro.github.io/AquameetPro/">
+<meta property="og:title" content="AquaMeet Pro — змагання з плавання з ноутбука і телефонів суддів">
+<meta property="og:description" content="Заявки від тренерів, розведення запливів, час із телефонів суддів, протокол, фінали, рекорди й дипломи. Спробуйте демо без реєстрації.">
+<meta property="og:image" content="https://aquameet-pro.github.io/AquameetPro/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<!-- google-site-verification: paste the Search Console meta tag here -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;700&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --deep:#04213a;      /* глибока вода */
+  --water:#0b7fc0;     /* вода під лампами */
+  --tile:#a5e4f4;      /* кахель */
+  --foam:#f3fafd;      /* піна */
+  --rope:#ffd23f;      /* поплавці розділювача */
+  --flag:#e4483a;      /* червоні 5 м біля стінки */
+  --ink:#0a2a43;
+  --muted:#4d6b80;
+  --display:'Oswald','Arial Narrow',sans-serif;
+  --body:'Onest',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--body);color:var(--ink);background:var(--foam);line-height:1.55;font-size:17px}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--rope);outline-offset:3px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+
+/* ── верх ── */
+.top{background:var(--deep);color:#fff}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.logo{font-family:var(--display);font-size:1.5rem;letter-spacing:.5px;text-decoration:none}
+.logo b{color:var(--tile);font-weight:600}
+.btn{display:inline-block;font:700 1rem var(--body);text-decoration:none;border:0;border-radius:6px;padding:.8rem 1.4rem;cursor:pointer}
+.btn-go{background:var(--rope);color:var(--deep)}
+.btn-go:hover{background:#ffe07a}
+.btn-line{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px rgba(255,255,255,.45)}
+.btn-line:hover{box-shadow:inset 0 0 0 2px #fff}
+.nav .btn{padding:.55rem 1.1rem;font-size:.95rem}
+
+.hero{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:44px;align-items:center;padding:36px 0 64px}
+h1{font-family:var(--display);font-weight:600;font-size:clamp(2.2rem,4.6vw,3.6rem);line-height:1.08;letter-spacing:.2px;text-wrap:balance}
+.hero p{margin:20px 0 28px;font-size:1.1rem;color:#cfe6f3;max-width:34em}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap}
+
+/* ── басейн ── */
+.pool{background:var(--water);border-radius:10px;border:6px solid #dff3fa;position:relative;overflow:hidden;
+  background-image:radial-gradient(ellipse at 30% 20%,rgba(255,255,255,.16),transparent 55%)}
+.lane{position:relative;height:44px;display:flex;align-items:center}
+.lane+.lane{border-top:5px solid transparent;
+  border-image:repeating-linear-gradient(90deg,var(--flag) 0 9%,transparent 9% 9.01%,#fff 9.01% 14%,var(--rope) 14% 19%,#fff 19% 24%,var(--rope) 24% 29%,#fff 29% 34%,var(--rope) 34% 39%,#fff 39% 44%,var(--rope) 44% 49%,#fff 49% 54%,var(--rope) 54% 59%,#fff 59% 64%,var(--rope) 64% 69%,#fff 69% 74%,var(--rope) 74% 79%,#fff 79% 84%,var(--rope) 84% 91%,var(--flag) 91% 100%) 5}
+.lane-n{position:absolute;left:8px;font:600 .95rem var(--display);color:rgba(255,255,255,.75);z-index:2}
+.lane-name{position:absolute;right:10px;font-size:.78rem;color:rgba(255,255,255,.8);z-index:2;white-space:nowrap}
+.sw{position:absolute;left:0;top:50%;width:26px;height:10px;margin-top:-5px;border-radius:6px;background:#fff;will-change:transform}
+.sw::after{content:"";position:absolute;top:1px;height:8px;width:46px;border-radius:6px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45))}
+.sw.fwd::after{right:24px}
+.sw.back::after{left:24px;transform:scaleX(-1)}
+.sw.done::after{display:none}
+.board{background:#021727;border-radius:10px;margin-top:12px;padding:14px 16px;color:#fff}
+.board-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.board-ev{font:500 1.05rem var(--display);letter-spacing:.4px}
+.clock{font:600 1.7rem var(--display);font-variant-numeric:tabular-nums;color:var(--rope)}
+.board ol{list-style:none;margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:2px 22px;min-height:84px}
+.board li{display:flex;justify-content:space-between;gap:8px;font-size:.9rem;border-bottom:1px solid rgba(255,255,255,.1);padding:3px 0}
+.board li span:last-child{font:500 .98rem var(--display);font-variant-numeric:tabular-nums;color:var(--tile)}
+.board-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;font-size:.82rem;color:#9fc2d6}
+.again{background:none;border:0;color:var(--rope);font:700 .9rem var(--body);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+
+/* ── секції ── */
+section{padding:72px 0}
+h2{font-family:var(--display);font-weight:600;font-size:clamp(1.7rem,3vw,2.4rem);line-height:1.15;margin-bottom:10px}
+.lead{color:var(--muted);max-width:40em;margin-bottom:34px}
+
+/* день змагань: справжня послідовність, тому з номерами */
+.day{list-style:none;counter-reset:s;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;border-top:5px solid var(--water)}
+.day li{counter-increment:s;padding:18px 18px 0 0;position:relative}
+.day li::before{content:counter(s);font:600 2.4rem var(--display);color:var(--water);display:block;line-height:1}
+.day h3{font-size:1.05rem;margin:8px 0 6px;min-height:2.6em}
+/* number, title and text share grid rows across the columns, so every description starts on one line */
+@supports (grid-template-rows:subgrid){
+  .day li{display:grid;grid-template-rows:subgrid;grid-row:span 3;align-content:start}
+  .day h3{min-height:0}
+}
+.day p{font-size:.93rem;color:var(--muted)}
+
+/* ролі */
+.roles{background:#fff;border-block:1px solid #d5eaf3}
+.role-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:26px}
+.role-tabs button{font:700 .98rem var(--body);background:none;border:0;border-bottom:4px solid transparent;padding:.55rem .9rem;cursor:pointer;color:var(--muted)}
+.role-tabs button[aria-selected=true]{color:var(--ink);border-color:var(--rope)}
+.role-pane{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:start}
+.role-pane[hidden]{display:none}
+.role-pane h3{font:600 1.5rem var(--display);margin-bottom:10px}
+.role-pane ul{padding-left:1.1em}
+.role-pane li{margin:.45em 0}
+.role-pane .note{margin-top:14px;font-size:.92rem;color:var(--muted)}
+.mock{background:var(--deep);color:#fff;border-radius:14px;padding:18px;font-size:.9rem}
+.mock-title{font:500 1rem var(--display);color:var(--tile);margin-bottom:10px}
+.mock table{width:100%;border-collapse:collapse}
+.mock td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.12)}
+.mock td:last-child{text-align:right;font-family:var(--display);font-variant-numeric:tabular-nums}
+.ok{color:#5fe0b0}.wait{color:var(--rope)}
+.phone{max-width:290px;margin:0 auto;border:8px solid #0e3350;border-radius:28px;background:#f3fafd;color:var(--ink);padding:18px 16px;text-align:center}
+.phone .badge{display:inline-block;background:var(--water);color:#fff;border-radius:20px;padding:3px 14px;font-weight:700;font-size:.85rem}
+.phone .who{margin:10px 0 2px;font-weight:700}
+.phone .ev{font-size:.82rem;color:var(--muted)}
+.phone .t{font:600 2.6rem var(--display);font-variant-numeric:tabular-nums;margin:10px 0}
+.phone button{width:100%;border:0;border-radius:10px;padding:.85rem;font:700 1rem var(--body);cursor:pointer}
+.phone .go{background:#19c48c;color:#04301f}
+.phone .go.run{background:var(--flag);color:#fff}
+.phone .send{background:var(--deep);color:#fff;margin-top:8px}
+.phone .send:disabled{opacity:.35;cursor:default}
+.phone .st{min-height:1.4em;margin-top:8px;font-size:.85rem;font-weight:700;color:#0a7a5a}
+
+/* можливості: щільний список, не картки */
+.feat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:34px 40px}
+.feat h3{font:600 1.2rem var(--display);padding-bottom:6px;border-bottom:3px solid var(--tile);margin-bottom:10px}
+.feat ul{list-style:none}
+.feat li{font-size:.95rem;padding:.28em 0}
+
+.fit{background:var(--deep);color:#fff}
+.fit .lead{color:#b7d5e6}
+.fit-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px}
+.fit h3{font:600 1.25rem var(--display);color:var(--tile);margin-bottom:8px}
+.fit p{color:#d7eaf4;font-size:.97rem}
+.honest{margin-top:36px;padding:16px 18px;border-left:5px solid var(--rope);background:rgba(255,255,255,.06);max-width:46em;font-size:.95rem;color:#e6f2f8}
+
+.need{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:48px;align-items:center}
+.need ul{padding-left:1.1em}
+.need li{margin:.5em 0}
+.end{background:var(--water);color:#fff;border-radius:14px;padding:34px;text-align:left}
+.end h2{margin-bottom:8px}
+.end p{margin-bottom:20px;color:#e3f4fb}
+footer{padding:28px 0 40px;font-size:.85rem;color:var(--muted)}
+
+@media(max-width:900px){
+  .hero,.role-pane,.need{grid-template-columns:1fr}
+  .day{grid-template-columns:1fr 1fr;border-top:0}
+  .day li{border-top:5px solid var(--water);margin-bottom:22px}
+  .feat,.fit-grid{grid-template-columns:1fr}
+  section{padding:52px 0}
+  .lane-name{display:none}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap">
+    <nav class="nav" aria-label="Головна навігація">
+      <a class="logo" href="#top">Aqua<b>Meet</b> Pro</a>
+      <span style="display:flex;gap:10px"><a class="btn btn-line" href="app.html?demo">Демо</a><a class="btn btn-go" href="app.html">Увійти</a></span>
+    </nav>
+
+    <header class="hero" id="top">
+      <div>
+        <h1>Змагання з плавання з одного ноутбука і телефонів суддів</h1>
+        <p>AquaMeet Pro збирає заявки від тренерів, розводить запливи, приймає час із телефонів суддів і друкує протокол. Батьки бачать результати одразу, ще до нагородження.</p>
+        <div class="hero-cta">
+          <a class="btn btn-go" href="app.html?demo">Спробувати без реєстрації</a>
+          <a class="btn btn-line" href="app.html">Увійти в систему</a>
+          <a class="btn btn-line" href="#day">Як проходить день змагань</a>
+        </div>
+      </div>
+
+      <div aria-label="Демонстрація запливу">
+        <div class="pool" id="pool" role="img" aria-label="Басейн зверху: шість доріжок, плавці пливуть 50 метрів"></div>
+        <div class="board" aria-live="polite">
+          <div class="board-head">
+            <span class="board-ev">Заплив №7, 50 м вільний, дівчата 2013–2014</span>
+            <span class="clock" id="clock">00:00,00</span>
+          </div>
+          <ol id="finish"></ol>
+          <div class="board-foot">
+            <span id="board-note">Так це бачать на табло в залі</span>
+            <button class="again" id="again" type="button">Запустити заплив ще раз</button>
+          </div>
+        </div>
+      </div>
+    </header>
+  </div>
+</div>
+
+<section id="day">
+  <div class="wrap">
+    <h2>День змагань, крок за кроком</h2>
+    <p class="lead">Раніше це були стоси карток, секундоміри і протокол, який друкують до ночі. Тепер так:</p>
+    <ol class="day">
+      <li><h3>Тренери подають заявки</h3><p>З телефона або файлом Excel. Система одразу показує помилки: не той рік, невідома дистанція, дубль.</p></li>
+      <li><h3>Організатор розводить запливи</h3><p>Одна кнопка: за віковими групами і заявленим часом, найшвидші по центру. Далі можна переставити вручну.</p></li>
+      <li><h3>Стартер дає сигнал</h3><p>Секундоміри на телефонах усіх суддів стартують одночасно. Суддя лише зупиняє час на своїй доріжці.</p></li>
+      <li><h3>Секретар підтверджує час</h3><p>Результати приходять на ноутбук за секунди. Розряд і особистий рекорд рахуються самі.</p></li>
+      <li><h3>Протокол готовий</h3><p>З підписами, місцями і командним заліком. Батьки вже дивляться результати за посиланням.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="roles" id="roles">
+  <div class="wrap">
+    <h2>Що бачить кожен учасник</h2>
+    <p class="lead">Оберіть роль. Суддівський секундомір справжній: спробуйте засікти час.</p>
+    <div class="role-tabs" role="tablist" aria-label="Ролі">
+      <button role="tab" aria-selected="true" aria-controls="r-org" id="t-org">Організатор</button>
+      <button role="tab" aria-selected="false" aria-controls="r-sec" id="t-sec" tabindex="-1">Секретар</button>
+      <button role="tab" aria-selected="false" aria-controls="r-tr" id="t-tr" tabindex="-1">Тренер</button>
+      <button role="tab" aria-selected="false" aria-controls="r-j" id="t-j" tabindex="-1">Суддя</button>
+      <button role="tab" aria-selected="false" aria-controls="r-p" id="t-p" tabindex="-1">Батьки</button>
+    </div>
+
+    <div class="role-pane" id="r-org" role="tabpanel" aria-labelledby="t-org">
+      <div>
+        <h3>Організатор веде змагання цілком</h3>
+        <ul>
+          <li>Створює змагання, дні, програму подій і перерви</li>
+          <li>Запрошує тренерів і бачить, хто підтвердив участь</li>
+          <li>Генерує запливи й друкує стартові картки</li>
+          <li>Роздає суддям QR-коди і бачить, чиї телефони на зв'язку</li>
+          <li>Друкує програму з орієнтовним часом кожної події</li>
+        </ul>
+        <p class="note">Працює з ноутбука або планшета. Якщо інтернет зник, дані лишаються на пристрої і дозаписуються пізніше.</p>
+      </div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-title">Розклад, день 1</div>
+        <table>
+          <tr><td>1. 50 м вільний</td><td>~10:20</td></tr>
+          <tr><td>2. 50 м на спині</td><td>~11:05</td></tr>
+          <tr><td>перерва 15 хв</td><td></td></tr>
+          <tr><td>3. 100 м комплекс</td><td>~12:10</td></tr>
+          <tr><td>На зв'язку: судді 6 з 6, стартер</td><td class="ok">готово</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="role-pane" id="r-sec" role="tabpanel" aria-labelledby="t-sec" hidden>
+      <div>
+        <h3>Секретар приймає результати</h3>
+        <ul>
+          <li>Бачить час від кожного судді й підтверджує одним натиском</li>
+          <li>Може ввести час вручну, поставити «не стартував» або дискваліфікацію з причиною</li>
+          <li>Одразу видно, які доріжки ще без результату</li>
+          <li>Перед друком система попередить, якщо когось пропущено</li>
+        </ul>
+      </div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-title">Заплив №7, результати від суддів</div>
+        <table>
+          <tr><td>Дор. 3, Ткачук Мирослава</td><td class="ok">00:33,97 ✓</td></tr>
+          <tr><td>Дор. 4, Гнатюк Емілія</td><td class="ok">00:36,00 ✓</td></tr>
+          <tr><td>Дор. 2, Бондар Злата</td><td class="wait">00:35,56 прийняти?</td></tr>
+          <tr><td>Дор. 5, Савчук Уляна</td><td class="wait">очікуємо</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="role-pane" id="r-tr" role="tabpanel" aria-labelledby="t-tr" hidden>
+      <div>
+        <h3>Тренер заявляє своїх спортсменів</h3>
+        <ul>
+          <li>Отримує запрошення і підтверджує участь</li>
+          <li>Вносить учасників і дистанції, заявлений час підставляється з минулих стартів</li>
+          <li>Бачить запливи лише зі своїми спортсменами і час їхнього старту</li>
+          <li>Стежить за результатами й особистими рекордами під час змагань</li>
+        </ul>
+        <p class="note">Усе це з телефона. Дані інших тренерів не видно.</p>
+      </div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-title">Мої спортсмени сьогодні</div>
+        <table>
+          <tr><td>Романюк Яна, заплив №9, дор. 4</td><td>~10:41</td></tr>
+          <tr><td>Кушнір Матвій, заплив №14, дор. 3</td><td>~11:02</td></tr>
+          <tr><td>Дячук Назар, 50 м вільний</td><td class="ok">00:34,06 рекорд</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="role-pane" id="r-j" role="tabpanel" aria-labelledby="t-j" hidden>
+      <div>
+        <h3>Суддя засікає час на своїй доріжці</h3>
+        <ul>
+          <li>Сканує QR-код один раз на весь день, без реєстрації</li>
+          <li>Бачить, хто пливе на його доріжці в кожному запливі</li>
+          <li>Секундомір стартує за сигналом стартера; суддя зупиняє і відправляє</li>
+          <li>Немає зв'язку? Результат збережеться і піде, щойно мережа повернеться</li>
+        </ul>
+        <p class="note">Спробуйте: натисніть «Старт», потім «Стоп» і «Відправити».</p>
+      </div>
+      <div class="phone">
+        <span class="badge">Доріжка 4</span>
+        <div class="who">Ткачук Мирослава</div>
+        <div class="ev">Заплив №7, 50 м вільний</div>
+        <div class="t" id="j-t">00:00,00</div>
+        <button class="go" id="j-go" type="button">Старт</button>
+        <button class="send" id="j-send" type="button" disabled>Відправити результат</button>
+        <div class="st" id="j-st" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <div class="role-pane" id="r-p" role="tabpanel" aria-labelledby="t-p" hidden>
+      <div>
+        <h3>Батьки дивляться результати з дому або з трибуни</h3>
+        <ul>
+          <li>Відкривають посилання від організатора, без реєстрації</li>
+          <li>Бачать запливи, доріжки, результати і місця</li>
+          <li>Сторінка оновлюється під час змагань</li>
+        </ul>
+        <p class="note">За посиланням видно лише це змагання: прізвище, рік, клуб і результат.</p>
+      </div>
+      <div class="mock" aria-hidden="true">
+        <div class="mock-title">50 м вільний, дівчата 2013–2014</div>
+        <table>
+          <tr><td>1. Ткачук Мирослава, «Дельфін»</td><td>00:33,97</td></tr>
+          <tr><td>2. Бондар Злата, «Дельфін»</td><td>00:35,56</td></tr>
+          <tr><td>3. Гнатюк Емілія, «Дельфін»</td><td>00:36,00</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Що вміє система</h2>
+    <p class="lead">Усе перелічене вже працює і перевірене на справжніх змаганнях.</p>
+    <div class="feat">
+      <div><h3>Заявки</h3><ul>
+        <li>Кабінет тренера зі своїми спортсменами</li>
+        <li>Імпорт з Excel з поясненням кожної помилки</li>
+        <li>Пошук дублів і масові правки</li>
+        <li>Вікові групи одним кроком</li>
+        <li>Закриття реєстрації і нагадування про термін</li></ul></div>
+      <div><h3>Запливи</h3><ul>
+        <li>Розведення за групами і заявленим часом</li>
+        <li>Басейни 25 і 50 м, до 10 доріжок</li>
+        <li>Зняття зі старту і дозаявка</li>
+        <li>Орієнтовний і фактичний час старту</li>
+        <li>Стартові картки А6</li></ul></div>
+      <div><h3>Проведення</h3><ul>
+        <li>Синхронний старт для всіх суддів</li>
+        <li>Секундомір і проміжні відрізки</li>
+        <li>Фальстарт одним натиском</li>
+        <li>Робота без зв'язку з дозаписом</li>
+        <li>Табло для великого екрана в залі</li></ul></div>
+      <div><h3>Результати</h3><ul>
+        <li>Розряди за нормативами</li>
+        <li>Особисті рекорди</li>
+        <li>Дискваліфікація з причиною</li>
+        <li>Призери і командний залік за очками</li>
+        <li>Естафети, зокрема змішані</li></ul></div>
+      <div><h3>Документи</h3><ul>
+        <li>Офіційний протокол з підписами</li>
+        <li>Програма змагань</li>
+        <li>Регламент у Word</li>
+        <li>Excel: результати, призери, клуби</li>
+        <li>Збереження в PDF</li></ul></div>
+      <div><h3>Після змагань</h3><ul>
+        <li>Архів усіх стартів</li>
+        <li>Картка спортсмена з історією</li>
+        <li>Рейтинг клубів</li>
+        <li>Шаблони для наступних змагань</li>
+        <li>Резервні копії</li></ul></div>
+    </div>
+  </div>
+</section>
+
+<section class="fit" id="fit">
+  <div class="wrap">
+    <h2>Кому підійде</h2>
+    <p class="lead">Систему створено в дитячій школі плавання, де все це роками робили вручну.</p>
+    <div class="fit-grid">
+      <div><h3>Школам і клубам</h3><p>Внутрішні старти, контрольні запливи, першості школи. Один організатор і кілька суддів з телефонами.</p></div>
+      <div><h3>Міським і обласним змаганням</h3><p>100–400 учасників, 10–30 тренерів з різних клубів, кілька днів, естафети, командний залік.</p></div>
+      <div><h3>Тренерам</h3><p>Заявка без таблиць і дзвінків, історія результатів кожного спортсмена, особисті рекорди.</p></div>
+    </div>
+    <p class="honest">Чесно про межі: хронометраж ручний, час фіксують судді з телефонів. З електронними сенсорними панелями на стінках басейну система поки не працює.</p>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap need">
+    <div>
+      <h2>Що потрібно, щоб почати</h2>
+      <ul>
+        <li>Ноутбук або планшет для організатора</li>
+        <li>Телефони суддів, по одному на доріжку</li>
+        <li>Інтернет у залі, вистачить мобільного</li>
+        <li>Принтер для протоколу і карток</li>
+      </ul>
+      <p class="lead" style="margin:16px 0 0">Встановлювати нічого не треба: система відкривається в браузері. Після входу вас зустріне короткий тур для вашої ролі.</p>
+    </div>
+    <div class="end">
+      <h2>Спробуйте на своєму змаганні</h2>
+      <p>Спершу подивіться демо з вигаданими даними — без реєстрації. Потім зареєструйтесь як тренер або увійдіть у свій кабінет.</p>
+      <span style="display:inline-flex;gap:10px;flex-wrap:wrap;justify-content:center"><a class="btn btn-go" href="app.html?demo">Спробувати демо</a><a class="btn btn-line" href="app.html">Увійти в систему</a></span>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap">© 2026 AquaMeet Pro. Система управління змаганнями з плавання. Усі права захищені.</div></footer>
+
+<script>
+// ── Заплив у шапці: 50 м у 25-метровому басейні, туди й назад ──
+(function(){
+  const swimmers=[
+    {n:'Мельник Соломія',t:36.29},{n:'Бондар Злата',t:35.56},{n:'Ткачук Мирослава',t:33.97},
+    {n:'Гнатюк Емілія',t:36.00},{n:'Савчук Уляна',t:37.50},{n:'Литвин Вікторія',t:39.29}
+  ];
+  const pool=document.getElementById('pool'),clock=document.getElementById('clock'),fin=document.getElementById('finish');
+  pool.innerHTML=swimmers.map((s,i)=>`<div class="lane"><span class="lane-n">${i+1}</span><span class="lane-name">${s.n}</span><span class="sw fwd" id="sw${i}"></span></div>`).join('');
+  const fmt=t=>{const s=Math.floor(t),c=Math.round((t-s)*100);return'00:'+String(s).padStart(2,'0')+','+String(c%100).padStart(2,'0')};
+  const SPEED=5; // 5 секунд демо = весь заплив
+  const maxT=Math.max(...swimmers.map(s=>s.t));
+  let raf=null;
+  function place(i,p){ // p: 0..1 частка дистанції
+    const el=document.getElementById('sw'+i),w=pool.clientWidth-26-36;
+    const x=p<=.5?p*2:(1-p)*2;
+    el.style.transform=`translateX(${28+x*w}px)`;
+    el.className='sw '+(p>=1?'done':p<=.5?'fwd':'back');
+  }
+  function board(done){
+    fin.innerHTML=done.map((s,k)=>`<li><span>${k+1}. ${s.n}</span><span>${fmt(s.t)}</span></li>`).join('');
+  }
+  function finalState(){
+    swimmers.forEach((_,i)=>place(i,1));clock.textContent=fmt(maxT);
+    board([...swimmers].sort((a,b)=>a.t-b.t));
+  }
+  function run(){
+    cancelAnimationFrame(raf);fin.innerHTML='';
+    const t0=performance.now();
+    (function tick(now){
+      const t=(now-t0)/1000*(maxT/SPEED);
+      swimmers.forEach((s,i)=>place(i,Math.min(1,t/s.t)));
+      clock.textContent=fmt(Math.min(t,maxT));
+      board(swimmers.filter(s=>t>=s.t).sort((a,b)=>a.t-b.t));
+      if(t<maxT)raf=requestAnimationFrame(tick);
+    })(t0);
+  }
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches)finalState();else setTimeout(run,500);
+  document.getElementById('again').addEventListener('click',run);
+  addEventListener('resize',()=>{if(clock.textContent===fmt(maxT))finalState();});
+})();
+
+// ── Ролі: вкладки з клавіатурою ──
+(function(){
+  const tabs=[...document.querySelectorAll('.role-tabs [role=tab]')];
+  function pick(t){
+    tabs.forEach(x=>{const on=x===t;x.setAttribute('aria-selected',on);x.tabIndex=on?0:-1;document.getElementById(x.getAttribute('aria-controls')).hidden=!on;});
+  }
+  tabs.forEach((t,i)=>{
+    t.addEventListener('click',()=>pick(t));
+    t.addEventListener('keydown',e=>{
+      const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;
+      const n=tabs[(i+d+tabs.length)%tabs.length];pick(n);n.focus();
+    });
+  });
+})();
+
+// ── Справжній секундомір судді ──
+(function(){
+  const t=document.getElementById('j-t'),go=document.getElementById('j-go'),send=document.getElementById('j-send'),st=document.getElementById('j-st');
+  let t0=0,raf=null,val=0;
+  const fmt=ms=>{const cs=Math.floor(ms/10),m=Math.floor(cs/6000),s=Math.floor(cs/100)%60;return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')+','+String(cs%100).padStart(2,'0')};
+  go.addEventListener('click',()=>{
+    if(raf){cancelAnimationFrame(raf);raf=null;val=performance.now()-t0;t.textContent=fmt(val);go.textContent='Старт';go.classList.remove('run');send.disabled=false;st.textContent='';return;}
+    t0=performance.now();send.disabled=true;st.textContent='';go.textContent='Стоп';go.classList.add('run');
+    (function tick(){t.textContent=fmt(performance.now()-t0);raf=requestAnimationFrame(tick);})();
+  });
+  send.addEventListener('click',()=>{send.disabled=true;st.textContent='Відправлено: '+fmt(val)+'. Секретар бачить час на ноутбуці.';});
+})();
+</script>
+</body>
+</html>

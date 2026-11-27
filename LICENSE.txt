@@ -1,0 +1,11 @@
+AquaMeet Pro — Copyright © 2026. All rights reserved. Усі права захищені.
+
+This software and its user interface are proprietary. No licence is granted.
+You may use the website as a visitor or registered user. You may not copy,
+modify, redistribute, sell, or create derivative works from the code, texts
+or design of this website, in whole or in part, without prior written
+permission of the copyright holder.
+
+Це програмне забезпечення та його інтерфейс є власністю правовласника.
+Копіювання, зміна, розповсюдження чи створення похідних продуктів на основі
+коду, текстів або дизайну без письмового дозволу заборонені.
